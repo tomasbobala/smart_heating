@@ -63,24 +63,34 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return SmartHeatingOptionsFlow(config_entry)
+        return SmartHeatingOptionsFlow()
 
 
 class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
-    """Menu pre spravu globalnych nastaveni a zon (pridat/upravit/zmazat)."""
+    """Menu pre spravu globalnych nastaveni a zon (pridat/upravit/zmazat).
 
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
-        self._zones: dict[str, Any] = dict(config_entry.options.get(OPT_ZONES, {}))
+    Poznamka: od HA 2024.12 sa 'config_entry' NESMIE nastavovat manualne
+    (je to teraz read-only property poskytnuta frameworkom cez self.handler).
+    Preto sa zoznam zon nacitava lazy, az v prvom kroku, nie v __init__.
+    """
+
+    def __init__(self) -> None:
+        self._zones: dict[str, Any] | None = None
         self._editing_zone_id: str | None = None
 
+    def _ensure_zones(self) -> None:
+        if self._zones is None:
+            self._zones = dict(self.config_entry.options.get(OPT_ZONES, {}))
+
     async def async_step_init(self, user_input=None):
+        self._ensure_zones()
         return self.async_show_menu(
             step_id="init",
             menu_options=["global", "add_zone", "edit_zone", "remove_zone"],
         )
 
     async def async_step_global(self, user_input=None):
+        self._ensure_zones()
         if user_input is not None:
             options = dict(self.config_entry.options)
             options[CONF_OUTDOOR_SENSOR] = user_input.get(CONF_OUTDOOR_SENSOR)
@@ -109,6 +119,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="global", data_schema=schema)
 
     async def async_step_add_zone(self, user_input=None):
+        self._ensure_zones()
         if user_input is not None:
             zone_id = uuid.uuid4().hex[:8]
             self._zones[zone_id] = self._zone_from_input(user_input)
@@ -117,6 +128,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         return self.async_show_form(step_id="add_zone", data_schema=self._zone_schema())
 
     async def async_step_edit_zone(self, user_input=None):
+        self._ensure_zones()
         if not self._zones:
             return self.async_abort(reason="no_zones")
 
@@ -144,6 +156,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         return self._save()
 
     async def async_step_remove_zone(self, user_input=None):
+        self._ensure_zones()
         if not self._zones:
             return self.async_abort(reason="no_zones")
 
