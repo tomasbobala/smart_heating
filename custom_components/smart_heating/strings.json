@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Heating - globalne nastavenia",
+        "description": "Vyber existujuce entity pre vonkajsiu teplotu a tarifu. Zony pridas neskor cez Nastavenia integracie.",
+        "data": {
+          "outdoor_sensor": "Senzor vonkajsej teploty",
+          "tariff_entity": "Entita tarify (on = kurenie povolene)"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Smart Heating uz je nastaveny. Zony spravuj cez Nastavenia integracie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating - sprava",
+        "menu_options": {
+          "global": "Globalne nastavenia",
+          "add_zone": "Pridat zonu",
+          "edit_zone": "Upravit zonu",
+          "remove_zone": "Zmazat zonu"
+        }
+      },
+      "global": {
+        "title": "Globalne nastavenia",
+        "data": {
+          "outdoor_sensor": "Senzor vonkajsej teploty",
+          "tariff_entity": "Entita tarify (on = kurenie povolene)"
+        }
+      },
+      "add_zone": {
+        "title": "Nova zona",
+        "data": {
+          "name": "Nazov zony",
+          "climate_entity": "Podlahovy termostat (climate)",
+          "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
+          "presence_entities": "Osoby, ktorych pritomnost sa sleduje",
+          "schedule_entity": "Harmonogram (schedule helper, volitelne)"
+        }
+      },
+      "edit_zone": {
+        "title": "Upravit zonu",
+        "data": {
+          "zone_id": "Zona",
+          "name": "Nazov zony",
+          "climate_entity": "Podlahovy termostat (climate)",
+          "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
+          "presence_entities": "Osoby, ktorych pritomnost sa sleduje",
+          "schedule_entity": "Harmonogram (schedule helper, volitelne)"
+        }
+      },
+      "remove_zone": {
+        "title": "Zmazat zonu",
+        "data": {
+          "zone_id": "Zona"
+        }
+      }
+    },
+    "abort": {
+      "no_zones": "Zatial nie je vytvorena ziadna zona."
+    }
+  }
+}
