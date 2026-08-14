@@ -104,3 +104,10 @@ HUB_NUMBER_DEFS = {
         15, 60, "mdi:fireplace", DEFAULT_FIREPLACE_THRESHOLD,
     ),
 }
+
+# ---- Tyzdenny rozvrh (vlastny grid v karte) ----
+WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+BLOCKS_PER_DAY = 48  # 30-minutove bloky
+SCHEDULE_STORE_KEY = f"{DOMAIN}_schedules"
+SCHEDULE_STORE_VERSION = 1
+SIGNAL_SCHEDULE_UPDATED = f"{DOMAIN}_schedule_updated"
