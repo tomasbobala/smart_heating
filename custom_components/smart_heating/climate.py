@@ -13,10 +13,11 @@ from .const import DOMAIN, MODE_AUTO, MODE_VYPNUTE, OPT_ZONES
 from .coordinator import SmartHeatingCoordinator, mode_entity_id, number_entity_id
 
 MODE_TO_NUMBER_KEY = {
-    "Komfort": "komfort_temp",
-    "Uspora": "uspora_temp",
-    "Mraz": "mraz_temp",
-    "Vypnute": "mraz_temp",
+    "Den": "teplota_den",
+    "Noc": "teplota_noc",
+    "Min": "teplota_min",
+    "Mraz": "teplota_mraz",
+    "Vypnute": "teplota_mraz",
 }
 
 
@@ -31,7 +32,7 @@ async def async_setup_entry(
 
 
 class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], ClimateEntity):
-    """Virtualny termostat - toto je entita, cez ktoru pouzivatel bezne ovlada zonu."""
+    """Virtualny termostat - hlavne miesto ovladania zony."""
 
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
@@ -74,11 +75,16 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
 
     @property
     def extra_state_attributes(self):
+        z = self._zdata
         return {
-            "rezim": self._zdata["mode"],
-            "aktivny_podrezim": self._zdata["effective_mode"],
-            "teplota_podlahy": self._zdata["floor_temperature"],
-            "dovod": self._zdata["reason"],
+            "rezim": z["mode"],
+            "aktivny_podrezim": z["effective_mode"],
+            "teplota_podlahy": z["floor_temperature"],
+            "zdroj_kurenia": z.get("heat_source"),
+            "boost_aktivny": z["boost_active"],
+            "nudzova_ochrana": z["emergency_active"],
+            "fve_prebytok_aktivny": z["pv_active"],
+            "dovod": z["reason"],
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -94,7 +100,7 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
-        key = MODE_TO_NUMBER_KEY.get(self._zdata["effective_mode"], "komfort_temp")
+        key = MODE_TO_NUMBER_KEY.get(self._zdata["effective_mode"], "teplota_den")
         await self.hass.services.async_call(
             "number",
             "set_value",

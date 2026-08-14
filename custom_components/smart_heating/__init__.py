@@ -11,7 +11,7 @@ from .coordinator import SmartHeatingCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["climate", "select", "number", "sensor"]
+PLATFORMS = ["climate", "select", "number", "sensor", "time", "switch", "button"]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:

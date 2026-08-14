@@ -38,9 +38,15 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
 
     @property
     def extra_state_attributes(self):
-        zdata = self.coordinator.data["zones"][self._zone_id]
+        z = self.coordinator.data["zones"][self._zone_id]
         return {
-            "floor_temperature": zdata["floor_temperature"],
-            "floor_override": zdata["floor_override"],
-            "heating_allowed": zdata["heating_allowed"],
+            "floor_temperature": z["floor_temperature"],
+            "floor_override": z["floor_override"],
+            "krb_override": z["krb_override"],
+            "tariff_blocked": z["tariff_blocked"],
+            "emergency_active": z["emergency_active"],
+            "pv_active": z["pv_active"],
+            "boost_active": z["boost_active"],
+            "heating_allowed": z["heating_allowed"],
+            "zdroj_kurenia": z.get("heat_source"),
         }

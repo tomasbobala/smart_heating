@@ -1,4 +1,4 @@
-"""Config flow pre Smart Heating."""
+"""Config flow pre Smart Heating v2."""
 from __future__ import annotations
 
 import uuid
@@ -11,53 +11,84 @@ from homeassistant.core import callback
 from homeassistant.helpers import selector
 
 from .const import (
+    AC_NUMBER_DEFS,
+    CONF_AC_ENTITY,
     CONF_CLIMATE_ENTITY,
+    CONF_FIREPLACE_BURNING_ENTITY,
+    CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
+    CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_NOTIFY_ENTITY,
     CONF_OUTDOOR_SENSOR,
     CONF_PRESENCE_ENTITIES,
+    CONF_PV_SURPLUS_ENTITY,
     CONF_SCHEDULE_ENTITY,
     CONF_TARIFF_ENTITY,
+    CONF_USE_FIREPLACE_GUARD,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
     DOMAIN,
     NUMBER_DEFS,
     OPT_ZONES,
+    TIME_DEFS,
     ZONE_TYPE_FLOOR,
+    ZONE_TYPE_FLOOR_AC,
 )
+
+
+def _add_optional(schema_dict: dict, key: str, value, ent_selector) -> None:
+    """Prida volitelne pole - default sa nastavi LEN ak existuje realna hodnota,
+    inak by EntitySelector dostal 'None' a zhavaroval by."""
+    if value:
+        schema_dict[vol.Optional(key, default=value)] = ent_selector
+    else:
+        schema_dict[vol.Optional(key)] = ent_selector
+
+
+def _hub_schema_dict(current: dict) -> dict:
+    schema_dict: dict = {}
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_SENSOR, current.get(CONF_OUTDOOR_SENSOR),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+    )
+    _add_optional(
+        schema_dict, CONF_TARIFF_ENTITY, current.get(CONF_TARIFF_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
+    )
+    _add_optional(
+        schema_dict, CONF_FIREPLACE_BURNING_ENTITY, current.get(CONF_FIREPLACE_BURNING_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
+    )
+    _add_optional(
+        schema_dict, CONF_FIREPLACE_TEMP_ENTITY, current.get(CONF_FIREPLACE_TEMP_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+    )
+    _add_optional(
+        schema_dict, CONF_NOTIFY_ENTITY, current.get(CONF_NOTIFY_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
+    )
+    _add_optional(
+        schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
+    )
+    return schema_dict
 
 
 class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Prvotne zalozenie hubu (jeden na instanciu HA)."""
 
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None):
         if self._async_current_entries():
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
-            return self.async_create_entry(
-                title="Smart Heating",
-                data={},
-                options={
-                    CONF_OUTDOOR_SENSOR: user_input.get(CONF_OUTDOOR_SENSOR),
-                    CONF_TARIFF_ENTITY: user_input.get(CONF_TARIFF_ENTITY),
-                    OPT_ZONES: {},
-                },
-            )
+            options = dict(user_input)
+            options[OPT_ZONES] = {}
+            return self.async_create_entry(title="Smart Heating", data={}, options=options)
 
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_OUTDOOR_SENSOR): selector.EntitySelector(
-                    selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-                ),
-                vol.Optional(CONF_TARIFF_ENTITY): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain=["input_boolean", "switch", "binary_sensor"]
-                    )
-                ),
-            }
-        )
+        schema = vol.Schema(_hub_schema_dict({}))
         return self.async_show_form(step_id="user", data_schema=schema)
 
     @staticmethod
@@ -67,12 +98,7 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
-    """Menu pre spravu globalnych nastaveni a zon (pridat/upravit/zmazat).
-
-    Poznamka: od HA 2024.12 sa 'config_entry' NESMIE nastavovat manualne
-    (je to teraz read-only property poskytnuta frameworkom cez self.handler).
-    Preto sa zoznam zon nacitava lazy, az v prvom kroku, nie v __init__.
-    """
+    """Menu pre spravu globalnych nastaveni a zon."""
 
     def __init__(self) -> None:
         self._zones: dict[str, Any] | None = None
@@ -93,29 +119,11 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         self._ensure_zones()
         if user_input is not None:
             options = dict(self.config_entry.options)
-            options[CONF_OUTDOOR_SENSOR] = user_input.get(CONF_OUTDOOR_SENSOR)
-            options[CONF_TARIFF_ENTITY] = user_input.get(CONF_TARIFF_ENTITY)
+            options.update(user_input)
             options[OPT_ZONES] = self._zones
             return self.async_create_entry(title="", data=options)
 
-        schema_dict: dict = {}
-        self._optional_selector(
-            schema_dict,
-            CONF_OUTDOOR_SENSOR,
-            self.config_entry.options.get(CONF_OUTDOOR_SENSOR),
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-            ),
-        )
-        self._optional_selector(
-            schema_dict,
-            CONF_TARIFF_ENTITY,
-            self.config_entry.options.get(CONF_TARIFF_ENTITY),
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])
-            ),
-        )
-        schema = vol.Schema(schema_dict)
+        schema = vol.Schema(_hub_schema_dict(self.config_entry.options))
         return self.async_show_form(step_id="global", data_schema=schema)
 
     async def async_step_add_zone(self, user_input=None):
@@ -136,21 +144,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             if user_input is not None:
                 self._editing_zone_id = user_input["zone_id"]
                 zone = self._zones[self._editing_zone_id]
-                return self.async_show_form(
-                    step_id="edit_zone", data_schema=self._zone_schema(zone)
-                )
+                return self.async_show_form(step_id="edit_zone", data_schema=self._zone_schema(zone))
             options = {zid: z[CONF_ZONE_NAME] for zid, z in self._zones.items()}
             schema = vol.Schema({vol.Required("zone_id"): vol.In(options)})
             return self.async_show_form(step_id="edit_zone", data_schema=schema)
 
-        # druhy prechod - ulozenie upravenej zony
-        zone = self._zones[self._editing_zone_id]
+        old_zone = self._zones[self._editing_zone_id]
         updated = self._zone_from_input(user_input)
-        updated["komfort_temp"] = zone.get("komfort_temp", NUMBER_DEFS["komfort_temp"][4])
-        updated["uspora_temp"] = zone.get("uspora_temp", NUMBER_DEFS["uspora_temp"][4])
-        updated["mraz_temp"] = zone.get("mraz_temp", NUMBER_DEFS["mraz_temp"][4])
-        updated["floor_min"] = zone.get("floor_min", NUMBER_DEFS["floor_min"][4])
-        updated["floor_max"] = zone.get("floor_max", NUMBER_DEFS["floor_max"][4])
+        updated = self._merge_tunables(old_zone, updated)
         self._zones[self._editing_zone_id] = updated
         self._editing_zone_id = None
         return self._save()
@@ -168,56 +169,70 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         schema = vol.Schema({vol.Required("zone_id"): vol.In(options)})
         return self.async_show_form(step_id="remove_zone", data_schema=schema)
 
-    def _optional_selector(self, schema_dict: dict, key: str, value, entity_selector) -> None:
-        """Prida volitelne pole do schemy. Default sa nastavi LEN ak existuje realna hodnota,
-        inak by EntitySelector dostal 'None' ako hodnotu a zhavaroval by ('Entity None is
-        neither a valid entity ID nor a valid UUID')."""
-        if value:
-            schema_dict[vol.Optional(key, default=value)] = entity_selector
-        else:
-            schema_dict[vol.Optional(key)] = entity_selector
-
     def _zone_schema(self, zone: dict | None = None) -> vol.Schema:
         zone = zone or {}
         schema_dict: dict = {
             vol.Required(CONF_ZONE_NAME, default=zone.get(CONF_ZONE_NAME, "")): str,
             vol.Required(
+                CONF_ZONE_TYPE, default=zone.get(CONF_ZONE_TYPE, ZONE_TYPE_FLOOR)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": ZONE_TYPE_FLOOR, "label": "Len podlaha"},
+                        {"value": ZONE_TYPE_FLOOR_AC, "label": "Klima prioritne + podlaha ako zaloha"},
+                    ]
+                )
+            ),
+            vol.Required(
                 CONF_CLIMATE_ENTITY, default=zone.get(CONF_CLIMATE_ENTITY)
             ): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
         }
-        self._optional_selector(
-            schema_dict,
-            CONF_FLOOR_TEMP_ENTITY,
-            zone.get(CONF_FLOOR_TEMP_ENTITY),
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-            ),
+        _add_optional(
+            schema_dict, CONF_AC_ENTITY, zone.get(CONF_AC_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
+        )
+        _add_optional(
+            schema_dict, CONF_FLOOR_TEMP_ENTITY, zone.get(CONF_FLOOR_TEMP_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
         )
         schema_dict[
             vol.Optional(CONF_PRESENCE_ENTITIES, default=zone.get(CONF_PRESENCE_ENTITIES, []))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True))
-        self._optional_selector(
-            schema_dict,
-            CONF_SCHEDULE_ENTITY,
-            zone.get(CONF_SCHEDULE_ENTITY),
+        schema_dict[
+            vol.Optional(CONF_MANUAL_PRESENCE_ENTITIES, default=zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["input_boolean", "switch"], multiple=True)
+        )
+        _add_optional(
+            schema_dict, CONF_SCHEDULE_ENTITY, zone.get(CONF_SCHEDULE_ENTITY),
             selector.EntitySelector(selector.EntitySelectorConfig(domain="schedule")),
         )
+        schema_dict[
+            vol.Optional(CONF_USE_FIREPLACE_GUARD, default=zone.get(CONF_USE_FIREPLACE_GUARD, False))
+        ] = selector.BooleanSelector()
         return vol.Schema(schema_dict)
 
     def _zone_from_input(self, user_input: dict) -> dict:
         return {
             CONF_ZONE_NAME: user_input[CONF_ZONE_NAME],
-            CONF_ZONE_TYPE: ZONE_TYPE_FLOOR,
+            CONF_ZONE_TYPE: user_input.get(CONF_ZONE_TYPE, ZONE_TYPE_FLOOR),
             CONF_CLIMATE_ENTITY: user_input[CONF_CLIMATE_ENTITY],
+            CONF_AC_ENTITY: user_input.get(CONF_AC_ENTITY),
             CONF_FLOOR_TEMP_ENTITY: user_input.get(CONF_FLOOR_TEMP_ENTITY),
             CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
+            CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_SCHEDULE_ENTITY: user_input.get(CONF_SCHEDULE_ENTITY),
-            "komfort_temp": NUMBER_DEFS["komfort_temp"][4],
-            "uspora_temp": NUMBER_DEFS["uspora_temp"][4],
-            "mraz_temp": NUMBER_DEFS["mraz_temp"][4],
-            "floor_min": NUMBER_DEFS["floor_min"][4],
-            "floor_max": NUMBER_DEFS["floor_max"][4],
+            CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
         }
+
+    @staticmethod
+    def _merge_tunables(old_zone: dict, new_zone: dict) -> dict:
+        """Zachova hodnoty ladiacich cisiel/casov pri uprave strukturalnych poli zony."""
+        for key, (_, _, _, _, default) in {**NUMBER_DEFS, **AC_NUMBER_DEFS}.items():
+            new_zone[key] = old_zone.get(key, default)
+        for key, (_, default) in TIME_DEFS.items():
+            new_zone[key] = old_zone.get(key, default)
+        return new_zone
 
     def _save(self):
         options = dict(self.config_entry.options)

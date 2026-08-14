@@ -1,4 +1,4 @@
-"""Select platform - vyber rezimu (Auto/Komfort/Uspora/Mraz/Vypnute) per zona."""
+"""Select platform - vyber rezimu (Auto/Den/Noc/Min/Mraz/Vypnute) per zona."""
 from __future__ import annotations
 
 from homeassistant.components.select import SelectEntity
