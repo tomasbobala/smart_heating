@@ -145,7 +145,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             sched_state = self.hass.states.get(schedule_entity)
             schedule_active = sched_state is not None and sched_state.state == "on"
 
-        target, heating_allowed, reason = self._resolve_mode(
+        target, heating_allowed, reason, effective_mode = self._resolve_mode(
             mode, komfort, uspora, mraz, presence, schedule_active
         )
 
@@ -162,6 +162,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         return {
             "name": zone[CONF_ZONE_NAME],
             "mode": mode,
+            "effective_mode": effective_mode,
             "current_temperature": current_temp,
             "target_temperature": target,
             "floor_temperature": floor_temp,
@@ -175,22 +176,25 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     @staticmethod
     def _resolve_mode(mode, komfort, uspora, mraz, presence, schedule_active):
-        """Vrati (target_temperature, heating_allowed, reason) pre dany rezim."""
+        """Vrati (target_temperature, heating_allowed, reason, effective_mode).
+
+        effective_mode je skutocne aktivny pod-rezim (Komfort/Uspora/Mraz/Vypnute) -
+        v Auto sa moze lisit od 'mode' (co je len raw hodnota select entity)."""
         if mode == MODE_VYPNUTE:
-            return mraz, False, "Rezim Vypnute"
+            return mraz, False, "Rezim Vypnute", MODE_VYPNUTE
         if mode == MODE_KOMFORT:
-            return komfort, True, "Manualny rezim Komfort"
+            return komfort, True, "Manualny rezim Komfort", MODE_KOMFORT
         if mode == MODE_USPORA:
-            return uspora, True, "Manualny rezim Uspora"
+            return uspora, True, "Manualny rezim Uspora", MODE_USPORA
         if mode == MODE_MRAZ:
-            return mraz, True, "Manualny rezim Mraz (protimrazova ochrana)"
+            return mraz, True, "Manualny rezim Mraz (protimrazova ochrana)", MODE_MRAZ
 
         # MODE_AUTO
         if schedule_active is False:
-            return uspora, True, "Auto: mimo harmonogramu -> Uspora"
+            return uspora, True, "Auto: mimo harmonogramu -> Uspora", MODE_USPORA
         if presence:
-            return komfort, True, "Auto: pritomnost doma -> Komfort"
-        return uspora, True, "Auto: nikto doma -> Uspora"
+            return komfort, True, "Auto: pritomnost doma -> Komfort", MODE_KOMFORT
+        return uspora, True, "Auto: nikto doma -> Uspora", MODE_USPORA
 
     async def _async_apply(self) -> None:
         """Posle prikazy na skutocne climate zariadenia podla vypocitanych cielov."""

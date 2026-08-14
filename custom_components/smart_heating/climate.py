@@ -16,7 +16,6 @@ MODE_TO_NUMBER_KEY = {
     "Komfort": "komfort_temp",
     "Uspora": "uspora_temp",
     "Mraz": "mraz_temp",
-    "Auto": "komfort_temp",
     "Vypnute": "mraz_temp",
 }
 
@@ -77,6 +76,7 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
     def extra_state_attributes(self):
         return {
             "rezim": self._zdata["mode"],
+            "aktivny_podrezim": self._zdata["effective_mode"],
             "teplota_podlahy": self._zdata["floor_temperature"],
             "dovod": self._zdata["reason"],
         }
@@ -94,7 +94,7 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
-        key = MODE_TO_NUMBER_KEY.get(self._zdata["mode"], "komfort_temp")
+        key = MODE_TO_NUMBER_KEY.get(self._zdata["effective_mode"], "komfort_temp")
         await self.hass.services.async_call(
             "number",
             "set_value",
