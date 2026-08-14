@@ -1,8 +1,12 @@
 """Climate platform - hlavny 'riadiaci' termostat per zona."""
 from __future__ import annotations
 
-from homeassistant.components.climate import ClimateEntity, ClimateEntityFeature, HVACMode
-from homeassistant.components.climate.const import HVACAction
+from homeassistant.components.climate import (
+    ClimateEntity,
+    ClimateEntityFeature,
+    HVACAction,
+    HVACMode,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
