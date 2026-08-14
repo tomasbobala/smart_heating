@@ -3,10 +3,14 @@
     "step": {
       "user": {
         "title": "Smart Heating - globalne nastavenia",
-        "description": "Vyber existujuce entity pre vonkajsiu teplotu a tarifu. Zony pridas neskor cez Nastavenia integracie.",
+        "description": "Zony pridas neskor cez Nastavenia integracie.",
         "data": {
           "outdoor_sensor": "Senzor vonkajsej teploty",
-          "tariff_entity": "Entita tarify (on = kurenie povolene)"
+          "tariff_entity": "Entita tarify / povolenie kurenia (on = povolene)",
+          "fireplace_burning_entity": "Krb - entita 'hori' (volitelne)",
+          "fireplace_temp_entity": "Krb - senzor teploty (volitelne)",
+          "notify_entity": "Notifikacna entita (volitelne)",
+          "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)"
         }
       }
     },
@@ -29,17 +33,25 @@
         "title": "Globalne nastavenia",
         "data": {
           "outdoor_sensor": "Senzor vonkajsej teploty",
-          "tariff_entity": "Entita tarify (on = kurenie povolene)"
+          "tariff_entity": "Entita tarify / povolenie kurenia (on = povolene)",
+          "fireplace_burning_entity": "Krb - entita 'hori' (volitelne)",
+          "fireplace_temp_entity": "Krb - senzor teploty (volitelne)",
+          "notify_entity": "Notifikacna entita (volitelne)",
+          "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)"
         }
       },
       "add_zone": {
         "title": "Nova zona",
         "data": {
           "name": "Nazov zony",
+          "zone_type": "Typ zony",
           "climate_entity": "Podlahovy termostat (climate)",
+          "ac_entity": "Klimatizacia (climate) - len pre typ 'Klima + podlaha'",
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
-          "presence_entities": "Osoby, ktorych pritomnost sa sleduje",
-          "schedule_entity": "Harmonogram (schedule helper, volitelne)"
+          "presence_entities": "Osoby sledovane cez GPS (person)",
+          "manual_presence_entities": "Manualny presence override (napr. navsteva)",
+          "schedule_entity": "Harmonogram (schedule helper, volitelne)",
+          "use_fireplace_guard": "Reaguj na krb"
         }
       },
       "edit_zone": {
@@ -47,10 +59,14 @@
         "data": {
           "zone_id": "Zona",
           "name": "Nazov zony",
+          "zone_type": "Typ zony",
           "climate_entity": "Podlahovy termostat (climate)",
+          "ac_entity": "Klimatizacia (climate) - len pre typ 'Klima + podlaha'",
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
-          "presence_entities": "Osoby, ktorych pritomnost sa sleduje",
-          "schedule_entity": "Harmonogram (schedule helper, volitelne)"
+          "presence_entities": "Osoby sledovane cez GPS (person)",
+          "manual_presence_entities": "Manualny presence override (napr. navsteva)",
+          "schedule_entity": "Harmonogram (schedule helper, volitelne)",
+          "use_fireplace_guard": "Reaguj na krb"
         }
       },
       "remove_zone": {
