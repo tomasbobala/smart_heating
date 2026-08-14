@@ -1,12 +1,12 @@
 {
   "domain": "smart_heating",
   "name": "Smart Heating",
-  "codeowners": ["@tomasbobala"],
+  "codeowners": ["@tvoj-github-username"],
   "config_flow": true,
-  "documentation": "https://github.com/tomasbobala/smart_heating",
+  "documentation": "https://github.com/tvoj-username/smart_heating",
   "integration_type": "hub",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/tomasbobala/smart_heating/issues",
+  "issue_tracker": "https://github.com/tvoj-username/smart_heating/issues",
   "requirements": [],
-  "version": "0.1.1"
+  "version": "0.1.2"
 }
