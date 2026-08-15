@@ -7,7 +7,11 @@ from datetime import datetime, time as dt_time, timedelta
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_send
-from homeassistant.helpers.event import async_track_state_change_event, async_track_time_interval
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -92,6 +96,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self.entry = entry
         self._unsub_tracking = None
         self._unsub_interval = None
+        self._unsub_debounce = None
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
         # perzistentne ulozisko tyzdennych rozvrhov - NEZAVISLE od config entry options,
@@ -157,6 +162,16 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     @callback
     def _handle_state_change(self, event: Event) -> None:
+        # Debounce: rychlo po sebe iduce zmeny (napr. termostat hlasi teplotu kazdych
+        # par sekund) zluc do JEDNEHO prepoctu namiesto prepoctu vsetkych zon pri
+        # kazdej jednotlivej zmene - zbytocne casty prepocet zatazoval cely system.
+        if self._unsub_debounce:
+            self._unsub_debounce()
+        self._unsub_debounce = async_call_later(self.hass, 2.0, self._debounced_recompute)
+
+    @callback
+    def _debounced_recompute(self, _now) -> None:
+        self._unsub_debounce = None
         self.async_set_updated_data(self._compute())
         self.hass.async_create_task(self._async_apply())
 
@@ -540,3 +555,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         if self._unsub_interval:
             self._unsub_interval()
             self._unsub_interval = None
+        if self._unsub_debounce:
+            self._unsub_debounce()
+            self._unsub_debounce = None
