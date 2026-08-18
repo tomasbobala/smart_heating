@@ -20,7 +20,6 @@ CONF_AC_ENTITY = "ac_entity"
 CONF_FLOOR_TEMP_ENTITY = "floor_temp_entity"
 CONF_PRESENCE_ENTITIES = "presence_entities"
 CONF_MANUAL_PRESENCE_ENTITIES = "manual_presence_entities"
-CONF_SCHEDULE_ENTITY = "schedule_entity"  # docasne (faza 2 prinesie vlastny grid v karte)
 CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
 
 ZONE_TYPE_FLOOR = "floor"
@@ -80,8 +79,10 @@ AC_NUMBER_DEFS = {
 
 # key -> (label, default "HH:MM:SS")  -- time entity per zona
 TIME_DEFS = {
-    "den_od": ("Zaciatok dna", DEFAULT_DEN_OD),
-    "noc_od": ("Zaciatok noci", DEFAULT_NOC_OD),
+    "den_od_tyzden": ("Zaciatok dna - pracovny den", DEFAULT_DEN_OD),
+    "den_od_vikend": ("Zaciatok dna - vikend", DEFAULT_DEN_OD),
+    "noc_od_tyzden": ("Zaciatok noci - pracovny den", DEFAULT_NOC_OD),
+    "noc_od_vikend": ("Zaciatok noci - vikend", DEFAULT_NOC_OD),
     "predkurenie_od": ("Predkurenie - zaciatok", DEFAULT_PREDKURENIE_OD),
     "predkurenie_do": ("Predkurenie - koniec (timeout)", DEFAULT_PREDKURENIE_DO),
 }
@@ -104,10 +105,3 @@ HUB_NUMBER_DEFS = {
         15, 60, "mdi:fireplace", DEFAULT_FIREPLACE_THRESHOLD,
     ),
 }
-
-# ---- Tyzdenny rozvrh (vlastny grid v karte) ----
-WEEKDAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-BLOCKS_PER_DAY = 48  # 30-minutove bloky
-SCHEDULE_STORE_KEY = f"{DOMAIN}_schedules"
-SCHEDULE_STORE_VERSION = 1
-SIGNAL_SCHEDULE_UPDATED = f"{DOMAIN}_schedule_updated"

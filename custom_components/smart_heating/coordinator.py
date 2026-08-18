@@ -6,19 +6,16 @@ from datetime import datetime, time as dt_time, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.dispatcher import async_dispatcher_send
 from homeassistant.helpers.event import (
     async_call_later,
     async_track_state_change_event,
     async_track_time_interval,
 )
-from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
 from .const import (
     AC_NUMBER_DEFS,
-    BLOCKS_PER_DAY,
     CONF_AC_ENTITY,
     CONF_CLIMATE_ENTITY,
     CONF_FIREPLACE_BURNING_ENTITY,
@@ -29,7 +26,6 @@ from .const import (
     CONF_OUTDOOR_SENSOR,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
-    CONF_SCHEDULE_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
     CONF_ZONE_NAME,
@@ -44,12 +40,8 @@ from .const import (
     MODE_VYPNUTE,
     NUMBER_DEFS,
     OPT_ZONES,
-    SCHEDULE_STORE_KEY,
-    SCHEDULE_STORE_VERSION,
-    SIGNAL_SCHEDULE_UPDATED,
     SWITCH_DEFS,
     TIME_DEFS,
-    WEEKDAY_KEYS,
     ZONE_TYPE_FLOOR_AC,
 )
 
@@ -99,10 +91,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_debounce = None
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
-        # perzistentne ulozisko tyzdennych rozvrhov - NEZAVISLE od config entry options,
-        # takze editacia rozvrhu z karty nikdy nespusti reload celej integracie
-        self._schedule_store = Store(hass, SCHEDULE_STORE_VERSION, SCHEDULE_STORE_KEY)
-        self._schedules: dict[str, dict] = {}
 
     @property
     def zones(self) -> dict:
@@ -114,7 +102,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         )
 
     async def async_setup(self) -> None:
-        self._schedules = await self._schedule_store.async_load() or {}
         self.data = self._compute()
         self._track_entities()
         self._unsub_interval = async_track_time_interval(
@@ -139,8 +126,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 ids.append(zone[CONF_FLOOR_TEMP_ENTITY])
             ids.extend(zone.get(CONF_PRESENCE_ENTITIES, []))
             ids.extend(zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
-            if zone.get(CONF_SCHEDULE_ENTITY):
-                ids.append(zone[CONF_SCHEDULE_ENTITY])
             ids.append(mode_entity_id(zone_id))
             for key in NUMBER_DEFS:
                 ids.append(number_entity_id(zone_id, key))
@@ -193,42 +178,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         zone_name = self.zones.get(zone_id, {}).get(CONF_ZONE_NAME, zone_id)
         await self._notify(f"Boost aktivovany v zone {zone_name} na {hours} h.")
         await self.async_recompute_and_apply()
-
-    # ---------------------------------------------------------------- tyzdenny rozvrh
-
-    def get_zone_schedule(self, zone_id: str) -> dict[str, list[bool]] | None:
-        """Vrati ulozeny grid pre zonu, alebo None ak zatial nie je nastaveny
-        (v tom pripade Auto rezim bez rozvrhu berie stale ako 'komfort')."""
-        return self._schedules.get(zone_id)
-
-    async def async_set_zone_schedule(self, zone_id: str, schedule: dict[str, list[bool]]) -> None:
-        for day in WEEKDAY_KEYS:
-            blocks = schedule.get(day)
-            if not isinstance(blocks, list) or len(blocks) != BLOCKS_PER_DAY:
-                raise ValueError(
-                    f"Rozvrh musi obsahovat presne {BLOCKS_PER_DAY} hodnot (True/False) pre den '{day}'"
-                )
-        self._schedules[zone_id] = {day: [bool(v) for v in schedule[day]] for day in WEEKDAY_KEYS}
-        await self._schedule_store.async_save(self._schedules)
-        async_dispatcher_send(self.hass, f"{SIGNAL_SCHEDULE_UPDATED}_{zone_id}")
-        await self.async_recompute_and_apply()
-
-    def _schedule_active(self, zone_id: str, zone: dict, weekday: int, now_t: dt_time) -> bool | None:
-        """True/False z vlastneho gridu (ak je nastaveny) - inak fallback na legacy
-        schedule.xxx helper (ak je priradeny) - inak None (= v Auto vzdy komfort)."""
-        grid = self._schedules.get(zone_id)
-        if grid:
-            blocks = grid.get(WEEKDAY_KEYS[weekday])
-            if blocks and len(blocks) == BLOCKS_PER_DAY:
-                idx = now_t.hour * 2 + (1 if now_t.minute >= 30 else 0)
-                return bool(blocks[idx])
-
-        schedule_entity = zone.get(CONF_SCHEDULE_ENTITY)
-        if schedule_entity:
-            state = self.hass.states.get(schedule_entity)
-            return state is not None and state.state == "on"
-
-        return None
 
     # ---------------------------------------------------------------- stav helpers
 
@@ -316,8 +265,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         min_temp = self._state_float(number_entity_id(zone_id, "teplota_min"), NUMBER_DEFS["teplota_min"][4])
         mraz = self._state_float(number_entity_id(zone_id, "teplota_mraz"), NUMBER_DEFS["teplota_mraz"][4])
 
-        den_od = self._state_time(time_entity_id(zone_id, "den_od"), TIME_DEFS["den_od"][1])
-        noc_od = self._state_time(time_entity_id(zone_id, "noc_od"), TIME_DEFS["noc_od"][1])
+        is_weekend = weekday >= 5  # 5=So, 6=Ne
+        den_od_key = "den_od_vikend" if is_weekend else "den_od_tyzden"
+        noc_od_key = "noc_od_vikend" if is_weekend else "noc_od_tyzden"
+        den_od = self._state_time(time_entity_id(zone_id, den_od_key), TIME_DEFS[den_od_key][1])
+        noc_od = self._state_time(time_entity_id(zone_id, noc_od_key), TIME_DEFS[noc_od_key][1])
         is_day = _time_in_range(now_t, den_od, noc_od)
         comfort_target = den if is_day else noc
         comfort_mode = MODE_DEN if is_day else MODE_NOC
@@ -327,8 +279,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         ) or any(
             self.hass.states.is_state(p, "on") for p in zone.get(CONF_MANUAL_PRESENCE_ENTITIES, [])
         )
-
-        schedule_active = self._schedule_active(zone_id, zone, weekday, now_t)
 
         predkurenie_povolene = self._state_bool(switch_entity_id(zone_id, "predkurenie_povolene"), True)
         predkurenie_od = self._state_time(time_entity_id(zone_id, "predkurenie_od"), TIME_DEFS["predkurenie_od"][1])
@@ -346,7 +296,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # --- 4/5: manualny rezim / auto (bez bezpecnostnych vrstiev) ---
         target, heating_allowed, reason, effective_mode = self._resolve_target(
             mode, den, noc, min_temp, mraz, comfort_target, comfort_mode,
-            presence, schedule_active, preheat_active, holiday_active, boost_active,
+            presence, preheat_active, holiday_active, boost_active,
         )
 
         # --- 1: TARIFA ---
@@ -395,7 +345,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             reason = f"NUDZOVA OCHRANA: {current_temp}\u00b0C < {emergency_temp}\u00b0C (preraza tarifu)"
             emergency_active = True
 
-        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], {
+        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, {
             "tariff": tariff_blocked,
             "floor": floor_override,
             "krb": krb_override,
@@ -429,7 +379,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     @staticmethod
     def _resolve_target(
         mode, den, noc, min_temp, mraz, comfort_target, comfort_mode,
-        presence, schedule_active, preheat_active, holiday_active, boost_active,
+        presence, preheat_active, holiday_active, boost_active,
     ):
         """Vrati (target, heating_allowed, reason, effective_mode) - BEZ tarify/floor/krb/emergency,
         tie sa aplikuju az v _compute_zone ako vrstvy nad vysledkom tejto funkcie."""
@@ -454,16 +404,19 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             return comfort_target, True, f"Auto: pritomnost doma -> {comfort_mode}", comfort_mode
         if preheat_active:
             return comfort_target, True, f"Auto: predkurenie pred prichodom -> {comfort_mode}", comfort_mode
-        if schedule_active is False:
-            return min_temp, True, "Auto: mimo harmonogramu -> Min", MODE_MIN
-        return comfort_target, True, f"Auto: harmonogram/predvolene -> {comfort_mode}", comfort_mode
+        return min_temp, True, "Auto: nikto doma, mimo predkurenia -> Min", MODE_MIN
 
     # ---------------------------------------------------------------- notifikacie
 
-    def _maybe_notify(self, zone_id: str, zone_name: str, flags: dict) -> None:
+    def _maybe_notify(self, zone_id: str, zone_name: str, mode: str, flags: dict) -> None:
         rt = self._rt(zone_id)
         prev_flags: set = rt["flags"]
         cur_flags = {k for k, v in flags.items() if v}
+        if mode == MODE_VYPNUTE:
+            # Zona je vedome vypnuta - notifikacie o tarife/podlahe/krbe su tu
+            # ocakavane a zbytocne (kurenie je aj tak vypnute z vlastnej vole).
+            # Nudzova ochrana notifikuje vzdy, bez ohladu na rezim.
+            cur_flags = {k for k in cur_flags if k == "emergency"}
         newly_active = cur_flags - prev_flags
         messages = {
             "tariff": f"{zone_name}: kurenie zablokovane vysokou tarifou.",
