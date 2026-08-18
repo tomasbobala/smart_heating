@@ -50,7 +50,6 @@
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
           "presence_entities": "Osoby sledovane cez GPS (person)",
           "manual_presence_entities": "Manualny presence override (napr. navsteva)",
-          "schedule_entity": "Harmonogram (schedule helper, volitelne)",
           "use_fireplace_guard": "Reaguj na krb"
         }
       },
@@ -65,7 +64,6 @@
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
           "presence_entities": "Osoby sledovane cez GPS (person)",
           "manual_presence_entities": "Manualny presence override (napr. navsteva)",
-          "schedule_entity": "Harmonogram (schedule helper, volitelne)",
           "use_fireplace_guard": "Reaguj na krb"
         }
       },
