@@ -43,6 +43,8 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
         return {
             "zone_id": self._zone_id,
             "floor_temperature": z["floor_temperature"],
+            "outdoor_temperature": z["outdoor_temperature"],
+            "cold_outdoor_active": z["cold_outdoor_active"],
             "floor_override": z["floor_override"],
             "krb_override": z["krb_override"],
             "tariff_blocked": z["tariff_blocked"],

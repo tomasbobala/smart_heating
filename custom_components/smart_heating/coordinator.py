@@ -225,7 +225,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         zones_data = {
             zone_id: self._compute_zone(
                 zone_id, zone, tariff_ok, holiday_active, emergency_temp,
-                krb_threshold, fireplace_temp, pv_surplus, now_t, weekday,
+                krb_threshold, fireplace_temp, pv_surplus, outdoor, now_t, weekday,
             )
             for zone_id, zone in self.zones.items()
         }
@@ -239,7 +239,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     def _compute_zone(
         self, zone_id, zone, tariff_ok, holiday_active, emergency_temp,
-        krb_threshold, fireplace_temp, pv_surplus, now_t, weekday,
+        krb_threshold, fireplace_temp, pv_surplus, outdoor, now_t, weekday,
     ) -> dict:
         climate_entity = zone[CONF_CLIMATE_ENTITY]
         climate_state = self.hass.states.get(climate_entity)
@@ -279,6 +279,13 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             predkurenie_povolene and weekday < 5 and _time_in_range(now_t, predkurenie_od, predkurenie_do)
         )
 
+        vonkajsia_hranica = self._state_float(
+            number_entity_id(zone_id, "vonkajsia_hranica"), NUMBER_DEFS["vonkajsia_hranica"][4]
+        )
+        cold_outdoor_active = (
+            outdoor is not None and vonkajsia_hranica is not None and outdoor <= vonkajsia_hranica
+        )
+
         rt = self._rt(zone_id)
         boost_until = rt.get("boost_until")
         boost_active = boost_until is not None and dt_util.now() < boost_until
@@ -288,7 +295,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # --- 4/5: manualny rezim / auto (bez bezpecnostnych vrstiev) ---
         target, heating_allowed, reason, effective_mode = self._resolve_target(
             mode, den, noc, min_temp, mraz, comfort_target, comfort_mode,
-            presence, preheat_active, holiday_active, boost_active,
+            presence, preheat_active, cold_outdoor_active, holiday_active, boost_active,
         )
 
         # --- 1: TARIFA ---
@@ -355,6 +362,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "floor_temperature": floor_temp,
             "floor_min": floor_min,
             "floor_max": floor_max,
+            "outdoor_temperature": outdoor,
+            "cold_outdoor_active": cold_outdoor_active,
             "heating_allowed": heating_allowed,
             "floor_override": floor_override,
             "krb_override": krb_override,
@@ -371,7 +380,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     @staticmethod
     def _resolve_target(
         mode, den, noc, min_temp, mraz, comfort_target, comfort_mode,
-        presence, preheat_active, holiday_active, boost_active,
+        presence, preheat_active, cold_outdoor_active, holiday_active, boost_active,
     ):
         """Vrati (target, heating_allowed, reason, effective_mode) - BEZ tarify/floor/krb/emergency,
         tie sa aplikuju az v _compute_zone ako vrstvy nad vysledkom tejto funkcie."""
@@ -396,6 +405,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             return comfort_target, True, f"Auto: pritomnost doma -> {comfort_mode}", comfort_mode
         if preheat_active:
             return comfort_target, True, f"Auto: predkurenie pred prichodom -> {comfort_mode}", comfort_mode
+        if cold_outdoor_active:
+            return comfort_target, True, f"Auto: nizka vonkajsia teplota -> {comfort_mode}", comfort_mode
         return min_temp, True, "Auto: nikto doma, mimo predkurenia -> Min", MODE_MIN
 
     # ---------------------------------------------------------------- notifikacie

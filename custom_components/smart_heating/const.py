@@ -55,6 +55,7 @@ DEFAULT_PREDKURENIE_DO = "18:00:00"
 
 DEFAULT_EMERGENCY_TEMP = 8.0
 DEFAULT_FIREPLACE_THRESHOLD = 30.0
+DEFAULT_OUTDOOR_THRESHOLD = -5.0
 
 # key -> (label, min, max, icon, default)  -- number entity per zona
 NUMBER_DEFS = {
@@ -65,6 +66,10 @@ NUMBER_DEFS = {
     "floor_min": ("Min. teplota podlahy", 5, 20, "mdi:thermometer-low", DEFAULT_FLOOR_MIN),
     "floor_max": ("Max. teplota podlahy", 20, 32, "mdi:thermometer-high", DEFAULT_FLOOR_MAX),
     "boost_hodiny": ("Boost - trvanie (h)", 0.5, 6, "mdi:rocket-launch", DEFAULT_BOOST_HOURS),
+    "vonkajsia_hranica": (
+        "Vonkajsia teplota - hranica pre vynutene kurenie (°C)",
+        -30, 15, "mdi:snowflake-thermometer", DEFAULT_OUTDOOR_THRESHOLD,
+    ),
 }
 
 # number entity navyse len pre zony typu floor_ac
