@@ -304,4 +304,6 @@ forkuješ kód).
 
 ## Licencia
 
-Pridaj si vlastnú licenciu (napr. MIT) do `LICENSE`, ak repozitár zdieľaš verejne.
+Tento projekt je licencovaný pod [MIT licenciou](LICENSE) — môžeš ho slobodne
+používať, upravovať aj šíriť, aj na komerčné účely, pokiaľ zachováš pôvodné
+copyright oznámenie.
