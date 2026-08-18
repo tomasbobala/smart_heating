@@ -5,10 +5,12 @@ DOMAIN = "smart_heating"
 # ---- Hub config/options ----
 CONF_OUTDOOR_SENSOR = "outdoor_sensor"
 CONF_TARIFF_ENTITY = "tariff_entity"
-CONF_FIREPLACE_BURNING_ENTITY = "fireplace_burning_entity"
 CONF_FIREPLACE_TEMP_ENTITY = "fireplace_temp_entity"
 CONF_NOTIFY_ENTITY = "notify_entity"
 CONF_PV_SURPLUS_ENTITY = "pv_surplus_entity"
+CONF_KRB_THRESHOLD = "krb_threshold"
+CONF_NUDZOVA_TEPLOTA = "nudzova_teplota"
+CONF_HOLIDAY_ACTIVE = "holiday_active"
 
 OPT_ZONES = "zones"
 
@@ -94,14 +96,4 @@ SWITCH_DEFS = {
     "vyuzi_fve_prebytok": ("Vyuzi FVE prebytok (kuri aj ked nikto nie je doma)", "mdi:solar-power", True),
 }
 
-# key -> (label, min, max, icon, default) -- hub-level number entity
-HUB_NUMBER_DEFS = {
-    "nudzova_teplota": (
-        "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
-        3, 15, "mdi:snowflake-alert", DEFAULT_EMERGENCY_TEMP,
-    ),
-    "krb_threshold": (
-        "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
-        15, 60, "mdi:fireplace", DEFAULT_FIREPLACE_THRESHOLD,
-    ),
-}
+

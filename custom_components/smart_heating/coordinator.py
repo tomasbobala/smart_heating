@@ -18,20 +18,23 @@ from .const import (
     AC_NUMBER_DEFS,
     CONF_AC_ENTITY,
     CONF_CLIMATE_ENTITY,
-    CONF_FIREPLACE_BURNING_ENTITY,
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
+    CONF_KRB_THRESHOLD,
     CONF_MANUAL_PRESENCE_ENTITIES,
     CONF_NOTIFY_ENTITY,
+    CONF_NUDZOVA_TEPLOTA,
     CONF_OUTDOOR_SENSOR,
+    CONF_HOLIDAY_ACTIVE,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
+    DEFAULT_EMERGENCY_TEMP,
+    DEFAULT_FIREPLACE_THRESHOLD,
     DOMAIN,
-    HUB_NUMBER_DEFS,
     MODE_AUTO,
     MODE_DEN,
     MODE_MIN,
@@ -64,13 +67,6 @@ def time_entity_id(zone_id: str, key: str) -> str:
 
 def switch_entity_id(zone_id: str, key: str) -> str:
     return f"switch.smart_heating_{zone_id}_{key}"
-
-
-def hub_number_entity_id(key: str) -> str:
-    return f"number.smart_heating_{key}"
-
-
-HUB_SWITCH_NEPRITOMNOST = "switch.smart_heating_nepritomnost"
 
 
 def _time_in_range(now_t: dt_time, start_t: dt_time, end_t: dt_time) -> bool:
@@ -111,12 +107,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     def _tracked_entity_ids(self) -> list[str]:
         ids: list[str] = []
         opt = self.entry.options
-        for key in (CONF_OUTDOOR_SENSOR, CONF_TARIFF_ENTITY, CONF_FIREPLACE_BURNING_ENTITY, CONF_FIREPLACE_TEMP_ENTITY, CONF_PV_SURPLUS_ENTITY):
+        for key in (CONF_OUTDOOR_SENSOR, CONF_TARIFF_ENTITY, CONF_FIREPLACE_TEMP_ENTITY, CONF_PV_SURPLUS_ENTITY):
             if opt.get(key):
                 ids.append(opt[key])
-        ids.append(HUB_SWITCH_NEPRITOMNOST)
-        for key in HUB_NUMBER_DEFS:
-            ids.append(hub_number_entity_id(key))
 
         for zone_id, zone in self.zones.items():
             ids.append(zone[CONF_CLIMATE_ENTITY])
@@ -220,10 +213,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             state = self.hass.states.get(tariff_entity)
             tariff_ok = state is not None and state.state == "on"
 
-        holiday_active = self._state_bool(HUB_SWITCH_NEPRITOMNOST, False)
-        emergency_temp = self._state_float(hub_number_entity_id("nudzova_teplota"), HUB_NUMBER_DEFS["nudzova_teplota"][4])
-        krb_threshold = self._state_float(hub_number_entity_id("krb_threshold"), HUB_NUMBER_DEFS["krb_threshold"][4])
-        fireplace_burning = self._state_bool(opt.get(CONF_FIREPLACE_BURNING_ENTITY), False)
+        holiday_active = bool(opt.get(CONF_HOLIDAY_ACTIVE, False))
+        emergency_temp = opt.get(CONF_NUDZOVA_TEPLOTA, DEFAULT_EMERGENCY_TEMP)
+        krb_threshold = opt.get(CONF_KRB_THRESHOLD, DEFAULT_FIREPLACE_THRESHOLD)
         fireplace_temp = self._state_float(opt.get(CONF_FIREPLACE_TEMP_ENTITY))
         pv_surplus = self._state_bool(opt.get(CONF_PV_SURPLUS_ENTITY), False)
 
@@ -233,7 +225,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         zones_data = {
             zone_id: self._compute_zone(
                 zone_id, zone, tariff_ok, holiday_active, emergency_temp,
-                krb_threshold, fireplace_burning, fireplace_temp, pv_surplus, now_t, weekday,
+                krb_threshold, fireplace_temp, pv_surplus, now_t, weekday,
             )
             for zone_id, zone in self.zones.items()
         }
@@ -247,7 +239,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     def _compute_zone(
         self, zone_id, zone, tariff_ok, holiday_active, emergency_temp,
-        krb_threshold, fireplace_burning, fireplace_temp, pv_surplus, now_t, weekday,
+        krb_threshold, fireplace_temp, pv_surplus, now_t, weekday,
     ) -> dict:
         climate_entity = zone[CONF_CLIMATE_ENTITY]
         climate_state = self.hass.states.get(climate_entity)
@@ -317,12 +309,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         krb_override = False
         use_krb = self._state_bool(switch_entity_id(zone_id, "reaguj_na_krb"), zone.get(CONF_USE_FIREPLACE_GUARD, False))
         if (
-            use_krb and fireplace_burning and fireplace_temp is not None
+            use_krb and fireplace_temp is not None
             and krb_threshold is not None and fireplace_temp >= krb_threshold
         ):
             heating_allowed = False
             krb_override = True
-            reason = f"STOP: krb hori, teplota pri krbe {fireplace_temp}\u00b0C >= {krb_threshold}\u00b0C"
+            reason = f"STOP: teplota pri krbe {fireplace_temp}\u00b0C >= {krb_threshold}\u00b0C"
 
         # --- 0.5: FVE PREBYTOK (preraza TARIFU, nie floor/krb) ---
         pv_active = False

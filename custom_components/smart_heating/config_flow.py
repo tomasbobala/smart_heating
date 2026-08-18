@@ -14,18 +14,22 @@ from .const import (
     AC_NUMBER_DEFS,
     CONF_AC_ENTITY,
     CONF_CLIMATE_ENTITY,
-    CONF_FIREPLACE_BURNING_ENTITY,
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
+    CONF_KRB_THRESHOLD,
     CONF_MANUAL_PRESENCE_ENTITIES,
     CONF_NOTIFY_ENTITY,
+    CONF_NUDZOVA_TEPLOTA,
     CONF_OUTDOOR_SENSOR,
+    CONF_HOLIDAY_ACTIVE,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
+    DEFAULT_EMERGENCY_TEMP,
+    DEFAULT_FIREPLACE_THRESHOLD,
     DOMAIN,
     NUMBER_DEFS,
     OPT_ZONES,
@@ -55,13 +59,26 @@ def _hub_schema_dict(current: dict) -> dict:
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
     )
     _add_optional(
-        schema_dict, CONF_FIREPLACE_BURNING_ENTITY, current.get(CONF_FIREPLACE_BURNING_ENTITY),
-        selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
-    )
-    _add_optional(
         schema_dict, CONF_FIREPLACE_TEMP_ENTITY, current.get(CONF_FIREPLACE_TEMP_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
     )
+    schema_dict[
+        vol.Optional(
+            CONF_KRB_THRESHOLD, default=current.get(CONF_KRB_THRESHOLD, DEFAULT_FIREPLACE_THRESHOLD)
+        )
+    ] = selector.NumberSelector(
+        selector.NumberSelectorConfig(min=15, max=60, step=0.5, mode="box", unit_of_measurement="°C")
+    )
+    schema_dict[
+        vol.Optional(
+            CONF_NUDZOVA_TEPLOTA, default=current.get(CONF_NUDZOVA_TEPLOTA, DEFAULT_EMERGENCY_TEMP)
+        )
+    ] = selector.NumberSelector(
+        selector.NumberSelectorConfig(min=3, max=15, step=0.5, mode="box", unit_of_measurement="°C")
+    )
+    schema_dict[
+        vol.Optional(CONF_HOLIDAY_ACTIVE, default=current.get(CONF_HOLIDAY_ACTIVE, False))
+    ] = selector.BooleanSelector()
     _add_optional(
         schema_dict, CONF_NOTIFY_ENTITY, current.get(CONF_NOTIFY_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
