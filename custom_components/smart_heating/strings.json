@@ -12,7 +12,8 @@
           "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)",
           "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
           "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
-          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)"
+          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
+          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie"
         }
       }
     },
@@ -41,7 +42,8 @@
           "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)",
           "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
           "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
-          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)"
+          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
+          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie"
         }
       },
       "add_zone": {

@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 from .const import (
     AC_NUMBER_DEFS,
     CONF_AC_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
     CONF_CLIMATE_ENTITY,
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
@@ -86,6 +87,10 @@ def _hub_schema_dict(current: dict) -> dict:
     _add_optional(
         schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
+    )
+    _add_optional(
+        schema_dict, CONF_BATTERY_SOC_ENTITY, current.get(CONF_BATTERY_SOC_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="battery")),
     )
     return schema_dict
 

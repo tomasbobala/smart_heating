@@ -42,6 +42,8 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
         z = self.coordinator.data["zones"][self._zone_id]
         return {
             "zone_id": self._zone_id,
+            "season": z["season"],
+            "release_control": z["release_control"],
             "floor_temperature": z["floor_temperature"],
             "outdoor_temperature": z["outdoor_temperature"],
             "cold_outdoor_active": z["cold_outdoor_active"],

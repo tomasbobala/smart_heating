@@ -8,6 +8,7 @@ CONF_TARIFF_ENTITY = "tariff_entity"
 CONF_FIREPLACE_TEMP_ENTITY = "fireplace_temp_entity"
 CONF_NOTIFY_ENTITY = "notify_entity"
 CONF_PV_SURPLUS_ENTITY = "pv_surplus_entity"
+CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_KRB_THRESHOLD = "krb_threshold"
 CONF_NUDZOVA_TEPLOTA = "nudzova_teplota"
 CONF_HOLIDAY_ACTIVE = "holiday_active"
@@ -37,6 +38,12 @@ MODE_MRAZ = "Mraz"
 MODE_VYPNUTE = "Vypnute"
 ZONE_MODES = [MODE_AUTO, MODE_DEN, MODE_NOC, MODE_MIN, MODE_MRAZ, MODE_VYPNUTE]
 
+# ---- Sezona (len zony s klimatizaciou - typ floor_ac) ----
+SEASON_KURENIE = "Kurenie"
+SEASON_CHLADENIE = "Chladenie"
+SEASON_AUTO = "Auto"
+SEASONS = [SEASON_KURENIE, SEASON_CHLADENIE, SEASON_AUTO]
+
 # ---- Defaultne hodnoty ----
 DEFAULT_DEN_TEMP = 21.0
 DEFAULT_NOC_TEMP = 19.0
@@ -56,6 +63,9 @@ DEFAULT_PREDKURENIE_DO = "18:00:00"
 DEFAULT_EMERGENCY_TEMP = 8.0
 DEFAULT_FIREPLACE_THRESHOLD = 30.0
 DEFAULT_OUTDOOR_THRESHOLD = -5.0
+DEFAULT_COOL_OUTDOOR_THRESHOLD = 24.0
+DEFAULT_COOL_TARGET = 25.0
+DEFAULT_COOL_BATTERY_THRESHOLD = 50.0
 
 # key -> (label, min, max, icon, default)  -- number entity per zona
 NUMBER_DEFS = {
@@ -81,6 +91,22 @@ AC_NUMBER_DEFS = {
     "ac_priorita_minuty": (
         "AC priorita - cas nez dokuri podlaha (min)",
         5, 90, "mdi:timer-outline", DEFAULT_AC_PRIORITY_MINUTES,
+    ),
+}
+
+# number entity navyse len pre zony s klimatizaciou (floor_ac) - jednoducha logika chladenia
+COOLING_NUMBER_DEFS = {
+    "vonkajsia_hranica_chladenie": (
+        "Chladenie - vonkajsia hranica pre Auto-sezonu (°C)",
+        15, 35, "mdi:sun-thermometer", DEFAULT_COOL_OUTDOOR_THRESHOLD,
+    ),
+    "teplota_chladenie": (
+        "Chladenie - cielova teplota (°C)",
+        18, 30, "mdi:snowflake", DEFAULT_COOL_TARGET,
+    ),
+    "bateria_hranica_chladenie": (
+        "Chladenie - min. nabitie baterie FVE (%)",
+        0, 100, "mdi:battery-charging-70", DEFAULT_COOL_BATTERY_THRESHOLD,
     ),
 }
 
