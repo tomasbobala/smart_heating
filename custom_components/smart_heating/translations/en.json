@@ -56,7 +56,8 @@
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
           "presence_entities": "Osoby sledovane cez GPS (person)",
           "manual_presence_entities": "Manualny presence override (napr. navsteva)",
-          "use_fireplace_guard": "Reaguj na krb"
+          "use_fireplace_guard": "Reaguj na krb",
+          "external_temp_entity": "Externy teplomer zony (nahradi vstavany senzor AC/podlahovky vo vypoctoch)"
         }
       },
       "edit_zone": {
@@ -70,7 +71,8 @@
           "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
           "presence_entities": "Osoby sledovane cez GPS (person)",
           "manual_presence_entities": "Manualny presence override (napr. navsteva)",
-          "use_fireplace_guard": "Reaguj na krb"
+          "use_fireplace_guard": "Reaguj na krb",
+          "external_temp_entity": "Externy teplomer zony (nahradi vstavany senzor AC/podlahovky vo vypoctoch)"
         }
       },
       "remove_zone": {
