@@ -21,6 +21,7 @@ CONF_ZONE_TYPE = "zone_type"
 CONF_CLIMATE_ENTITY = "climate_entity"
 CONF_AC_ENTITY = "ac_entity"
 CONF_FLOOR_TEMP_ENTITY = "floor_temp_entity"
+CONF_EXTERNAL_TEMP_ENTITY = "external_temp_entity"
 CONF_PRESENCE_ENTITIES = "presence_entities"
 CONF_MANUAL_PRESENCE_ENTITIES = "manual_presence_entities"
 CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
@@ -54,6 +55,8 @@ DEFAULT_FLOOR_MAX = 28.0
 DEFAULT_BOOST_HOURS = 2.0
 DEFAULT_AC_PRIORITY_DIFF = 1.0
 DEFAULT_AC_PRIORITY_MINUTES = 30.0
+DEFAULT_AC_SETPOINT = 26.0
+DEFAULT_AC_HYSTEREZIA = 0.3
 
 DEFAULT_DEN_OD = "06:00:00"
 DEFAULT_NOC_OD = "20:00:00"
@@ -91,6 +94,14 @@ AC_NUMBER_DEFS = {
     "ac_priorita_minuty": (
         "AC priorita - cas nez dokuri podlaha (min)",
         5, 90, "mdi:timer-outline", DEFAULT_AC_PRIORITY_MINUTES,
+    ),
+    "ac_setpoint_teplota": (
+        "AC - fyzicky setpoint pri kureni (°C, nezavisle od cielovej teploty)",
+        18, 32, "mdi:air-conditioner", DEFAULT_AC_SETPOINT,
+    ),
+    "ac_hysterezia": (
+        "AC - hysterezia pre zapnutie/vypnutie (°C, podla externeho teplomera)",
+        0.1, 2, "mdi:swap-vertical-bold", DEFAULT_AC_HYSTEREZIA,
     ),
 }
 

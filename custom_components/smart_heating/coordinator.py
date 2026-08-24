@@ -20,6 +20,7 @@ from .const import (
     CONF_AC_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CLIMATE_ENTITY,
+    CONF_EXTERNAL_TEMP_ENTITY,
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
@@ -268,7 +269,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     ) -> dict:
         climate_entity = zone[CONF_CLIMATE_ENTITY]
         climate_state = self.hass.states.get(climate_entity)
-        current_temp = climate_state.attributes.get("current_temperature") if climate_state else None
+        external_temp_entity = zone.get(CONF_EXTERNAL_TEMP_ENTITY)
+        if external_temp_entity:
+            current_temp = self._state_float(external_temp_entity)
+        else:
+            current_temp = climate_state.attributes.get("current_temperature") if climate_state else None
+        has_external_temp = bool(external_temp_entity)
 
         floor_temp = self._state_float(zone.get(CONF_FLOOR_TEMP_ENTITY))
         floor_min = self._state_float(number_entity_id(zone_id, "floor_min"), NUMBER_DEFS["floor_min"][4])
@@ -297,7 +303,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
         if season == SEASON_CHLADENIE:
             return self._compute_zone_cooling(
-                zone_id, zone, mode, release_control, current_temp,
+                zone_id, zone, mode, release_control, current_temp, has_external_temp,
                 floor_temp, floor_min, floor_max, battery_soc, climate_entity,
             )
 
@@ -410,6 +416,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "mode": mode,
             "effective_mode": effective_mode,
             "current_temperature": current_temp,
+            "has_external_temp": has_external_temp,
             "target_temperature": target,
             "device_mode": device_mode,
             "floor_temperature": floor_temp,
@@ -432,7 +439,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         }
 
     def _compute_zone_cooling(
-        self, zone_id, zone, mode, release_control, current_temp,
+        self, zone_id, zone, mode, release_control, current_temp, has_external_temp,
         floor_temp, floor_min, floor_max, battery_soc, climate_entity,
     ) -> dict:
         """Zjednodusena logika chladenia: len batera FVE vs hranica, ziadna
@@ -468,6 +475,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "mode": mode,
             "effective_mode": None,
             "current_temperature": current_temp,
+            "has_external_temp": has_external_temp,
             "target_temperature": target,
             "device_mode": device_mode,
             "floor_temperature": floor_temp,
@@ -589,22 +597,45 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     async def _apply_floor_ac(self, zone_id: str, zdata: dict) -> None:
         """KURENIE v zone typu floor_ac: AC je vzdy prioritny zdroj. Podlaha nastupi
         ako dokurovanie, ak AC nestiha dlhsie ako 'ac_priorita_minuty' o viac ako
-        'ac_priorita_rozdiel' stupnov."""
+        'ac_priorita_rozdiel' stupnov.
+
+        Ak ma zona nastaveny externy teplomer (vlastny senzor AC je nepresny), AC sa
+        neriadi svojim vlastnym regulacnym okruhom - namiesto toho posielame pevny
+        'ac_setpoint_teplota' (napr. 26°C, zarucene vysoko nad realny ciel) a MY sami
+        rozhodujeme kedy ma bezat, na zaklade extern. teplomera s hysterezou."""
         ac_entity = zdata["ac_entity"]
         floor_entity = zdata["climate_entity"]
         heating_allowed = zdata["heating_allowed"]
         target = zdata["target_temperature"]
         current_temp = zdata["current_temperature"]
+        rt = self._rt(zone_id)
 
         if not heating_allowed:
             await self._apply_device(ac_entity, "off", None)
             await self._apply_device(floor_entity, "off", None)
+            rt["ac_running"] = False
             zdata["heat_source"] = "Ziadny"
             return
 
-        await self._apply_device(ac_entity, "heat", target)
+        if zdata["has_external_temp"]:
+            ac_setpoint = self._state_float(
+                number_entity_id(zone_id, "ac_setpoint_teplota"), AC_NUMBER_DEFS["ac_setpoint_teplota"][4]
+            )
+            hysterezia = self._state_float(
+                number_entity_id(zone_id, "ac_hysterezia"), AC_NUMBER_DEFS["ac_hysterezia"][4]
+            )
+            if current_temp is not None and target is not None:
+                if current_temp >= target + hysterezia:
+                    rt["ac_running"] = False
+                elif current_temp <= target - hysterezia:
+                    rt["ac_running"] = True
+                # inak (v pasme hysterezie) - necha predchadzajuci stav bezo zmeny
+            ac_running = rt.get("ac_running", True)  # bez udajov radsej bezpecnejsie zapnut
+            await self._apply_device(ac_entity, "heat" if ac_running else "off", ac_setpoint if ac_running else None)
+        else:
+            rt["ac_running"] = True
+            await self._apply_device(ac_entity, "heat", target)
 
-        rt = self._rt(zone_id)
         diff_limit = self._state_float(number_entity_id(zone_id, "ac_priorita_rozdiel"), AC_NUMBER_DEFS["ac_priorita_rozdiel"][4])
         minutes_limit = self._state_float(number_entity_id(zone_id, "ac_priorita_minuty"), AC_NUMBER_DEFS["ac_priorita_minuty"][4])
 
@@ -621,7 +652,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             floor_engaged = False
 
         await self._apply_device(floor_entity, "heat" if floor_engaged else "off", target if floor_engaged else None)
-        zdata["heat_source"] = "AC + Podlaha" if floor_engaged else "AC"
+        zdata["heat_source"] = "AC + Podlaha" if floor_engaged else ("AC" if rt.get("ac_running", True) else "Ziadny (AC caka)")
 
     def async_unsub(self) -> None:
         if self._unsub_tracking:

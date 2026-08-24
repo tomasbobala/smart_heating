@@ -15,6 +15,7 @@ from .const import (
     CONF_AC_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CLIMATE_ENTITY,
+    CONF_EXTERNAL_TEMP_ENTITY,
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
@@ -216,6 +217,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             schema_dict, CONF_FLOOR_TEMP_ENTITY, zone.get(CONF_FLOOR_TEMP_ENTITY),
             selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
         )
+        _add_optional(
+            schema_dict, CONF_EXTERNAL_TEMP_ENTITY, zone.get(CONF_EXTERNAL_TEMP_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+        )
         schema_dict[
             vol.Optional(CONF_PRESENCE_ENTITIES, default=zone.get(CONF_PRESENCE_ENTITIES, []))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True))
@@ -236,6 +241,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_CLIMATE_ENTITY: user_input[CONF_CLIMATE_ENTITY],
             CONF_AC_ENTITY: user_input.get(CONF_AC_ENTITY),
             CONF_FLOOR_TEMP_ENTITY: user_input.get(CONF_FLOOR_TEMP_ENTITY),
+            CONF_EXTERNAL_TEMP_ENTITY: user_input.get(CONF_EXTERNAL_TEMP_ENTITY),
             CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
             CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
