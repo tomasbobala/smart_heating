@@ -442,12 +442,18 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self, zone_id, zone, mode, release_control, current_temp, has_external_temp,
         floor_temp, floor_min, floor_max, battery_soc, climate_entity,
     ) -> dict:
-        """Zjednodusena logika chladenia: len batera FVE vs hranica, ziadna
-        pritomnost/den-noc/predkurenie. Podlaha nikdy nebezi (nevie chladit)."""
+        """Chladenie: baterka FVE musi byt nad hranicou (podmienka na to, ci sa smie
+        vobec chladit) A ak ma zona externy teplomer, ten s hysterezou rozhoduje kedy
+        AC realne bezi (rovnaky princip ako pri kureni - 'teplota_chladenie' sluzi
+        zaroven ako ciel pre hysterezu aj ako fyzicky setpoint poslany do AC).
+        Podlaha nikdy nebezi (nevie chladit)."""
+        rt = self._rt(zone_id)
+
         if mode == MODE_VYPNUTE:
             cooling_allowed = False
             target = None
             reason = "Rezim Vypnute"
+            rt["cool_running"] = False
         else:
             threshold = self._state_float(
                 number_entity_id(zone_id, "bateria_hranica_chladenie"),
@@ -457,14 +463,35 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 number_entity_id(zone_id, "teplota_chladenie"),
                 COOLING_NUMBER_DEFS["teplota_chladenie"][4],
             )
-            cooling_allowed = battery_soc is not None and threshold is not None and battery_soc >= threshold
-            target = cool_target if cooling_allowed else None
-            if battery_soc is None:
-                reason = "Chladenie: baterka FVE nie je nastavena/dostupna -> vypnute"
-            elif cooling_allowed:
-                reason = f"Chladenie: baterka {battery_soc}% >= hranica {threshold}%"
+            battery_ok = battery_soc is not None and threshold is not None and battery_soc >= threshold
+            target = cool_target
+
+            if not battery_ok:
+                cooling_allowed = False
+                target = None
+                rt["cool_running"] = False
+                if battery_soc is None:
+                    reason = "Chladenie: baterka FVE nie je nastavena/dostupna -> vypnute"
+                else:
+                    reason = f"Chladenie: baterka {battery_soc}% < hranica {threshold}% -> vypnute"
+            elif has_external_temp and current_temp is not None and cool_target is not None:
+                hysterezia = self._state_float(
+                    number_entity_id(zone_id, "ac_hysterezia"), AC_NUMBER_DEFS["ac_hysterezia"][4]
+                )
+                if current_temp <= cool_target - hysterezia:
+                    rt["cool_running"] = False
+                elif current_temp >= cool_target + hysterezia:
+                    rt["cool_running"] = True
+                # inak (v pasme hysterezie) - necha predchadzajuci stav bezo zmeny
+                cooling_allowed = rt.get("cool_running", True)
+                if cooling_allowed:
+                    reason = f"Chladenie: teplomer {current_temp}\u00b0C >= ciel {cool_target}\u00b0C (baterka {battery_soc}% OK)"
+                else:
+                    reason = f"Chladenie: teplomer {current_temp}\u00b0C uz pod cielom {cool_target}\u00b0C -> vypnute"
             else:
-                reason = f"Chladenie: baterka {battery_soc}% < hranica {threshold}% -> vypnute"
+                cooling_allowed = True
+                rt["cool_running"] = True
+                reason = f"Chladenie: baterka {battery_soc}% >= hranica {threshold}%"
 
         device_mode = "cool" if cooling_allowed else "off"
 
