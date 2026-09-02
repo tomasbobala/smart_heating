@@ -62,6 +62,7 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 RECOMPUTE_INTERVAL = timedelta(minutes=5)
+NOTIFY_STARTUP_GRACE = timedelta(minutes=3)
 
 
 def mode_entity_id(zone_id: str) -> str:
@@ -102,6 +103,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_debounce = None
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
+        self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
+        self._startup_time = dt_util.now()
 
     @property
     def zones(self) -> dict:
@@ -110,10 +113,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     def _rt(self, zone_id: str) -> dict:
         return self._runtime.setdefault(
             zone_id,
-            {
-                "boost_until": None, "ac_deficit_since": None, "flags": set(),
-                "prev_raw_mode": None, "notif_initialized": False,
-            },
+            {"boost_until": None, "ac_deficit_since": None, "prev_raw_mode": None},
         )
 
     async def async_setup(self) -> None:
@@ -194,7 +194,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         rt["boost_until"] = dt_util.now() + timedelta(hours=hours)
         zone_name = self.zones.get(zone_id, {}).get(CONF_ZONE_NAME, zone_id)
         if self.entry.options.get(CONF_NOTIFY_BOOST, True):
-            await self._notify(f"Boost aktivovany v zone {zone_name} na {hours} h.")
+            await self._notify(f"Boost aktivovaný v zóne {zone_name} na {hours} h.")
         await self.async_recompute_and_apply()
 
     # ---------------------------------------------------------------- stav helpers
@@ -255,6 +255,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             )
             for zone_id, zone in self.zones.items()
         }
+
+        self._process_global_notifications(tariff_ok, holiday_active, zones_data)
 
         return {
             "outdoor_temp": outdoor,
@@ -408,13 +410,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             reason = f"NUDZOVA OCHRANA: {current_temp}\u00b0C < {emergency_temp}\u00b0C (preraza tarifu)"
             emergency_active = True
 
-        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, {
-            "tariff": tariff_blocked,
-            "floor": floor_override,
-            "krb": krb_override,
-            "emergency": emergency_active,
-            "boost": boost_active,
-        })
+        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, floor_override, floor_temp, preheat_active, cold_outdoor_active)
 
         device_mode = "heat" if heating_allowed else "off"
 
@@ -503,6 +499,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 reason = f"Chladenie: baterka {battery_soc}% >= hranica {threshold}%"
 
         device_mode = "cool" if cooling_allowed else "off"
+        self._maybe_notify_cooling(zone_id, zone[CONF_ZONE_NAME], cooling_allowed, battery_soc, target)
 
         return {
             "name": zone[CONF_ZONE_NAME],
@@ -567,55 +564,129 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     # ---------------------------------------------------------------- notifikacie
 
-    def _maybe_notify(self, zone_id: str, zone_name: str, mode: str, flags: dict) -> None:
-        rt = self._rt(zone_id)
-        cur_flags = {k for k, v in flags.items() if v}
-
-        if not rt["notif_initialized"]:
-            # Prve vyhodnotenie po starte HA - len tichy zaznam aktualneho stavu,
-            # BEZ posielania notifikacii (inak by kazdy restart poslal notifikaciu
-            # za uz existujuci, nezmeneny stav - napr. ak bola tarifa blokovana
-            # uz pred restartom, nie je to "nova" zmena).
-            rt["notif_initialized"] = True
-            rt["flags"] = cur_flags
+    def _notify_bool_transition(self, state_dict: dict, key: str, active: bool, enabled: bool, start_msg: str, stop_msg: str | None) -> None:
+        """Generciky helper: posle start_msg pri prechode False->True a stop_msg
+        (ak je zadana) pri prechode True->False. Pocas ochranneho okna po starte HA
+        len ticho zaznamena zakladny stav, bez posielania."""
+        if dt_util.now() - self._startup_time < NOTIFY_STARTUP_GRACE:
+            state_dict[key] = active
             return
+        prev = state_dict.get(key, False)
+        if active != prev and enabled:
+            msg = start_msg if active else stop_msg
+            if msg:
+                self.hass.async_create_task(self._notify(msg))
+        state_dict[key] = active
 
-        prev_flags: set = rt["flags"]
-        if mode == MODE_VYPNUTE:
-            # Zona je vedome vypnuta - notifikacie o tarife/podlahe/krbe su tu
-            # ocakavane a zbytocne (kurenie je aj tak vypnute z vlastnej vole).
-            # Nudzova ochrana notifikuje vzdy, bez ohladu na rezim.
-            cur_flags = {k for k in cur_flags if k == "emergency"}
-        newly_active = cur_flags - prev_flags
-
+    def _maybe_notify(
+        self, zone_id: str, zone_name: str, mode: str,
+        floor_override: bool, floor_temp, preheat_active: bool, cold_outdoor_active: bool,
+    ) -> None:
+        rt = self._rt(zone_id)
         opt = self.entry.options
-        notify_enabled = {
-            "tariff": opt.get(CONF_NOTIFY_TARIFF, True),
-            "floor": opt.get(CONF_NOTIFY_FLOOR, True),
-            "krb": opt.get(CONF_NOTIFY_KRB, True),
-            "emergency": opt.get(CONF_NOTIFY_EMERGENCY, True),
+
+        # Manualne Vypnute - podlaha/predkurenie/vonkajsia hranica su tu ocakavane
+        # a nerelevantne (kurenie je aj tak vypnute z vlastnej vole).
+        is_vypnute = mode == MODE_VYPNUTE
+
+        floor_temp_str = f"{floor_temp}\u00b0C" if floor_temp is not None else "?"
+        self._notify_bool_transition(
+            rt, "notif_floor", floor_override and not is_vypnute, opt.get(CONF_NOTIFY_FLOOR, True),
+            f"{zone_name}: kúrenie vypnuté - podlaha dosiahla max. teplotu {floor_temp_str}.",
+            f"{zone_name}: podlaha vychladla, kúrenie obnovené.",
+        )
+        self._notify_bool_transition(
+            rt, "notif_preheat", preheat_active and not is_vypnute, opt.get(CONF_NOTIFY_PREHEAT, True),
+            f"{zone_name}: predkúrenie spustené pred príchodom.",
+            f"{zone_name}: predkúrenie ukončené.",
+        )
+        self._notify_bool_transition(
+            rt, "notif_cold_outdoor", cold_outdoor_active and not is_vypnute, opt.get(CONF_NOTIFY_COLD_OUTDOOR, True),
+            f"{zone_name}: nízka vonkajšia teplota vynútila kúrenie.",
+            f"{zone_name}: vonkajšia teplota stúpla, vynútené kúrenie ukončené.",
+        )
+
+    def _maybe_notify_cooling(self, zone_id: str, zone_name: str, cooling_active: bool, battery_soc, target) -> None:
+        rt = self._rt(zone_id)
+        battery_str = f"{battery_soc}%" if battery_soc is not None else "?"
+        target_str = f"{target}\u00b0C" if target is not None else "?"
+        self._notify_bool_transition(
+            rt, "notif_cooling", cooling_active, self.entry.options.get(CONF_NOTIFY_COOLING, True),
+            f"{zone_name}: chladenie spustené (batéria {battery_str}, cieľ {target_str}).",
+            f"{zone_name}: chladenie zastavené.",
+        )
+
+    def _maybe_notify_ac_backup(self, zone_id: str, zone_name: str, floor_engaged: bool) -> None:
+        rt = self._rt(zone_id)
+        self._notify_bool_transition(
+            rt, "notif_ac_backup", floor_engaged, self.entry.options.get(CONF_NOTIFY_AC_BACKUP, True),
+            f"{zone_name}: AC nestíha, podlaha zapojená ako dokurovanie.",
+            f"{zone_name}: podlaha vypnutá, AC opäť stíha samo.",
+        )
+
+    def _process_global_notifications(self, tariff_ok: bool, holiday_active: bool, zones_data: dict) -> None:
+        opt = self.entry.options
+        grace = dt_util.now() - self._startup_time < NOTIFY_STARTUP_GRACE
+
+        tariff_blocked = not tariff_ok
+        if grace:
+            self._global_rt["tariff_blocked"] = tariff_blocked
+        elif tariff_blocked != self._global_rt["tariff_blocked"]:
+            if opt.get(CONF_NOTIFY_TARIFF, True):
+                msg = (
+                    "Globálny stav: kúrenie zablokované vysokou tarifou."
+                    if tariff_blocked else "Globálny stav: tarifa klesla, kúrenie obnovené."
+                )
+                self.hass.async_create_task(self._notify(msg))
+            self._global_rt["tariff_blocked"] = tariff_blocked
+
+        if grace:
+            self._global_rt["holiday_active"] = holiday_active
+        elif holiday_active != self._global_rt["holiday_active"]:
+            if opt.get(CONF_NOTIFY_HOLIDAY, True):
+                msg = "Dovolenka aktivovaná - všetky zóny na Min." if holiday_active else "Dovolenka ukončená."
+                self.hass.async_create_task(self._notify(msg))
+            self._global_rt["holiday_active"] = holiday_active
+
+        krb_zones = {
+            z["name"] for z in zones_data.values() if z.get("krb_override") and z.get("mode") != MODE_VYPNUTE
         }
-        messages = {
-            "tariff": f"{zone_name}: kurenie zablokovane vysokou tarifou.",
-            "floor": f"{zone_name}: kurenie vypnute - podlaha dosiahla max. teplotu.",
-            "krb": f"{zone_name}: kurenie vypnute - krb hori a je dost teplo.",
-            "emergency": f"{zone_name}: NUDZOVA protimrazova ochrana aktivovana!",
-        }
-        for flag in newly_active:
-            if flag in messages and notify_enabled.get(flag, True):
-                self.hass.async_create_task(self._notify(messages[flag]))
-        rt["flags"] = cur_flags
+        if grace:
+            self._global_rt["krb_zones"] = krb_zones
+        elif krb_zones != self._global_rt["krb_zones"]:
+            if opt.get(CONF_NOTIFY_KRB, True):
+                msg = (
+                    f"Krb: kúrenie vypnuté v zónach: {', '.join(sorted(krb_zones))}."
+                    if krb_zones else "Krb: kúrenie obnovené vo všetkých zónach."
+                )
+                self.hass.async_create_task(self._notify(msg))
+            self._global_rt["krb_zones"] = krb_zones
+
+        emergency_zones = {z["name"] for z in zones_data.values() if z.get("emergency_active")}
+        if grace:
+            self._global_rt["emergency_zones"] = emergency_zones
+        elif emergency_zones != self._global_rt["emergency_zones"]:
+            if opt.get(CONF_NOTIFY_EMERGENCY, True):
+                msg = (
+                    f"Núdzová ochrana aktivovaná v zónach: {', '.join(sorted(emergency_zones))}!"
+                    if emergency_zones else "Núdzová ochrana ukončená vo všetkých zónach."
+                )
+                self.hass.async_create_task(self._notify(msg))
+            self._global_rt["emergency_zones"] = emergency_zones
 
     async def _notify(self, message: str) -> None:
-        entity_id = self.entry.options.get(CONF_NOTIFY_ENTITY)
-        if not entity_id:
+        entity_ids = self.entry.options.get(CONF_NOTIFY_ENTITY)
+        if not entity_ids:
             return
-        try:
-            await self.hass.services.async_call(
-                "notify", "send_message", {"entity_id": entity_id, "message": message}, blocking=False
-            )
-        except Exception:  # noqa: BLE001
-            _LOGGER.warning("Notifikaciu sa nepodarilo odoslat (%s): %s", entity_id, message)
+        if isinstance(entity_ids, str):
+            entity_ids = [entity_ids]
+        for entity_id in entity_ids:
+            try:
+                await self.hass.services.async_call(
+                    "notify", "send_message", {"entity_id": entity_id, "message": message}, blocking=False
+                )
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning("Notifikaciu sa nepodarilo odoslat (%s): %s", entity_id, message)
 
     # ---------------------------------------------------------------- aplikacia na zariadenia
 
@@ -706,6 +777,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             floor_engaged = False
 
         await self._apply_device(floor_entity, "heat" if floor_engaged else "off", target if floor_engaged else None)
+        self._maybe_notify_ac_backup(zone_id, zdata["name"], floor_engaged)
         zdata["heat_source"] = "AC + Podlaha" if floor_engaged else ("AC" if rt.get("ac_running", True) else "Ziadny (AC caka)")
 
     def async_unsub(self) -> None:

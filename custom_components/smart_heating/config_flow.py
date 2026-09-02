@@ -20,11 +20,16 @@ from .const import (
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
     CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_NOTIFY_AC_BACKUP,
     CONF_NOTIFY_BOOST,
+    CONF_NOTIFY_COLD_OUTDOOR,
+    CONF_NOTIFY_COOLING,
     CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
     CONF_NOTIFY_FLOOR,
+    CONF_NOTIFY_HOLIDAY,
     CONF_NOTIFY_KRB,
+    CONF_NOTIFY_PREHEAT,
     CONF_NOTIFY_TARIFF,
     CONF_NUDZOVA_TEPLOTA,
     CONF_OUTDOOR_SENSOR,
@@ -86,11 +91,17 @@ def _hub_schema_dict(current: dict) -> dict:
     schema_dict[
         vol.Optional(CONF_HOLIDAY_ACTIVE, default=current.get(CONF_HOLIDAY_ACTIVE, False))
     ] = selector.BooleanSelector()
-    _add_optional(
-        schema_dict, CONF_NOTIFY_ENTITY, current.get(CONF_NOTIFY_ENTITY),
-        selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
-    )
-    for key in (CONF_NOTIFY_TARIFF, CONF_NOTIFY_FLOOR, CONF_NOTIFY_KRB, CONF_NOTIFY_EMERGENCY, CONF_NOTIFY_BOOST):
+    existing_notify = current.get(CONF_NOTIFY_ENTITY, [])
+    if isinstance(existing_notify, str):
+        existing_notify = [existing_notify] if existing_notify else []
+    schema_dict[
+        vol.Optional(CONF_NOTIFY_ENTITY, default=existing_notify)
+    ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True))
+    for key in (
+        CONF_NOTIFY_TARIFF, CONF_NOTIFY_FLOOR, CONF_NOTIFY_KRB, CONF_NOTIFY_EMERGENCY,
+        CONF_NOTIFY_BOOST, CONF_NOTIFY_COOLING, CONF_NOTIFY_HOLIDAY, CONF_NOTIFY_PREHEAT,
+        CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR,
+    ):
         schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
     _add_optional(
         schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
