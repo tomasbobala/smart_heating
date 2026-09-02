@@ -25,7 +25,12 @@ from .const import (
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
     CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_NOTIFY_BOOST,
+    CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
+    CONF_NOTIFY_FLOOR,
+    CONF_NOTIFY_KRB,
+    CONF_NOTIFY_TARIFF,
     CONF_NUDZOVA_TEPLOTA,
     CONF_OUTDOOR_SENSOR,
     CONF_HOLIDAY_ACTIVE,
@@ -105,7 +110,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     def _rt(self, zone_id: str) -> dict:
         return self._runtime.setdefault(
             zone_id,
-            {"boost_until": None, "ac_deficit_since": None, "flags": set(), "prev_raw_mode": None},
+            {
+                "boost_until": None, "ac_deficit_since": None, "flags": set(),
+                "prev_raw_mode": None, "notif_initialized": False,
+            },
         )
 
     async def async_setup(self) -> None:
@@ -185,7 +193,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         rt = self._rt(zone_id)
         rt["boost_until"] = dt_util.now() + timedelta(hours=hours)
         zone_name = self.zones.get(zone_id, {}).get(CONF_ZONE_NAME, zone_id)
-        await self._notify(f"Boost aktivovany v zone {zone_name} na {hours} h.")
+        if self.entry.options.get(CONF_NOTIFY_BOOST, True):
+            await self._notify(f"Boost aktivovany v zone {zone_name} na {hours} h.")
         await self.async_recompute_and_apply()
 
     # ---------------------------------------------------------------- stav helpers
@@ -560,14 +569,32 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     def _maybe_notify(self, zone_id: str, zone_name: str, mode: str, flags: dict) -> None:
         rt = self._rt(zone_id)
-        prev_flags: set = rt["flags"]
         cur_flags = {k for k, v in flags.items() if v}
+
+        if not rt["notif_initialized"]:
+            # Prve vyhodnotenie po starte HA - len tichy zaznam aktualneho stavu,
+            # BEZ posielania notifikacii (inak by kazdy restart poslal notifikaciu
+            # za uz existujuci, nezmeneny stav - napr. ak bola tarifa blokovana
+            # uz pred restartom, nie je to "nova" zmena).
+            rt["notif_initialized"] = True
+            rt["flags"] = cur_flags
+            return
+
+        prev_flags: set = rt["flags"]
         if mode == MODE_VYPNUTE:
             # Zona je vedome vypnuta - notifikacie o tarife/podlahe/krbe su tu
             # ocakavane a zbytocne (kurenie je aj tak vypnute z vlastnej vole).
             # Nudzova ochrana notifikuje vzdy, bez ohladu na rezim.
             cur_flags = {k for k in cur_flags if k == "emergency"}
         newly_active = cur_flags - prev_flags
+
+        opt = self.entry.options
+        notify_enabled = {
+            "tariff": opt.get(CONF_NOTIFY_TARIFF, True),
+            "floor": opt.get(CONF_NOTIFY_FLOOR, True),
+            "krb": opt.get(CONF_NOTIFY_KRB, True),
+            "emergency": opt.get(CONF_NOTIFY_EMERGENCY, True),
+        }
         messages = {
             "tariff": f"{zone_name}: kurenie zablokovane vysokou tarifou.",
             "floor": f"{zone_name}: kurenie vypnute - podlaha dosiahla max. teplotu.",
@@ -575,7 +602,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "emergency": f"{zone_name}: NUDZOVA protimrazova ochrana aktivovana!",
         }
         for flag in newly_active:
-            if flag in messages:
+            if flag in messages and notify_enabled.get(flag, True):
                 self.hass.async_create_task(self._notify(messages[flag]))
         rt["flags"] = cur_flags
 

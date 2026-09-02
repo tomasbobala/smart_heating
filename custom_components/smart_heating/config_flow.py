@@ -20,7 +20,12 @@ from .const import (
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
     CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_NOTIFY_BOOST,
+    CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
+    CONF_NOTIFY_FLOOR,
+    CONF_NOTIFY_KRB,
+    CONF_NOTIFY_TARIFF,
     CONF_NUDZOVA_TEPLOTA,
     CONF_OUTDOOR_SENSOR,
     CONF_HOLIDAY_ACTIVE,
@@ -85,6 +90,8 @@ def _hub_schema_dict(current: dict) -> dict:
         schema_dict, CONF_NOTIFY_ENTITY, current.get(CONF_NOTIFY_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain="notify")),
     )
+    for key in (CONF_NOTIFY_TARIFF, CONF_NOTIFY_FLOOR, CONF_NOTIFY_KRB, CONF_NOTIFY_EMERGENCY, CONF_NOTIFY_BOOST):
+        schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
     _add_optional(
         schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
