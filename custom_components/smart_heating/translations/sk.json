@@ -13,7 +13,12 @@
           "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
           "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
           "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
-          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie"
+          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie",
+          "notify_tariff": "Notifikacia: tarifa blokuje kurenie",
+          "notify_floor": "Notifikacia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikacia: krb vypol kurenie",
+          "notify_emergency": "Notifikacia: nudzova protimrazova ochrana",
+          "notify_boost": "Notifikacia: Boost aktivovany"
         }
       }
     },
@@ -43,7 +48,12 @@
           "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
           "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
           "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
-          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie"
+          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie",
+          "notify_tariff": "Notifikacia: tarifa blokuje kurenie",
+          "notify_floor": "Notifikacia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikacia: krb vypol kurenie",
+          "notify_emergency": "Notifikacia: nudzova protimrazova ochrana",
+          "notify_boost": "Notifikacia: Boost aktivovany"
         }
       },
       "add_zone": {
