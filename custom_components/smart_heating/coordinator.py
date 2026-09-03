@@ -415,7 +415,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             reason = f"NUDZOVA OCHRANA: {current_temp}\u00b0C < {emergency_temp}\u00b0C (preraza tarifu)"
             emergency_active = True
 
-        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, floor_override, floor_temp, preheat_active, cold_outdoor_active)
+        self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, floor_override, floor_temp, preheat_active, cold_outdoor_active, presence)
 
         device_mode = "heat" if heating_allowed else "off"
 
@@ -585,7 +585,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     def _maybe_notify(
         self, zone_id: str, zone_name: str, mode: str,
-        floor_override: bool, floor_temp, preheat_active: bool, cold_outdoor_active: bool,
+        floor_override: bool, floor_temp, preheat_active: bool, cold_outdoor_active: bool, presence: bool,
     ) -> None:
         rt = self._rt(zone_id)
         opt = self.entry.options
@@ -600,10 +600,14 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             f"{zone_name}: kúrenie vypnuté - podlaha dosiahla max. teplotu {floor_temp_str}.",
             f"{zone_name}: podlaha vychladla, kúrenie obnovené.",
         )
+        # "Predkurenie ukoncene" ma zmysel len ak sa tym realne nieco meni (nikto nie
+        # je doma -> kurenie sa stiahne na Min). Ak je niekto doma, dovod kurenia sa
+        # len ticho zmenil na "pritomnost" - nema zmysel o tom notifikovat.
+        preheat_stop_msg = None if presence else f"{zone_name}: predkúrenie ukončené, nikto nie je doma."
         self._notify_bool_transition(
             rt, "notif_preheat", preheat_active and not is_vypnute, opt.get(CONF_NOTIFY_PREHEAT, True),
             f"{zone_name}: predkúrenie spustené pred príchodom.",
-            f"{zone_name}: predkúrenie ukončené.",
+            preheat_stop_msg,
         )
         self._notify_bool_transition(
             rt, "notif_cold_outdoor", cold_outdoor_active and not is_vypnute, opt.get(CONF_NOTIFY_COLD_OUTDOOR, True),
