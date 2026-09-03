@@ -129,39 +129,39 @@ class SmartHeatingCard extends HTMLElement {
           <div class="sh-badges"></div>
 
           <div class="sh-section sh-section--mode">
-            <div class="sh-section-label">Rezim</div>
+            <div class="sh-section-label"><span class="sh-icon">🧭</span>Rezim</div>
             <div class="sh-chips sh-mode-chips"></div>
           </div>
 
           <div class="sh-section sh-section--mode sh-season-section" style="display:none">
-            <div class="sh-section-label">Sezona</div>
+            <div class="sh-section-label"><span class="sh-icon">🔄</span>Sezona</div>
             <div class="sh-chips sh-season-chips"></div>
           </div>
 
           <div class="sh-collapsible-grid">
             <details class="sh-section sh-section--temp">
-              <summary class="sh-section-label">Teploty</summary>
+              <summary class="sh-section-label"><span class="sh-icon">🌡️</span>Teploty</summary>
               <div class="sh-temps"></div>
             </details>
 
             <details class="sh-section sh-section--temp sh-cooling-section" style="display:none">
-              <summary class="sh-section-label">Chladenie</summary>
+              <summary class="sh-section-label"><span class="sh-icon">❄️</span>Chladenie</summary>
               <div class="sh-cooling"></div>
             </details>
 
             <details class="sh-section sh-section--time">
-              <summary class="sh-section-label">Casy</summary>
+              <summary class="sh-section-label"><span class="sh-icon">⏰</span>Casy</summary>
               <div class="sh-times"></div>
             </details>
 
             <details class="sh-section sh-section--toggle">
-              <summary class="sh-section-label">Prepinace</summary>
+              <summary class="sh-section-label"><span class="sh-icon">🔀</span>Prepinace</summary>
               <div class="sh-toggles"></div>
             </details>
           </div>
 
           <div class="sh-section sh-section--boost">
-            <div class="sh-section-label">Boost</div>
+            <div class="sh-section-label"><span class="sh-icon">🚀</span>Boost</div>
             <div class="sh-boost"></div>
           </div>
         </div>
@@ -171,7 +171,7 @@ class SmartHeatingCard extends HTMLElement {
 
   _styles() {
     return `
-      .sh-root { padding: 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+      .sh-root { padding: 16px; display: flex; flex-direction: column; gap: 20px; container-type: inline-size; }
       .sh-header { display: flex; justify-content: space-between; align-items: flex-start; }
       .sh-title { font-size: 1.25rem; font-weight: 500; color: var(--primary-text-color); }
       .sh-subtitle { font-size: 0.85rem; color: var(--secondary-text-color); margin-top: 2px; }
@@ -188,52 +188,52 @@ class SmartHeatingCard extends HTMLElement {
       .sh-badge.ok { background: rgba(76,175,80,0.18); color: #2e7d32; }
       .sh-badge.info { background: rgba(33,150,243,0.18); color: #1565c0; }
 
-      .sh-section { border-left: 3px solid var(--divider-color); padding-left: 10px; border-radius: 4px; }
-      .sh-section--mode { border-left-color: #8e6ecb; }
-      .sh-section--temp { border-left-color: #ef8a3d; }
-      .sh-section--time { border-left-color: #4a9fd8; }
-      .sh-section--toggle { border-left-color: #4caf7d; }
-      .sh-section--boost { border-left-color: #e0577a; }
-
-      .sh-section-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--secondary-text-color); margin-bottom: 6px; }
-      details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+      .sh-section { border-radius: 10px; }
+      .sh-section-label {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 0.85rem; font-weight: 500; color: var(--primary-text-color);
+        padding: 9px 12px; border-radius: 9px;
+        background: rgba(127,127,127,0.07);
+      }
+      .sh-icon { font-size: 0.95rem; line-height: 1; }
+      details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; user-select: none; }
       details.sh-section > summary.sh-section-label::-webkit-details-marker { display: none; }
-      details.sh-section > summary.sh-section-label::before { content: "\\25B8"; font-size: 0.7rem; transition: transform .15s ease; display: inline-block; }
-      details.sh-section[open] > summary.sh-section-label::before { transform: rotate(90deg); }
-      details.sh-section > summary.sh-section-label:hover { color: var(--primary-text-color); }
-      details.sh-section > div { margin-top: 8px; }
+      details.sh-section > summary.sh-section-label::after { content: "\\25B8"; font-size: 0.7rem; margin-left: auto; color: var(--secondary-text-color); transition: transform .15s ease; }
+      details.sh-section[open] > summary.sh-section-label::after { transform: rotate(90deg); }
+      details.sh-section > summary.sh-section-label:hover { background: rgba(127,127,127,0.12); }
+      details.sh-section > div { margin-top: 12px; padding: 0 2px; }
 
-      .sh-collapsible-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+      .sh-collapsible-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
       @container (min-width: 480px) {
         .sh-collapsible-grid { grid-template-columns: 1fr 1fr; }
       }
 
-      .sh-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .sh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
       .sh-chip { border: 1px solid var(--divider-color); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer; color: var(--primary-text-color); background: transparent; user-select: none; }
       .sh-chip.active { background: #8e6ecb; border-color: #8e6ecb; color: #fff; }
-      .sh-temps, .sh-cooling { display: flex; flex-direction: column; gap: 8px; }
+      .sh-temps, .sh-cooling { display: flex; flex-direction: column; gap: 10px; }
       .sh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .sh-row-label { font-size: 0.9rem; color: var(--primary-text-color); flex: 1; }
       .sh-stepper { display: flex; align-items: center; gap: 8px; }
       .sh-stepper button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 1rem; cursor: pointer; line-height: 1; }
       .sh-stepper .sh-val { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
       .sh-time-input { border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); padding: 4px 6px; font-size: 0.85rem; width: 90px; }
-      .sh-toggles { display: flex; flex-direction: column; gap: 8px; }
+      .sh-toggles { display: flex; flex-direction: column; gap: 10px; }
       .sh-switch { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--divider-color); cursor: pointer; flex-shrink: 0; }
       .sh-switch.on { background: #4caf7d; }
       .sh-switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s ease; }
       .sh-switch.on .knob { left: 20px; }
-      .sh-boost { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .sh-boost { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
       .sh-boost-btn { border: none; border-radius: 8px; background: #e0577a; color: #fff; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; }
       .sh-boost-btn:disabled { opacity: .5; cursor: default; }
       .sh-boost-status { font-size: 0.8rem; color: var(--secondary-text-color); }
 
-      .sh-times-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+      .sh-times-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 14px; }
+      .sh-times-table:last-child { margin-bottom: 0; }
       .sh-times-table th { text-align: left; font-weight: 500; color: var(--secondary-text-color); font-size: 0.78rem; padding-bottom: 6px; }
       .sh-times-table td { padding: 4px 6px 4px 0; color: var(--primary-text-color); }
       .sh-times-table td:first-child { padding-left: 0; }
-      .sh-predkurenie-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.85rem; color: var(--primary-text-color); flex-wrap: wrap; }
-      .sh-predkurenie-row .sh-sep { color: var(--secondary-text-color); }
+      .sh-times-table--predkurenie { max-width: 220px; }
     `;
   }
 
@@ -419,12 +419,17 @@ class SmartHeatingCard extends HTMLElement {
           <td><input class="sh-time-input" type="time" value="${this._timeVal("noc_od_vikend")}" data-time-key="noc_od_vikend" /></td>
         </tr>
       </table>
-      <div class="sh-predkurenie-row">
-        <span>Predkurenie:</span>
-        <input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_od")}" data-time-key="predkurenie_od" />
-        <span class="sh-sep">–</span>
-        <input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_do")}" data-time-key="predkurenie_do" />
-      </div>
+      <table class="sh-times-table sh-times-table--predkurenie">
+        <tr><th colspan="2">Predkurenie</th></tr>
+        <tr>
+          <td>Zaciatok</td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_od")}" data-time-key="predkurenie_od" /></td>
+        </tr>
+        <tr>
+          <td>Koniec</td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_do")}" data-time-key="predkurenie_do" /></td>
+        </tr>
+      </table>
     `;
     wrap.querySelectorAll("input[data-time-key]").forEach((input) => {
       input.onchange = () => {
