@@ -15,7 +15,6 @@ function eid(zoneId, domain, key) {
   return `${domain}.smart_heating_${zoneId}${key ? "_" + key : ""}`;
 }
 
-/** Najde vsetky dostupne Smart Heating zony v hass.states -> [{zone_id, name}] */
 function findZones(hass) {
   const zones = [];
   for (const entityId of Object.keys(hass.states)) {
@@ -54,10 +53,6 @@ class SmartHeatingCard extends HTMLElement {
       this._built = true;
     }
     if (prevHass) {
-      // Preskoc prekreslenie, ak sa v tomto hass tiku nezmenila ziadna entita
-      // relevantna pre tuto kartu - hass sa posiela pri KAZDEJ zmene v celom HA,
-      // takze bez tejto kontroly by karta zbytocne prekreslovala pri kazdom cudzom
-      // stavovom evente (svetla, senzory... = zbytocna zataz UI vlakna).
       const relevantChanged = this._entityIds().some(
         (id) => hass.states[id] !== prevHass.states[id]
       );
@@ -99,7 +94,7 @@ class SmartHeatingCard extends HTMLElement {
   }
 
   getCardSize() {
-    return 9;
+    return 6;
   }
 
   static getConfigElement() {
@@ -130,7 +125,6 @@ class SmartHeatingCard extends HTMLElement {
           </div>
 
           <div class="sh-meta"></div>
-
           <div class="sh-reason"></div>
           <div class="sh-badges"></div>
 
@@ -144,34 +138,26 @@ class SmartHeatingCard extends HTMLElement {
             <div class="sh-chips sh-season-chips"></div>
           </div>
 
-          <div class="sh-section sh-section--temp">
-            <div class="sh-section-label">Teploty</div>
-            <div class="sh-temps"></div>
-          </div>
+          <div class="sh-collapsible-grid">
+            <details class="sh-section sh-section--temp">
+              <summary class="sh-section-label">Teploty</summary>
+              <div class="sh-temps"></div>
+            </details>
 
-          <div class="sh-section sh-section--temp sh-cooling-section" style="display:none">
-            <div class="sh-section-label">Chladenie</div>
-            <div class="sh-cooling"></div>
-          </div>
+            <details class="sh-section sh-section--temp sh-cooling-section" style="display:none">
+              <summary class="sh-section-label">Chladenie</summary>
+              <div class="sh-cooling"></div>
+            </details>
 
-          <div class="sh-section sh-section--time">
-            <div class="sh-section-label">Casy - pracovny den</div>
-            <div class="sh-times-tyzden"></div>
-          </div>
+            <details class="sh-section sh-section--time">
+              <summary class="sh-section-label">Casy</summary>
+              <div class="sh-times"></div>
+            </details>
 
-          <div class="sh-section sh-section--time">
-            <div class="sh-section-label">Casy - vikend</div>
-            <div class="sh-times-vikend"></div>
-          </div>
-
-          <div class="sh-section sh-section--time">
-            <div class="sh-section-label">Predkurenie (len Po-Pia)</div>
-            <div class="sh-times-predkurenie"></div>
-          </div>
-
-          <div class="sh-section sh-section--toggle">
-            <div class="sh-section-label">Prepinace</div>
-            <div class="sh-toggles"></div>
+            <details class="sh-section sh-section--toggle">
+              <summary class="sh-section-label">Prepinace</summary>
+              <div class="sh-toggles"></div>
+            </details>
           </div>
 
           <div class="sh-section sh-section--boost">
@@ -185,7 +171,7 @@ class SmartHeatingCard extends HTMLElement {
 
   _styles() {
     return `
-      .sh-root { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+      .sh-root { padding: 16px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
       .sh-header { display: flex; justify-content: space-between; align-items: flex-start; }
       .sh-title { font-size: 1.25rem; font-weight: 500; color: var(--primary-text-color); }
       .sh-subtitle { font-size: 0.85rem; color: var(--secondary-text-color); margin-top: 2px; }
@@ -210,16 +196,28 @@ class SmartHeatingCard extends HTMLElement {
       .sh-section--boost { border-left-color: #e0577a; }
 
       .sh-section-label { font-size: 0.78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--secondary-text-color); margin-bottom: 6px; }
+      details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px; user-select: none; }
+      details.sh-section > summary.sh-section-label::-webkit-details-marker { display: none; }
+      details.sh-section > summary.sh-section-label::before { content: "\\25B8"; font-size: 0.7rem; transition: transform .15s ease; display: inline-block; }
+      details.sh-section[open] > summary.sh-section-label::before { transform: rotate(90deg); }
+      details.sh-section > summary.sh-section-label:hover { color: var(--primary-text-color); }
+      details.sh-section > div { margin-top: 8px; }
+
+      .sh-collapsible-grid { display: grid; grid-template-columns: 1fr; gap: 12px; align-items: start; }
+      @container (min-width: 480px) {
+        .sh-collapsible-grid { grid-template-columns: 1fr 1fr; }
+      }
+
       .sh-chips { display: flex; flex-wrap: wrap; gap: 6px; }
       .sh-chip { border: 1px solid var(--divider-color); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer; color: var(--primary-text-color); background: transparent; user-select: none; }
       .sh-chip.active { background: #8e6ecb; border-color: #8e6ecb; color: #fff; }
-      .sh-temps, .sh-times-tyzden, .sh-times-vikend, .sh-times-predkurenie { display: flex; flex-direction: column; gap: 8px; }
+      .sh-temps, .sh-cooling { display: flex; flex-direction: column; gap: 8px; }
       .sh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
       .sh-row-label { font-size: 0.9rem; color: var(--primary-text-color); flex: 1; }
       .sh-stepper { display: flex; align-items: center; gap: 8px; }
       .sh-stepper button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 1rem; cursor: pointer; line-height: 1; }
       .sh-stepper .sh-val { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
-      .sh-time-input { border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); padding: 4px 6px; font-size: 0.9rem; }
+      .sh-time-input { border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); padding: 4px 6px; font-size: 0.85rem; width: 90px; }
       .sh-toggles { display: flex; flex-direction: column; gap: 8px; }
       .sh-switch { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--divider-color); cursor: pointer; flex-shrink: 0; }
       .sh-switch.on { background: #4caf7d; }
@@ -229,6 +227,13 @@ class SmartHeatingCard extends HTMLElement {
       .sh-boost-btn { border: none; border-radius: 8px; background: #e0577a; color: #fff; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; }
       .sh-boost-btn:disabled { opacity: .5; cursor: default; }
       .sh-boost-status { font-size: 0.8rem; color: var(--secondary-text-color); }
+
+      .sh-times-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+      .sh-times-table th { text-align: left; font-weight: 500; color: var(--secondary-text-color); font-size: 0.78rem; padding-bottom: 6px; }
+      .sh-times-table td { padding: 4px 6px 4px 0; color: var(--primary-text-color); }
+      .sh-times-table td:first-child { padding-left: 0; }
+      .sh-predkurenie-row { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 0.85rem; color: var(--primary-text-color); flex-wrap: wrap; }
+      .sh-predkurenie-row .sh-sep { color: var(--secondary-text-color); }
     `;
   }
 
@@ -237,8 +242,7 @@ class SmartHeatingCard extends HTMLElement {
   _updateContent() {
     if (!this._zoneId) {
       if (this.querySelector(".sh-root")) {
-        this.querySelector(".sh-root").innerHTML =
-          `<div class="sh-reason">Vyber zonu v nastaveniach karty.</div>`;
+        this.querySelector(".sh-root").innerHTML = `<div class="sh-reason">Vyber zonu v nastaveniach karty.</div>`;
       }
       return;
     }
@@ -279,30 +283,15 @@ class SmartHeatingCard extends HTMLElement {
     }
 
     this._renderTemps();
-    this._renderTimesGroup(".sh-times-tyzden", [
-      ["Zaciatok dna", "den_od_tyzden"],
-      ["Zaciatok noci", "noc_od_tyzden"],
-    ]);
-    this._renderTimesGroup(".sh-times-vikend", [
-      ["Zaciatok dna", "den_od_vikend"],
-      ["Zaciatok noci", "noc_od_vikend"],
-    ]);
-    this._renderTimesGroup(".sh-times-predkurenie", [
-      ["Zaciatok", "predkurenie_od"],
-      ["Koniec (timeout)", "predkurenie_do"],
-    ]);
+    this._renderTimes();
     this._renderToggles();
     this._renderBoost(zAttrs);
   }
 
   _renderMeta(zAttrs) {
     const parts = [];
-    if (zAttrs.floor_temperature != null) {
-      parts.push(`<span>Podlaha: <b>${zAttrs.floor_temperature}°C</b></span>`);
-    }
-    if (zAttrs.outdoor_temperature != null) {
-      parts.push(`<span>Vonku: <b>${zAttrs.outdoor_temperature}°C</b></span>`);
-    }
+    if (zAttrs.floor_temperature != null) parts.push(`<span>Podlaha: <b>${zAttrs.floor_temperature}°C</b></span>`);
+    if (zAttrs.outdoor_temperature != null) parts.push(`<span>Vonku: <b>${zAttrs.outdoor_temperature}°C</b></span>`);
     const wrap = this.querySelector(".sh-meta");
     wrap.innerHTML = parts.join("");
     wrap.style.display = parts.length ? "flex" : "none";
@@ -318,17 +307,14 @@ class SmartHeatingCard extends HTMLElement {
     if (zAttrs.cold_outdoor_active) badges.push(["info", "Nizka vonkajsia teplota"]);
     if (zAttrs.boost_active) badges.push(["info", "Boost aktivny"]);
     const wrap = this.querySelector(".sh-badges");
-    wrap.innerHTML = badges
-      .map(([cls, label]) => `<span class="sh-badge ${cls}">${label}</span>`)
-      .join("");
+    wrap.innerHTML = badges.map(([cls, label]) => `<span class="sh-badge ${cls}">${label}</span>`).join("");
     wrap.style.display = badges.length ? "flex" : "none";
   }
 
   _renderModeChips(current) {
     const wrap = this.querySelector(".sh-mode-chips");
     wrap.innerHTML = MODES.map(
-      (m) =>
-        `<button class="sh-chip ${m === current ? "active" : ""}" data-mode="${m}">${m}</button>`
+      (m) => `<button class="sh-chip ${m === current ? "active" : ""}" data-mode="${m}">${m}</button>`
     ).join("");
     wrap.querySelectorAll(".sh-chip").forEach((btn) => {
       btn.onclick = () => {
@@ -343,37 +329,13 @@ class SmartHeatingCard extends HTMLElement {
   _renderSeasonChips(current) {
     const wrap = this.querySelector(".sh-season-chips");
     wrap.innerHTML = SEASONS.map(
-      (s) =>
-        `<button class="sh-chip ${s === current ? "active" : ""}" data-season="${s}">${s}</button>`
+      (s) => `<button class="sh-chip ${s === current ? "active" : ""}" data-season="${s}">${s}</button>`
     ).join("");
     wrap.querySelectorAll(".sh-chip").forEach((btn) => {
       btn.onclick = () => {
         this._hass.callService("select", "select_option", {
           entity_id: eid(this._zoneId, "select", "sezona"),
           option: btn.dataset.season,
-        });
-      };
-    });
-  }
-
-  _renderCooling() {
-    const wrap = this.querySelector(".sh-cooling");
-    wrap.innerHTML =
-      this._numberRow("Cielova teplota chladenia", "teplota_chladenie", 0.5, "°C") +
-      this._numberRow("Baterka FVE - min. % pre chladenie", "bateria_hranica_chladenie", 5, "%") +
-      this._numberRow("Vonkajsia hranica pre Auto-sezonu", "vonkajsia_hranica_chladenie", 0.5, "°C");
-    wrap.querySelectorAll("button[data-act]").forEach((btn) => {
-      btn.onclick = () => {
-        const key = btn.dataset.key;
-        const step = parseFloat(btn.dataset.step);
-        const state = this._hass.states[eid(this._zoneId, "number", key)];
-        if (!state) return;
-        const current = parseFloat(state.state);
-        const delta = btn.dataset.act === "inc" ? step : -step;
-        const next = Math.round((current + delta) * 10) / 10;
-        this._hass.callService("number", "set_value", {
-          entity_id: eid(this._zoneId, "number", key),
-          value: next,
         });
       };
     });
@@ -393,19 +355,7 @@ class SmartHeatingCard extends HTMLElement {
       </div>`;
   }
 
-  _renderTemps() {
-    const wrap = this.querySelector(".sh-temps");
-    const hasAc = !!this._hass.states[eid(this._zoneId, "select", "sezona")];
-    wrap.innerHTML =
-      this._numberRow("Teplota - den", "teplota_den", 0.5, "°C") +
-      this._numberRow("Teplota - noc", "teplota_noc", 0.5, "°C") +
-      this._numberRow("Teplota - min (baseline)", "teplota_min", 0.5, "°C") +
-      this._numberRow("Teplota - protimrazova", "teplota_mraz", 0.5, "°C") +
-      this._numberRow("Vonkajsia hranica (vynuti kurenie)", "vonkajsia_hranica", 0.5, "°C") +
-      (hasAc
-        ? this._numberRow("AC fyzicky setpoint (ked kuri)", "ac_setpoint_teplota", 0.5, "°C") +
-          this._numberRow("AC hysterezia (podla ext. teplomera)", "ac_hysterezia", 0.1, "°C")
-        : "");
+  _wireNumberRows(wrap) {
     wrap.querySelectorAll("button[data-act]").forEach((btn) => {
       btn.onclick = () => {
         const key = btn.dataset.key;
@@ -423,19 +373,59 @@ class SmartHeatingCard extends HTMLElement {
     });
   }
 
-  _timeRow(label, key) {
-    const state = this._hass.states[eid(this._zoneId, "time", key)];
-    const val = state ? state.state.slice(0, 5) : "";
-    return `
-      <div class="sh-row">
-        <div class="sh-row-label">${label}</div>
-        <input class="sh-time-input" type="time" value="${val}" data-time-key="${key}" />
-      </div>`;
+  _renderTemps() {
+    const wrap = this.querySelector(".sh-temps");
+    const hasAc = !!this._hass.states[eid(this._zoneId, "select", "sezona")];
+    wrap.innerHTML =
+      this._numberRow("Teplota - den", "teplota_den", 0.5, "°C") +
+      this._numberRow("Teplota - noc", "teplota_noc", 0.5, "°C") +
+      this._numberRow("Teplota - min (baseline)", "teplota_min", 0.5, "°C") +
+      this._numberRow("Teplota - protimrazova", "teplota_mraz", 0.5, "°C") +
+      this._numberRow("Vonkajsia hranica (vynuti kurenie)", "vonkajsia_hranica", 0.5, "°C") +
+      (hasAc
+        ? this._numberRow("AC fyzicky setpoint (ked kuri)", "ac_setpoint_teplota", 0.5, "°C") +
+          this._numberRow("AC hysterezia", "ac_hysterezia", 0.1, "°C")
+        : "");
+    this._wireNumberRows(wrap);
   }
 
-  _renderTimesGroup(selector, rows) {
-    const wrap = this.querySelector(selector);
-    wrap.innerHTML = rows.map(([label, key]) => this._timeRow(label, key)).join("");
+  _renderCooling() {
+    const wrap = this.querySelector(".sh-cooling");
+    wrap.innerHTML =
+      this._numberRow("Cielova teplota chladenia", "teplota_chladenie", 0.5, "°C") +
+      this._numberRow("Baterka FVE - min. % pre chladenie", "bateria_hranica_chladenie", 5, "%") +
+      this._numberRow("Vonkajsia hranica pre Auto-sezonu", "vonkajsia_hranica_chladenie", 0.5, "°C");
+    this._wireNumberRows(wrap);
+  }
+
+  _timeVal(key) {
+    const state = this._hass.states[eid(this._zoneId, "time", key)];
+    return state ? state.state.slice(0, 5) : "";
+  }
+
+  _renderTimes() {
+    const wrap = this.querySelector(".sh-times");
+    wrap.innerHTML = `
+      <table class="sh-times-table">
+        <tr><th></th><th>Prac. den</th><th>Vikend</th></tr>
+        <tr>
+          <td>Zaciatok dna</td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("den_od_tyzden")}" data-time-key="den_od_tyzden" /></td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("den_od_vikend")}" data-time-key="den_od_vikend" /></td>
+        </tr>
+        <tr>
+          <td>Zaciatok noci</td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("noc_od_tyzden")}" data-time-key="noc_od_tyzden" /></td>
+          <td><input class="sh-time-input" type="time" value="${this._timeVal("noc_od_vikend")}" data-time-key="noc_od_vikend" /></td>
+        </tr>
+      </table>
+      <div class="sh-predkurenie-row">
+        <span>Predkurenie:</span>
+        <input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_od")}" data-time-key="predkurenie_od" />
+        <span class="sh-sep">–</span>
+        <input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_do")}" data-time-key="predkurenie_do" />
+      </div>
+    `;
     wrap.querySelectorAll("input[data-time-key]").forEach((input) => {
       input.onchange = () => {
         const key = input.dataset.timeKey;
@@ -500,9 +490,7 @@ class SmartHeatingCard extends HTMLElement {
         value: Math.round((dur + 0.5) * 10) / 10,
       });
     wrap.querySelector(".sh-boost-btn").onclick = () =>
-      this._hass.callService("button", "press", {
-        entity_id: eid(this._zoneId, "button", "boost"),
-      });
+      this._hass.callService("button", "press", { entity_id: eid(this._zoneId, "button", "boost") });
   }
 }
 
@@ -551,10 +539,7 @@ class SmartHeatingCardEditor extends HTMLElement {
     const optionsHtml =
       `<option value="" disabled ${!currentZoneId ? "selected" : ""}>-- vyber zonu --</option>` +
       zones
-        .map(
-          (z) =>
-            `<option value="${z.zone_id}" ${z.zone_id === currentZoneId ? "selected" : ""}>${z.name} (${z.zone_id})</option>`
-        )
+        .map((z) => `<option value="${z.zone_id}" ${z.zone_id === currentZoneId ? "selected" : ""}>${z.name} (${z.zone_id})</option>`)
         .join("");
     if (select.innerHTML !== optionsHtml) select.innerHTML = optionsHtml;
 
