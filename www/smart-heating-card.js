@@ -467,7 +467,11 @@ class SmartHeatingCard extends HTMLElement {
         if (!state) return;
         const current = parseFloat(state.state);
         const delta = btn.dataset.act === "inc" ? step : -step;
-        const next = Math.round((current + delta) * 10) / 10;
+        let next = Math.round((current + delta) * 10) / 10;
+        const min = state.attributes.min;
+        const max = state.attributes.max;
+        if (min != null) next = Math.max(min, next);
+        if (max != null) next = Math.min(max, next);
         this._hass.callService("number", "set_value", {
           entity_id: eid(this._zoneId, "number", key),
           value: next,
