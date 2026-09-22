@@ -1,403 +1,491 @@
 # Smart Heating
 
-Univerzálna Home Assistant integrácia na riadenie viaczónového kúrenia **aj chladenia**
-— elektrické podlahové kúrenie, klimatizácia ako primárny zdroj tepla alebo chladu,
-krb, fotovoltaika (prebytok aj batéria) a tarifa elektriny, všetko v jednom systéme
-s vlastnou logikou a Lovelace kartou.
+[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating)](https://github.com/tomasbobala/smart_heating/releases)
+[![Validate](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml/badge.svg)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
+[![License](https://img.shields.io/github/license/tomasbobala/smart_heating)](LICENSE)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-Vytvorené pre reálny dom s viacerými nezávislými zónami (izbami), kde každá zóna
-má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=smart_heating&category=integration)
 
----
+*[Citat po slovensky](README.sk.md)*
 
-## Obsah
+A general-purpose Home Assistant integration for multi-zone **heating and cooling**
+- electric floor heating, air conditioning as a primary heat/cool source, a
+fireplace, solar (surplus and battery) and electricity tariffs, all in one
+system with its own decision logic and a Lovelace card.
 
-- [Čo integrácia rieši](#čo-integrácia-rieši)
-- [Architektúra](#architektúra)
-- [Rozhodovacia logika — Kúrenie](#rozhodovacia-logika--kúrenie)
-- [Rozhodovacia logika — Chladenie](#rozhodovacia-logika--chladenie)
-- [Externý teplomer a presné riadenie AC](#externý-teplomer-a-presné-riadenie-ac)
-- [Režim Vypnuté — ako funguje](#režim-vypnuté--ako-funguje)
-- [Instalácia](#instalácia)
-- [Nastavenie](#nastavenie)
-- [Entity vytvorené integráciou](#entity-vytvorené-integráciou)
-- [Lovelace karta](#lovelace-karta)
-- [Príklady použitia](#príklady-použitia)
-- [Riešenie problémov](#riešenie-problémov)
-- [Známe obmedzenia](#známe-obmedzenia)
+Built for a real house with multiple independent zones (rooms), where each
+zone has its own rules but shares common global settings.
 
 ---
 
-## Čo integrácia rieši
+## Contents
 
-- **Viacero nezávislých zón** — každá miestnosť má vlastný režim, teploty, časy
-- **Elektrické podlahové kúrenie** s bezpečnostným limitom teploty podlahy
-- **Klimatizácia ako primárny zdroj tepla** (tepelné čerpadlo je lacnejšie než
-  odporové vykurovanie) s podlahou ako záložným dokurovaním
-- **Klimatizácia aj na chladenie** — samostatná, zjednodušená logika riadená
-  nabitím batérie FVE (voliteľne s presným riadením cez externý teplomer)
-- **Krb** — vypnutie kúrenia v miestnosti, keď je pri krbe dostatočne teplo
-- **Tarifa elektriny** — globálne zablokovanie kúrenia pri vysokej tarife
-- **Fotovoltaika** — využitie prebytku (kúrenie) aj nabitia batérie (chladenie)
-- **Núdzová protimrazová ochrana** — zabráni skutočnému zamrznutiu aj počas
-  vysokej tarify
-- **Predkúrenie pred príchodom** — na pevný čas, nezávisle od reálnej prítomnosti
-- **Vynútené kúrenie pri extrémnom mraze** — per zóna nastaviteľná vonkajšia hranica
-- **Externý teplomer zóny** — presnejšie riadenie, keď vstavaný senzor
-  klimatizácie/podlahovky neodráža reálnu teplotu v miestnosti
-- **Boost** — okamžité dočasné vykúrenie na požiadanie
-- **Vlastná Lovelace karta** — jedna karta na zónu, plné ovládanie bez YAML
+- [What it does](#what-it-does)
+- [Architecture](#architecture)
+- [Decision logic - Heating](#decision-logic---heating)
+- [Decision logic - Cooling](#decision-logic---cooling)
+- [External thermometer and precise AC control](#external-thermometer-and-precise-ac-control)
+- [Notifications](#notifications)
+- [Language (i18n)](#language-i18n)
+- [Tests and CI](#tests-and-ci)
+- [Off mode - how it works](#off-mode---how-it-works)
+- [Installation](#installation)
+- [Setup](#setup)
+- [Entities created by the integration](#entities-created-by-the-integration)
+- [Lovelace card](#lovelace-card)
+- [Usage examples](#usage-examples)
+- [Troubleshooting](#troubleshooting)
+- [Known limitations](#known-limitations)
 
 ---
 
-## Architektúra
+## What it does
 
-### Hub (jeden na inštanciu Home Assistant)
+- **Multiple independent zones** - each room has its own mode, temperatures, schedule
+- **Electric floor heating** with a floor-temperature safety limit
+- **Air conditioning as the primary heat source** (a heat pump is cheaper to run
+  than resistive heating), with the floor as a backup top-up
+- **Air conditioning for cooling too** - a separate, deliberately simpler logic
+  driven by solar battery charge (optionally with precise control via an
+  external thermometer)
+- **Fireplace** - turns off heating in a room once it's warm enough near the fireplace
+- **Electricity tariff** - a global block on heating during high-tariff periods
+- **Solar (PV)** - uses surplus generation (heating) and battery charge (cooling)
+- **Emergency frost protection** - prevents actual freezing even during a high-tariff block
+- **Pre-heating before arrival** - a fixed time window, independent of actual presence
+- **Forced heating in extreme cold** - a per-zone configurable outdoor threshold
+- **External zone thermometer** - more accurate control when the AC's/floor's
+  built-in sensor doesn't reflect the real room temperature
+- **Boost** - instant, temporary comfort heating on demand
+- **Custom Lovelace card** - one card per zone, full control without YAML
+- **English and Slovak** - both the card and the backend-generated text (reasons,
+  notifications) support both languages
 
-Všetky globálne nastavenia sa spravujú cez **Nastaviť → Globálne nastavenia**
-(nie ako samostatné entity — všetko na jednom mieste):
+---
 
-| Nastavenie | Popis |
+## Architecture
+
+### Hub (one per Home Assistant instance)
+
+All global settings are managed via **Configure -> Global settings**
+(not as separate entities - everything lives in one place):
+
+| Setting | Description |
 |---|---|
-| Senzor vonkajšej teploty | používa sa aj na vynútené kúrenie pri mraze a Auto-sezónu |
-| Entita tarify / povolenie kúrenia | `on` = kúrenie povolené (najvyššia priorita blok) |
-| Krb - senzor teploty | teplota pri krbe |
-| Krb - prahová teplota (°C) | nad ktorou sa vypne kúrenie v zónach reagujúcich na krb |
-| FVE prebytok entita | `on` = fotovoltaika vyrába prebytok a batéria je nabitá (pre kúrenie) |
-| Batéria FVE - stav nabitia (%) | číselný senzor SOC, používa sa pre jednoduché chladenie |
-| Núdzová protimrazová ochrana (°C) | preráža aj tarifu |
-| Dovolenka / Neprítomnosť | force Min vo všetkých zónach (Auto režim) |
-| Notifikačná entita | kam sa posielajú upozornenia |
+| Outdoor temperature sensor | also used for forced heating in cold and the Auto season |
+| Tariff / heating-allowed entity | `on` = heating allowed (the highest-priority block) |
+| Fireplace - temperature sensor | temperature near the fireplace |
+| Fireplace - threshold temperature (C) | above which heating turns off in zones reacting to the fireplace |
+| Solar surplus entity | `on` = solar is producing a surplus and the battery is charged (for heating) |
+| Solar battery - state of charge (%) | numeric SOC sensor, used for simple cooling |
+| Emergency frost protection (C) | overrides even the tariff block |
+| Holiday / Away | forces Min in all zones (Auto mode) |
+| Notification targets | can select multiple; where alerts are sent |
+| Language | `auto \| en \| sk` - language for backend-generated reasons/notifications |
 
-### Zóna (koľko izieb, toľko zón)
+### Zone (as many as you have rooms)
 
-Pridáva sa cez **Options Flow** (Nastavenia → Zariadenia a služby → Smart Heating
-→ Nastaviť → Pridať zónu):
+Added via **Options Flow** (Settings -> Devices & Services -> Smart Heating
+-> Configure -> Add zone):
 
-- **Typ zóny:**
-  - `floor` — len podlahové kúrenie
-  - `floor_ac` — klimatizácia (kúrenie aj chladenie) ako primárny zdroj, podlaha
-    ako záložné dokurovanie (len pri kúrení — chladiť nevie)
-- Podlahový `climate` termostat (povinné)
-- Klimatizačný `climate` entity (len pre `floor_ac`)
-- Senzor teploty podlahy (voliteľné, pre bezpečnostný limit)
-- **Externý teplomer zóny** (voliteľné) — nahradí vstavaný senzor vo výpočtoch
-- Osoby sledované cez GPS (`person.x`)
-- Manuálny presence override (napr. `input_boolean.navsteva` pre návštevu)
-- Reaguj na krb (áno/nie)
+- **Zone type:**
+  - `floor` - floor heating only
+  - `floor_ac` - air conditioning (heating and cooling) as the primary source,
+    floor as backup top-up (heating only - it can't cool)
+- Floor `climate` thermostat (required)
+- AC `climate` entity (only for `floor_ac`)
+- Floor temperature sensor (optional, for the safety limit)
+- **External zone thermometer** (optional) - replaces the built-in sensor in all calculations
+- People tracked via GPS (`person.x`)
+- Manual presence override (e.g. `input_boolean.guest` for a visitor)
+- React to fireplace (yes/no)
 
 ---
 
-## Rozhodovacia logika — Kúrenie
+## Decision logic - Heating
 
-Pre zónu v sezóne **Kúrenie** (pozri nižšie, ako sa sezóna určuje) sa v tomto
-poradí vyhodnocuje cieľ (vyššie položky prebíjajú nižšie):
+For a zone in the **Heating** season (see below for how the season is
+determined), the target is resolved in this order (higher items override lower ones):
 
 ```
-0. NÚDZOVÁ OCHRANA
-   current_temp < núdzová hranica (default 8°C)
-   → krátko zapne kúrenie, PRERAZÍ TARIFU (nie floor/krb bezpečnosť)
+0. EMERGENCY PROTECTION
+   current_temp < emergency threshold (default 8C)
+   -> briefly turns on heating, OVERRIDES THE TARIFF (not floor/fireplace safety)
 
-0.5 FVE PREBYTOK
-   FVE entita = on A zóna má "Využi FVE prebytok" zapnuté
-   → cieľ = Deň/Noc komfort, PRERAZÍ TARIFU (nie floor/krb)
+0.5 SOLAR SURPLUS
+   Solar entity = on AND zone has "Use solar surplus" enabled
+   -> target = Day/Night comfort, OVERRIDES THE TARIFF (not floor/fireplace)
 
-1. TARIFA
-   Entita "kúrenie povolené" != on → VYPNI VŠETKO (podlahu aj AC)
+1. TARIFF
+   "heating allowed" entity != on -> TURN EVERYTHING OFF (floor and AC)
 
-2. BEZPEČNOSŤ PODLAHY
-   Teplota podlahy >= max (per zóna) → VYPNI, bez výnimky
+2. FLOOR SAFETY
+   Floor temperature >= max (per zone) -> TURN OFF, no exceptions
 
-3. KRB
-   Zóna má "Reaguj na krb" zapnuté A teplota pri krbe >= threshold → VYPNI
+3. FIREPLACE
+   Zone has "React to fireplace" enabled AND fireplace temperature >= threshold -> TURN OFF
 
-4. MANUÁLNY REŽIM (ak zóna nie je v Auto)
-   Den / Noc / Min / Mraz / Vypnute — priama teplota, žiadne ďalšie vyhodnocovanie
+4. MANUAL MODE (if zone isn't in Auto)
+   Day / Night / Min / Frost / Off - direct temperature, no further evaluation
 
 5. AUTO
-   a. Urč Deň/Noc komfortnú teplotu podľa aktuálneho času (samostatné hranice
-      pre pracovný deň a víkend)
-   b. Skutočne je niekto doma (GPS alebo manuálny override)? → Komfort
-   c. Beží okno predkúrenia? (len Po–Pia, pevný čas) → Komfort
-   d. Vonkajšia teplota <= per-zóna hranica? → Komfort (vynútené kúrenie pri mraze)
-   e. Inak → Min (len udržiavanie, baseline)
+   a. Determine the Day/Night comfort temperature for the current time
+      (separate thresholds for weekdays and weekends)
+   b. Is anyone actually home? (GPS or manual override) -> Comfort
+   c. Is the pre-heating window active? (Mon-Fri only, fixed time) -> Comfort
+   d. Outdoor temperature <= per-zone threshold? -> Comfort (forced heating in cold)
+   e. Otherwise -> Min (maintenance baseline only)
 ```
 
-**Boost** (tlačidlo, dočasné na X hodín) sa vyhodnocuje pred krokom 4 — prebíja
-manuálny režim aj Auto, ale **rešpektuje** tarifu, podlahu aj krb. Nezávisí od
-reálnej prítomnosti.
+**Boost** (button, temporary for X hours) is evaluated before step 4 - it
+overrides manual mode and Auto, but **respects** the tariff, floor safety and
+fireplace safety. It doesn't depend on actual presence.
 
-### Zóna `floor_ac` v Kúrení — priorita AC → podlaha
+### `floor_ac` zone in Heating - AC -> floor priority
 
-1. AC sa nastaví na vypočítaný cieľ ako prvá (primárny zdroj) — pozri aj
-   [Externý teplomer](#externý-teplomer-a-presné-riadenie-ac) nižšie, ak má AC
-   nepresný vlastný senzor
-2. Ak aktuálna teplota zaostáva za cieľom o viac než nastavený rozdiel (°C)
-   dlhšie než nastavený čas (minúty), zapne sa aj podlaha ako dokurovanie
-3. Keď AC dobehne cieľ, podlaha sa vypne
+1. The AC is set to the computed target first (primary source) - see also
+   [External thermometer](#external-thermometer-and-precise-ac-control) below
+   if the AC has an inaccurate built-in sensor
+2. If the current temperature lags the target by more than a configured
+   difference (C) for longer than a configured time (minutes), the floor also
+   turns on as a top-up
+3. Once the AC catches up to the target, the floor turns off
 
 ---
 
-## Rozhodovacia logika — Chladenie
+## Decision logic - Cooling
 
-Platí **len pre zóny typu `floor_ac`**. Podlaha sa pri chladení nikdy nezapája.
+Applies only to `floor_ac` zones. The floor never engages during cooling.
 
-### Ako sa určí sezóna (Kúrenie vs Chladenie)
+### How the season (Heating vs Cooling) is determined
 
-Každá `floor_ac` zóna má vlastný prepínač **Sezóna**: `Kurenie` / `Chladenie` / `Auto`.
+Each `floor_ac` zone has its own **Season** selector: `Heating` / `Cooling` / `Auto`.
 
-- **Kurenie** / **Chladenie** — manuálne vynútené, ignoruje vonkajšiu teplotu
-- **Auto** — vonkajšia teplota >= per-zóna hranica → **Chladenie**, inak **Kúrenie**
+- **Heating** / **Cooling** - manually forced, ignores outdoor temperature
+- **Auto** - outdoor temperature >= per-zone threshold -> **Cooling**, otherwise **Heating**
 
-### Logika v sezóne Chladenie (zámerne jednoduchšia než kúrenie)
+### Logic in Cooling season (deliberately simpler than heating)
 
-Žiadna prítomnosť, žiadny Deň/Noc, žiadne predkúrenie — len:
+No presence, no Day/Night, no pre-heating - just:
 
 ```
-1. Manuálny rezim = Vypnute? → AC off, koniec
+1. Manual mode = Off? -> AC off, done
 
-2. Batéria FVE (%) >= nastavená hranica?
-   → NIE → AC off
-   → ÁNO → pokračuj
+2. Solar battery (%) >= configured threshold?
+   -> NO -> AC off
+   -> YES -> continue
 
-3. Ma zóna externý teplomer?
-   → NIE → chladí (spolieha sa na vlastný senzor AC, ako doteraz)
-   → ÁNO → hysteréza podľa externého teplomera:
-       teplomer <= cieľ - hysterézia → vypni chladenie
-       teplomer >= cieľ + hysterézia → zapni chladenie
-       (v pásme medzi) → nechaj predchádzajúci stav (anti-cyklovanie)
+3. Does the zone have an external thermometer?
+   -> NO -> cools (relies on the AC's own sensor, as before)
+   -> YES -> hysteresis based on the external thermometer:
+       thermometer <= target - hysteresis -> turn cooling off
+       thermometer >= target + hysteresis -> turn cooling on
+       (in between) -> keep the previous state (anti-cycling)
 ```
 
-`Cieľová teplota chladenia` slúži zároveň ako hranica pre hysterézu **aj** ako
-fyzická hodnota, ktorá sa reálne pošle klimatizácii.
+The `Cooling target temperature` serves both as the hysteresis reference and
+as the physical value actually sent to the AC.
 
 ---
 
-## Externý teplomer a presné riadenie AC
+## External thermometer and precise AC control
 
-Bežný problém: vstavaný senzor klimatizácie môže byť nepresný alebo neodráža
-reálnu teplotu v miestnosti (napr. je pri okne, alebo miestnosť má iný tepelný
-zdroj ako krb). Riešenie:
+A common problem: the AC's built-in sensor can be inaccurate or not reflect
+the real room temperature (e.g. it's near a window, or the room has another
+heat source like a fireplace). Solution:
 
-1. V nastavení zóny priraď **Externý teplomer zóny** (napr. teplomer pri krbe)
-2. Táto hodnota **nahradí** vstavaný senzor vo **všetkých** výpočtoch danej zóny
-   (zobrazená aktuálna teplota, núdzová ochrana, AC↔podlaha priorita, hysteréza
-   pri kúrení aj chladení)
-3. Pri kúrení navyše: AC dostane príkaz kúriť na **pevný fyzický setpoint**
-   (`AC fyzický setpoint`, napr. 26°C) namiesto vypočítaného komfortného cieľa
-   — pretože jej vlastný senzor a regulačný okruh sú nepresné. O tom, **či**
-   AC vôbec beží, rozhoduje `AC hysteréza` vs externý teplomer, nie AC sama.
+1. Assign an **External zone thermometer** in the zone settings (e.g. a
+   thermometer near the fireplace)
+2. This value **replaces** the built-in sensor in **all** calculations for
+   that zone (displayed current temperature, emergency protection, AC<->floor
+   priority, hysteresis for both heating and cooling)
+3. For heating specifically: the AC is commanded to heat at a **fixed
+   physical setpoint** (`AC physical setpoint`, e.g. 26C) instead of the
+   computed comfort target - because its own sensor and control loop are
+   inaccurate. **Whether** the AC runs at all is decided by `AC hysteresis`
+   against the external thermometer, not by the AC itself.
 
-Ak zóna **nemá** externý teplomer nastavený, všetko funguje presne ako predtým
-(AC sa riadi vlastným senzorom a regulačným okruhom).
-
----
-
-## Režim Vypnuté — ako funguje
-
-Pri **prechode** do režimu Vypnuté (zmena z iného režimu) sa pošle `off`
-**jedenkrát**. Pokým zóna **zostáva** vo Vypnuté, coordinator už do zariadenia
-vôbec nezasahuje — necháš si ho ovládať úplne sám (napr. prepnúť klimatizáciu
-na chladenie mimo Smart Heating), kým znova neprepneš na iný režim. Toto platí
-rovnako pre kúrenie aj chladenie.
+If a zone has **no** external thermometer configured, everything works exactly
+as before (the AC is controlled by its own sensor and control loop).
 
 ---
 
-## Instalácia
+## Notifications
 
-### Cez HACS (odporúčané)
+10 separate categories, each with its own toggle in **Global settings**
+(all enabled by default):
 
-1. HACS → tri bodky vpravo hore → **Vlastné repozitáre**
+| Category | Scope | Example |
+|---|---|---|
+| Tariff | once, house-wide | `Global: heating blocked by high tariff.` |
+| Floor | per zone | `{zone}: heating off - floor reached max temperature {temp}.` |
+| Fireplace | once, with the list of zones | `Fireplace: heating turned off in zones: {list}.` |
+| Emergency protection | once, with the list of zones | `Emergency protection activated in zones: {list}!` |
+| Boost | per zone | `Boost activated in zone {zone} for {hours} h.` |
+| Cooling | per zone | `{zone}: cooling started (battery {%}, target {C}).` |
+| Holiday | once, house-wide | `Holiday mode activated - all zones to Min.` |
+| Pre-heating | per zone | `{zone}: pre-heating started before arrival.` |
+| AC/floor backup | per zone, `floor_ac` only | `{zone}: AC can't keep up, floor engaged as backup.` |
+| Outdoor threshold (cold) | per zone | `{zone}: low outdoor temperature forced heating.` |
+
+Most categories also send a "back to normal" message (e.g. "heating
+restored"). There's a 3-minute grace window after HA starts during which no
+notifications are sent (the baseline state is just quietly recorded) - this
+prevents false alerts for a condition that already existed before the
+restart. **Notification targets** supports selecting **multiple** targets at
+once (e.g. both partners' phones).
+
+---
+
+## Language (i18n)
+
+Both the integration and the card support English and Slovak:
+
+- **Card**: `language: auto | en | sk` in the card config (`auto` follows HA's language)
+- **Backend** (decision reasons, heat source, notifications): a **Language**
+  field in the integration's Global settings (`auto | en | sk`)
+
+They're independent - you can have the card in English and notifications in
+Slovak, if you want.
+
+---
+
+## Tests and CI
+
+The project has a real test suite (not just manual verification):
+
+- **Python** (`pytest` + `pytest-homeassistant-custom-component`) - decision
+  logic, i18n, notifications, config/options flow (including regression tests
+  for specific bugs found during development)
+- **JavaScript** (`node:test` + `jsdom`) - the card, i18n, render-skipping optimization
+
+```bash
+# Python
+pip install -r requirements-test.txt
+pytest
+
+# JS
+npm install
+npm test
+```
+
+GitHub Actions (`.github/workflows/validate.yml`) runs both on every
+push/PR, alongside the official HACS and `hassfest` validation.
+
+---
+
+## Off mode - how it works
+
+On **transition** into Off mode (a change from another mode), `off` is sent
+**once**. While the zone **stays** in Off, the coordinator no longer touches
+the device at all - you're free to control it entirely yourself (e.g. switch
+the AC to cooling outside of Smart Heating) until you switch to another mode
+again. This applies equally to heating and cooling.
+
+---
+
+## Installation
+
+### Via HACS (recommended)
+
+1. HACS -> the three-dot menu, top right -> **Custom repositories**
 2. URL: `https://github.com/tomasbobala/smart_heating`
-3. Kategória: **Integrácia**
-4. Vyhľadaj "Smart Heating" v HACS a nainštaluj
-5. Reštartuj Home Assistant
+3. Category: **Integration**
+4. Search for "Smart Heating" in HACS and install it
+5. Restart Home Assistant
 
-### Manuálne
+### Manually
 
-1. Skopíruj `custom_components/smart_heating` do `config/custom_components/smart_heating`
-2. Reštartuj Home Assistant
+1. Copy `custom_components/smart_heating` into `config/custom_components/smart_heating`
+2. Restart Home Assistant
 
 ---
 
-## Nastavenie
+## Setup
 
-### 1. Pridanie integrácie (hub)
+### 1. Add the integration (hub)
 
-**Nastavenia → Zariadenia a služby → Pridať integráciu → Smart Heating**
+**Settings -> Devices & Services -> Add Integration -> Smart Heating**
 
-Všetky polia sú voliteľné — dajú sa doplniť aj neskôr cez "Nastaviť → Globálne
-nastavenia".
+Every field is optional - you can fill them in later via "Configure -> Global settings".
 
-### 2. Pridanie zóny
+### 2. Add a zone
 
-Na dlaždici integrácie klikni **Nastaviť (Configure)** → **Pridať zónu**:
+On the integration's tile, click **Configure** -> **Add zone**:
 
-- Zadaj názov, vyber typ zóny a podlahový/klimatizačný `climate` entity
-- Voliteľne priraď externý teplomer, senzor teploty podlahy
-- Priraď osoby na sledovanie prítomnosti
-- Ulož
+- Enter a name, pick the zone type and the floor/AC `climate` entity
+- Optionally assign an external thermometer and a floor temperature sensor
+- Assign people to track for presence
+- Save
 
-Po pridaní zóny sa vytvorí ~19–26 entít (podľa typu zóny) s predvolenými
-hodnotami, ktoré si doladíš cez entity alebo priamo cez Lovelace kartu.
+Adding a zone creates ~19-26 entities (depending on zone type) with sensible
+defaults, which you fine-tune via the entities or directly through the
+Lovelace card.
 
-### 3. Pridanie karty na dashboard
+### 3. Add the card to your dashboard
 
-Pridaj JS resource (**Nastavenia → Ovládacie panely → Zdroje**):
+Add the JS resource (**Settings -> Dashboards -> Resources**):
 
 ```
-URL: /local/smart-heating-card.js   (skopíruj tam www/smart-heating-card.js)
-Typ: JavaScript modul
+URL: /local/smart-heating-card.js   (copy www/smart-heating-card.js there)
+Type: JavaScript Module
 ```
 
-Potom na dashboard pridaj kartu cez UI (Upraviť dashboard → Pridať kartu →
-Smart Heating) — otvorí sa vizuálny výber zóny, netreba písať `zone_id` ručne.
-Alebo priamo v YAML:
+Then add the card to your dashboard via the UI (Edit dashboard -> Add card ->
+Smart Heating) - a visual zone picker opens, no need to type `zone_id` by
+hand. Or directly in YAML:
 
 ```yaml
 type: custom:smart-heating-card
 zone_id: "xxxxxxxx"
-name: "Obývačka"       # volitelne, inak sa pouzije meno z climate entity
+name: "Living room"     # optional, otherwise uses the climate entity's name
+language: auto           # optional: auto | en | sk
 ```
 
 ---
 
-## Entity vytvorené integráciou
+## Entities created by the integration
 
-Hub **nemá** žiadne vlastné entity — všetko globálne je súčasťou Globálnych
-nastavení (Options Flow).
+The hub has **no** entities of its own - everything global lives in Global
+settings (Options Flow).
 
-### Per zóna (`<id>` = interné ID zóny)
+### Per zone (`<id>` = the zone's internal ID)
 
-| Entity | Popis |
+| Entity | Description |
 |---|---|
-| `climate.smart_heating_<id>` | hlavný virtuálny termostat — primárne ovládacie miesto (podporuje aj Cool pri `floor_ac`) |
-| `select.smart_heating_<id>_rezim` | Auto / Den / Noc / Min / Mraz / Vypnute |
-| `select.smart_heating_<id>_sezona` | **len `floor_ac`**: Kurenie / Chladenie / Auto |
-| `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | teploty kúrenia |
-| `number..._floor_min` / `_floor_max` | bezpečnostné limity teploty podlahy |
-| `number..._vonkajsia_hranica` | hranica pre vynútené kúrenie pri mraze |
-| `number..._boost_hodiny` | trvanie Boostu |
-| `number..._ac_priorita_rozdiel` / `_ac_priorita_minuty` | **len `floor_ac`**: kedy nastúpi podlaha ako záloha |
-| `number..._ac_setpoint_teplota` | **len `floor_ac`**: fyzický setpoint AC pri kúrení (s ext. teplomerom) |
-| `number..._ac_hysterezia` | **len `floor_ac`**: hysteréza pre zapnutie/vypnutie AC (kúrenie aj chladenie) |
-| `number..._teplota_chladenie` | **len `floor_ac`**: cieľ/setpoint chladenia |
-| `number..._bateria_hranica_chladenie` | **len `floor_ac`**: min. % SOC batérie pre chladenie |
-| `number..._vonkajsia_hranica_chladenie` | **len `floor_ac`**: hranica pre Auto-sezónu |
-| `time..._den_od_tyzden` / `_vikend`, `_noc_od_tyzden` / `_vikend` | časové hranice Deň/Noc |
-| `time..._predkurenie_od` / `_do` | okno predkúrenia (len Po–Pia) |
-| `switch..._predkurenie_povolene` | zapnutie/vypnutie predkúrenia |
-| `switch..._reaguj_na_krb` | zapnutie/vypnutie reakcie na krb |
-| `switch..._vyuzi_fve_prebytok` | zapnutie/vypnutie využitia FVE prebytku (kúrenie) |
-| `button..._boost` | okamžité spustenie Boostu |
-| `sensor..._stav` | diagnostický dôvod aktuálneho rozhodnutia + atribúty (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`) |
+| `climate.smart_heating_<id>` | the main virtual thermostat - the primary control point (supports Cool for `floor_ac`) |
+| `select.smart_heating_<id>_rezim` | Auto / Day / Night / Min / Frost / Off |
+| `select.smart_heating_<id>_sezona` | **`floor_ac` only**: Heating / Cooling / Auto |
+| `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | heating temperatures |
+| `number..._floor_min` / `_floor_max` | floor temperature safety limits |
+| `number..._vonkajsia_hranica` | threshold for forced heating in cold |
+| `number..._boost_hodiny` | Boost duration |
+| `number..._ac_priorita_rozdiel` / `_ac_priorita_minuty` | **`floor_ac` only**: when the floor kicks in as backup |
+| `number..._ac_setpoint_teplota` | **`floor_ac` only**: the AC's physical setpoint when heating (with ext. thermometer) |
+| `number..._ac_hysterezia` | **`floor_ac` only**: hysteresis for turning the AC on/off (heating and cooling) |
+| `number..._teplota_chladenie` | **`floor_ac` only**: cooling target/setpoint |
+| `number..._bateria_hranica_chladenie` | **`floor_ac` only**: min. battery SOC % for cooling |
+| `number..._vonkajsia_hranica_chladenie` | **`floor_ac` only**: threshold for the Auto season |
+| `time..._den_od_tyzden` / `_vikend`, `_noc_od_tyzden` / `_vikend` | Day/Night time thresholds |
+| `time..._predkurenie_od` / `_do` | pre-heating window (Mon-Fri only) |
+| `switch..._predkurenie_povolene` | enable/disable pre-heating |
+| `switch..._reaguj_na_krb` | enable/disable reacting to the fireplace |
+| `switch..._vyuzi_fve_prebytok` | enable/disable using solar surplus (heating) |
+| `button..._boost` | trigger Boost immediately |
+| `sensor..._stav` | the diagnostic reason for the current decision + attributes (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`) |
 
 ---
 
-## Lovelace karta
+## Lovelace card
 
-`www/smart-heating-card.js` — čistý JavaScript web component, žiadny build
-krok. Jedna karta = jedna zóna. Obsahuje:
+`www/smart-heating-card.js` - a plain JavaScript web component, no build
+step. One card = one zone. Includes:
 
-- Aktuálnu/cieľovú teplotu, teplotu podlahy a vonkajšiu teplotu, dôvod
-  rozhodnutia, farebné odznaky
-- Prepínanie režimu (chipy) a **sezóny** (len pre zóny s AC)
-- Steppery na všetky teploty vrátane chladiacich a AC-špecifických
-- Časové polia (pracovný deň / víkend / predkúrenie)
-- Prepínače (predkúrenie, krb, FVE)
-- Boost (trvanie + tlačidlo)
-- **Vizuálny editor** pri pridávaní karty (dropdown zón namiesto ručného `zone_id`)
+- Current/target temperature, floor and outdoor temperature, the decision
+  reason, colored badges
+- Mode switching (chips) and **season** switching (AC zones only)
+- Steppers for every temperature, including cooling- and AC-specific ones
+- Time fields (weekday / weekend / pre-heating)
+- Toggles (pre-heating, fireplace, solar)
+- Boost (duration + button)
+- Collapsible sections (temperatures, cooling, schedule, switches) - mode,
+  season and Boost stay expanded; a two-column layout kicks in on wider cards
+- **Visual editor** when adding the card (zone dropdown instead of typing
+  `zone_id` by hand, plus a language picker)
 
-Karta prekresľuje obsah **len** keď sa zmení niečo z jej vlastnej zóny (nie
-pri každej zmene v celom Home Assistant) — dôležité pre výkon pri väčšom
-počte kariet na dashboarde. Sekcie Sezóna/Chladenie/AC nastavenia sa
-zobrazujú **len** pre zóny typu `floor_ac`.
-
----
-
-## Príklady použitia
-
-### "Chcem, aby sa doma kúrilo skôr, než prídeme"
-
-Nastav `predkurenie_od` (napr. 15:00) a `predkurenie_do` (napr. 18:00, ako
-poistka keby nikto neprišiel) — funguje len v pracovné dni.
-
-### "Cez víkend chodíme spať neskôr a vstávame neskôr"
-
-Nastav `den_od_vikend` a `noc_od_vikend` odlišne od `den_od_tyzden`/`noc_od_tyzden`.
-
-### "Nechcem posielať prebytky FVE do siete v zime"
-
-Priraď v hube entitu "FVE prebytok" (vlastný template `binary_sensor`
-kombinujúci "FVE vyrába" + "batéria nabitá nad X %"). Zóny s
-`vyuzi_fve_prebytok` zapnutým sa vykurujú na komfort aj bez prítomnosti.
-
-### "V lete chcem chladiť, len keď je batéria FVE nabitá"
-
-Nastav `bateria_hranica_chladenie` (napr. 50 %), priraď v Globálnych
-nastaveniach senzor SOC batérie a nastav zóne Sezónu na `Auto` alebo `Chladenie`.
-
-### "Vstavaný senzor klimatizácie je nepresný, kúri/chladí nesprávne"
-
-Priraď zóne **Externý teplomer** (skutočný teplomer v miestnosti). Systém ho
-odvtedy použije namiesto senzora AC, vrátane hysteréznej logiky zapnutia/vypnutia.
-
-### "Idem domov, chcem aby bolo teplo, aj keď je vysoká tarifa"
-
-Stlač **Boost** — force-uje komfort na nastavený počet hodín. Rešpektuje
-tarifu (počká, kým tarifa klesne) aj bezpečnosť podlahy/krbu.
-
-### "Chcem klimatizáciu na chvíľu ovládať priamo, mimo Smart Heating"
-
-Prepni zónu na **Vypnuté** — po jednorazovom `off` sa integrácia do zariadenia
-prestane miešať, kým znova neprepneš na iný režim.
+The card only re-renders when something from its own zone actually changes
+(not on every state change in the whole of Home Assistant) - important for
+performance with many cards on one dashboard.
 
 ---
 
-## Riešenie problémov
+## Usage examples
 
-**Zmena Python súboru sa neprejavila** → treba **celý reštart** Home Assistant,
-nie len reload integrácie (platí obzvlášť pri pridaní/zmene platformy).
+### "I want heating to start before we get home"
 
-**Zmena JS karty sa neprejavila** → problém je takmer vždy v **cache
-prehliadača**. V Safari: Shift+klik na tlačidlo obnovenia, alebo zmeň URL
-resource na `?v=N` (zvýš číslo pri každej zmene) v Nastavenia → Ovládacie
-panely → Zdroje.
+Set `pre-heating from` (e.g. 15:00) and `pre-heating to` (e.g. 18:00, as a
+fallback in case nobody arrives) - only active on weekdays.
 
-**Options Flow hádže 500 Internal Server Error** → `config_entry` v
-`OptionsFlow` sa od HA 2024.12 nesmie nastavovať manuálne v `__init__` (v tejto
-integrácii už opravené, relevantné len ak forkuješ kód).
+### "We go to bed later and wake up later on weekends"
 
-**Custom entity vôbec nevznikli po pridaní zóny** → skontroluj **Nastavenia
-→ Systém → Logy**, filter `smart_heating` — časté príčiny: nesprávny
-`EntityCategory` (musí byť enum, nie string), nesprávny import konštanty z
-`homeassistant.components.climate`.
+Set `night starts (weekend)` and `day starts (weekend)` differently from the
+weekday values.
 
-**AC pri chladení/kúrení necháva bežať dlho aj po dosiahnutí cieľa** → priraď
-zóne Externý teplomer a skontroluj hodnotu `AC hysterezia` — príliš vysoká
-hodnota spôsobí veľké pásmo necitlivosti.
+### "I don't want to send solar surplus to the grid in winter"
 
-**Klimatizácia sa mi "vypína sama", keď ju ovládam priamo** → over si režim
-zóny. Vo `Vypnuté` má systém po prvom `off` zariadenie nechať na pokoji — ak
-sa to nedeje, over si verziu (potrebuješ min. 0.6.0).
+Assign a "solar surplus" entity in the hub (your own template `binary_sensor`
+combining "solar is producing" + "battery above X%"). Zones with "Use solar
+surplus" enabled heat to comfort even without presence.
+
+### "In summer I want cooling only when the solar battery is charged"
+
+Set the battery threshold for cooling (e.g. 50%), assign the battery SOC
+sensor in Global settings, and set the zone's Season to `Auto` or `Cooling`.
+
+### "The AC's built-in sensor is inaccurate, heating/cooling triggers wrong"
+
+Assign an **External thermometer** to the zone (a real thermometer in the
+room). The system uses it instead of the AC's sensor from then on, including
+for the on/off hysteresis logic.
+
+### "I'm heading home, I want it warm even during a high tariff"
+
+Press **Boost** - forces comfort for a configured number of hours. Still
+respects the tariff (waits for it to drop) and floor/fireplace safety.
+
+### "I want to control the AC directly for a while, outside Smart Heating"
+
+Switch the zone to **Off** - after the one-time `off`, the integration stops
+touching the device until you switch to another mode again.
 
 ---
 
-## Známe obmedzenia
+## Troubleshooting
 
-- Boost, deficit AC↔podlaha, hysteréza a notifikačné flagy sú len v pamäti
-  (RAM) — po reštarte Home Assistant sa vynulujú (zámerne, ide o krátkodobý stav)
-- Bezpečnostné limity teploty podlahy vyžadujú samostatný senzor teploty
-  podlahy priradený k zóne — bez neho sa táto ochrana nevyhodnocuje
-- Chladenie je zámerne zjednodušené (len batéria ± externý teplomer) — žiadna
-  prítomnosť, Deň/Noc ani predkúrenie ako pri kúrení
-- Karta nemá vizuálny editor pre štrukturálne polia zóny (typ zóny, entity) —
-  tie sa nastavujú cez Options Flow integrácie, nie cez kartu
+**A Python file change didn't take effect** -> you need a **full restart** of
+Home Assistant, not just an integration reload (especially true when adding
+or changing a platform).
+
+**A card (JS) change didn't take effect** -> almost always **browser cache**.
+In Safari: Shift-click the reload button, or bump the resource URL to `?v=N`
+(increase the number on every change) in Settings -> Dashboards -> Resources.
+
+**Options Flow throws a 500 Internal Server Error** -> since HA 2024.12,
+`config_entry` in `OptionsFlow` must not be set manually in `__init__` (this
+is already fixed in this integration; only relevant if you fork the code).
+
+**No custom entities appeared after adding a zone** -> check **Settings ->
+System -> Logs**, filter for `smart_heating` - common causes: a wrong
+`EntityCategory` (must be an enum, not a string), or a wrong constant import
+from `homeassistant.components.climate`.
+
+**The AC keeps running long after reaching its target (heating or cooling)** ->
+assign an external thermometer to the zone and check the `AC hysteresis`
+value - too high a value causes a large dead-band.
+
+**The AC "turns itself off" when I control it directly** -> check the zone's
+mode. In **Off**, the system is supposed to leave the device alone after the
+first `off` - if that's not happening, check your version (you need at least 0.6.0).
 
 ---
 
-## Licencia
+## Known limitations
 
-Tento projekt je licencovaný pod [MIT licenciou](LICENSE) — môžeš ho slobodne
-používať, upravovať aj šíriť, aj na komerčné účely, pokiaľ zachováš pôvodné
-copyright oznámenie.
+- Boost, AC<->floor deficit tracking, hysteresis and notification flags are
+  in-memory (RAM) only - they reset on a Home Assistant restart (by design,
+  they're short-lived state)
+- Floor temperature safety limits require a dedicated floor temperature
+  sensor assigned to the zone - without one, that protection isn't evaluated
+- Cooling is deliberately simplified (battery +/- external thermometer only) -
+  no presence, Day/Night or pre-heating like heating has
+- The card has no visual editor for a zone's structural fields (zone type,
+  entities) - those are set via the integration's Options Flow, not the card
+
+---
+
+## License
+
+This project is licensed under the [MIT License](LICENSE) - you're free to
+use, modify and distribute it, including commercially, as long as you keep
+the original copyright notice.
