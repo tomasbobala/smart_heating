@@ -2,98 +2,110 @@
   "config": {
     "step": {
       "user": {
-        "title": "Smart Heating - globalne nastavenia",
-        "description": "Zony pridas neskor cez Nastavenia integracie.",
+        "title": "Smart Heating - globálne nastavenia",
+        "description": "Zóny pridáš neskôr cez Nastavenia integrácie.",
         "data": {
-          "outdoor_sensor": "Senzor vonkajsej teploty",
-          "tariff_entity": "Entita tarify / povolenie kurenia (on = povolene)",
-          "fireplace_temp_entity": "Krb - senzor teploty (volitelne)",
-          "notify_entity": "Notifikacne entity (mozes vybrat viacero)",
-          "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)",
-          "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
-          "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
-          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
-          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie",
-          "notify_tariff": "Notifikacia: tarifa blokuje kurenie",
-          "notify_floor": "Notifikacia: podlaha dosiahla max. teplotu",
-          "notify_krb": "Notifikacia: krb vypol kurenie",
-          "notify_emergency": "Notifikacia: nudzova protimrazova ochrana",
-          "notify_boost": "Notifikacia: Boost aktivovany"
+          "outdoor_sensor": "Senzor vonkajšej teploty",
+          "tariff_entity": "Entita tarify / povolenie kúrenia (on = povolené)",
+          "fireplace_temp_entity": "Krb - senzor teploty (voliteľné)",
+          "notify_entity": "Notifikačné entity (môžeš vybrať viacero)",
+          "pv_surplus_entity": "FVE prebytok / môže sa kúriť zadarmo (voliteľné)",
+          "battery_soc_entity": "Batéria FVE - stav nabitia (%) pre jednoduché chladenie",
+          "krb_threshold": "Krb - prahová teplota (°C), nad ktorou sa vypne kúrenie",
+          "nudzova_teplota": "Núdzová protimrazová ochrana (°C) - preráža aj tarifu",
+          "holiday_active": "Dovolenka / Neprítomnosť (všetky zóny na Min)",
+          "notify_tariff": "Notifikácia: tarifa blokuje kúrenie",
+          "notify_floor": "Notifikácia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikácia: krb vypol kúrenie",
+          "notify_emergency": "Notifikácia: núdzová protimrazová ochrana",
+          "notify_boost": "Notifikácia: Boost aktivovaný",
+          "notify_cooling": "Notifikácia: chladenie spustené/zastavené",
+          "notify_holiday": "Notifikácia: Dovolenka aktivovaná/ukončená",
+          "notify_preheat": "Notifikácia: predkúrenie spustené/ukončené",
+          "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
+          "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
+          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)"
         }
       }
     },
     "abort": {
-      "single_instance_allowed": "Smart Heating uz je nastaveny. Zony spravuj cez Nastavenia integracie."
+      "single_instance_allowed": "Smart Heating už je nastavený. Zóny spravuj cez Nastavenia integrácie."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Smart Heating - sprava",
+        "title": "Smart Heating - správa",
         "menu_options": {
-          "global": "Globalne nastavenia",
-          "add_zone": "Pridat zonu",
-          "edit_zone": "Upravit zonu",
-          "remove_zone": "Zmazat zonu"
+          "global": "Globálne nastavenia",
+          "add_zone": "Pridať zónu",
+          "edit_zone": "Upraviť zónu",
+          "remove_zone": "Zmazať zónu"
         }
       },
       "global": {
-        "title": "Globalne nastavenia",
+        "title": "Globálne nastavenia",
         "data": {
-          "outdoor_sensor": "Senzor vonkajsej teploty",
-          "tariff_entity": "Entita tarify / povolenie kurenia (on = povolene)",
-          "fireplace_temp_entity": "Krb - senzor teploty (volitelne)",
-          "notify_entity": "Notifikacne entity (mozes vybrat viacero)",
-          "pv_surplus_entity": "FVE prebytok / moze sa kurit zadarmo (volitelne)",
-          "krb_threshold": "Krb - prahova teplota (°C), nad ktorou sa vypne kurenie",
-          "nudzova_teplota": "Nudzova protimrazova ochrana (°C) - prerazi aj tarifu",
-          "holiday_active": "Dovolenka / Nepritomnost (vsetky zony na Min)",
-          "battery_soc_entity": "Baterka FVE - stav nabitia (%) pre jednoduche chladenie",
-          "notify_tariff": "Notifikacia: tarifa blokuje kurenie",
-          "notify_floor": "Notifikacia: podlaha dosiahla max. teplotu",
-          "notify_krb": "Notifikacia: krb vypol kurenie",
-          "notify_emergency": "Notifikacia: nudzova protimrazova ochrana",
-          "notify_boost": "Notifikacia: Boost aktivovany"
+          "outdoor_sensor": "Senzor vonkajšej teploty",
+          "tariff_entity": "Entita tarify / povolenie kúrenia (on = povolené)",
+          "fireplace_temp_entity": "Krb - senzor teploty (voliteľné)",
+          "notify_entity": "Notifikačné entity (môžeš vybrať viacero)",
+          "pv_surplus_entity": "FVE prebytok / môže sa kúriť zadarmo (voliteľné)",
+          "battery_soc_entity": "Batéria FVE - stav nabitia (%) pre jednoduché chladenie",
+          "krb_threshold": "Krb - prahová teplota (°C), nad ktorou sa vypne kúrenie",
+          "nudzova_teplota": "Núdzová protimrazová ochrana (°C) - preráža aj tarifu",
+          "holiday_active": "Dovolenka / Neprítomnosť (všetky zóny na Min)",
+          "notify_tariff": "Notifikácia: tarifa blokuje kúrenie",
+          "notify_floor": "Notifikácia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikácia: krb vypol kúrenie",
+          "notify_emergency": "Notifikácia: núdzová protimrazová ochrana",
+          "notify_boost": "Notifikácia: Boost aktivovaný",
+          "notify_cooling": "Notifikácia: chladenie spustené/zastavené",
+          "notify_holiday": "Notifikácia: Dovolenka aktivovaná/ukončená",
+          "notify_preheat": "Notifikácia: predkúrenie spustené/ukončené",
+          "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
+          "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
+          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)"
         }
       },
       "add_zone": {
-        "title": "Nova zona",
+        "title": "Nová zóna",
         "data": {
-          "name": "Nazov zony",
-          "zone_type": "Typ zony",
-          "climate_entity": "Podlahovy termostat (climate)",
-          "ac_entity": "Klimatizacia (climate) - len pre typ 'Klima + podlaha'",
-          "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
-          "presence_entities": "Osoby sledovane cez GPS (person)",
-          "manual_presence_entities": "Manualny presence override (napr. navsteva)",
+          "name": "Názov zóny",
+          "zone_type": "Typ zóny",
+          "climate_entity": "Podlahový termostat (climate)",
+          "ac_entity": "Klimatizácia (climate) - len pre typ 'Klíma + podlaha'",
+          "floor_temp_entity": "Senzor teploty podlahy (voliteľné)",
+          "presence_entities": "Osoby sledované cez GPS (person)",
+          "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
           "use_fireplace_guard": "Reaguj na krb",
-          "external_temp_entity": "Externy teplomer zony (nahradi vstavany senzor AC/podlahovky vo vypoctoch)"
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)"
         }
       },
       "edit_zone": {
-        "title": "Upravit zonu",
+        "title": "Upraviť zónu",
         "data": {
-          "zone_id": "Zona",
-          "name": "Nazov zony",
-          "zone_type": "Typ zony",
-          "climate_entity": "Podlahovy termostat (climate)",
-          "ac_entity": "Klimatizacia (climate) - len pre typ 'Klima + podlaha'",
-          "floor_temp_entity": "Senzor teploty podlahy (volitelne)",
-          "presence_entities": "Osoby sledovane cez GPS (person)",
-          "manual_presence_entities": "Manualny presence override (napr. navsteva)",
+          "zone_id": "Zóna",
+          "name": "Názov zóny",
+          "zone_type": "Typ zóny",
+          "climate_entity": "Podlahový termostat (climate)",
+          "ac_entity": "Klimatizácia (climate) - len pre typ 'Klíma + podlaha'",
+          "floor_temp_entity": "Senzor teploty podlahy (voliteľné)",
+          "presence_entities": "Osoby sledované cez GPS (person)",
+          "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
           "use_fireplace_guard": "Reaguj na krb",
-          "external_temp_entity": "Externy teplomer zony (nahradi vstavany senzor AC/podlahovky vo vypoctoch)"
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)"
         }
       },
       "remove_zone": {
-        "title": "Zmazat zonu",
+        "title": "Zmazať zónu",
         "data": {
-          "zone_id": "Zona"
+          "zone_id": "Zóna"
         }
       }
     },
     "abort": {
-      "no_zones": "Zatial nie je vytvorena ziadna zona."
+      "no_zones": "Zatiaľ nie je vytvorená žiadna zóna."
     }
   }
 }

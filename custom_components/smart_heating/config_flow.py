@@ -19,6 +19,7 @@ from .const import (
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
+    CONF_LANGUAGE,
     CONF_MANUAL_PRESENCE_ENTITIES,
     CONF_NOTIFY_AC_BACKUP,
     CONF_NOTIFY_BOOST,
@@ -91,6 +92,17 @@ def _hub_schema_dict(current: dict) -> dict:
     schema_dict[
         vol.Optional(CONF_HOLIDAY_ACTIVE, default=current.get(CONF_HOLIDAY_ACTIVE, False))
     ] = selector.BooleanSelector()
+    schema_dict[
+        vol.Optional(CONF_LANGUAGE, default=current.get(CONF_LANGUAGE, "auto"))
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                {"value": "auto", "label": "Auto (follow Home Assistant)"},
+                {"value": "en", "label": "English"},
+                {"value": "sk", "label": "Slovenčina"},
+            ]
+        )
+    )
     existing_notify = current.get(CONF_NOTIFY_ENTITY, [])
     if isinstance(existing_notify, str):
         existing_notify = [existing_notify] if existing_notify else []

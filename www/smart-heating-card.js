@@ -1,15 +1,88 @@
 /* Smart Heating Card
- * Vlastna Lovelace karta pre integraciu Smart Heating.
- * Ziadny build krok - cisty JS web component, staci nahrat ako Lovelace resource.
+ * Standalone Lovelace card for the Smart Heating integration.
+ * No build step - pure JS web component, just add it as a Lovelace resource.
  *
- * Konfiguracia (YAML v karte, alebo pouzi vizualny editor pri pridavani karty):
+ * Config (YAML, or use the visual editor when adding the card):
  *   type: custom:smart-heating-card
  *   zone_id: "287f437c"
- *   name: "Obyvacka"   # volitelne, inak sa pouzije meno z climate entity
+ *   name: "Living room"   # optional, otherwise uses the climate entity's name
+ *   language: auto        # optional: auto | en | sk  (auto = follow HA language)
  */
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const SEASONS = ["Kurenie", "Chladenie", "Auto"];
+
+const MODE_LABELS = {
+  Auto: { en: "Auto", sk: "Auto" },
+  Den: { en: "Day", sk: "Deň" },
+  Noc: { en: "Night", sk: "Noc" },
+  Min: { en: "Min", sk: "Min" },
+  Mraz: { en: "Frost", sk: "Mráz" },
+  Vypnute: { en: "Off", sk: "Vypnuté" },
+};
+const SEASON_LABELS = {
+  Kurenie: { en: "Heating", sk: "Kúrenie" },
+  Chladenie: { en: "Cooling", sk: "Chladenie" },
+  Auto: { en: "Auto", sk: "Auto" },
+};
+
+const I18N = {
+  section_mode: { en: "Mode", sk: "Režim" },
+  section_season: { en: "Season", sk: "Sezóna" },
+  section_temps: { en: "Temperatures", sk: "Teploty" },
+  section_cooling: { en: "Cooling", sk: "Chladenie" },
+  section_times: { en: "Schedule", sk: "Časy" },
+  section_toggles: { en: "Switches", sk: "Prepínače" },
+  section_boost: { en: "Boost", sk: "Boost" },
+
+  target: { en: "target", sk: "cieľ" },
+  floor: { en: "Floor", sk: "Podlaha" },
+  outdoor: { en: "Outdoor", sk: "Vonku" },
+  source: { en: "Source", sk: "Zdroj" },
+
+  badge_emergency: { en: "Emergency protection", sk: "Núdzová ochrana" },
+  badge_tariff: { en: "Blocked by tariff", sk: "Zablokované tarifou" },
+  badge_floor: { en: "Floor - max temperature", sk: "Podlaha - max teplota" },
+  badge_krb: { en: "Fireplace - off", sk: "Krb - vypnuté" },
+  badge_pv: { en: "Solar surplus", sk: "FVE prebytok" },
+  badge_cold: { en: "Low outdoor temperature", sk: "Nízka vonkajšia teplota" },
+  badge_boost: { en: "Boost active", sk: "Boost aktívny" },
+
+  temp_day: { en: "Day temperature", sk: "Teplota - deň" },
+  temp_night: { en: "Night temperature", sk: "Teplota - noc" },
+  temp_min: { en: "Min temperature (baseline)", sk: "Teplota - min (baseline)" },
+  temp_frost: { en: "Frost protection temperature", sk: "Teplota - protimrazová" },
+  temp_outdoor_threshold: { en: "Outdoor threshold (forces heating)", sk: "Vonkajšia hranica (vynúti kúrenie)" },
+  temp_ac_setpoint: { en: "AC physical setpoint (when heating)", sk: "AC fyzický setpoint (keď kúri)" },
+  temp_ac_hysteresis: { en: "AC hysteresis", sk: "AC hysterézia" },
+
+  cool_target: { en: "Cooling target temperature", sk: "Cieľová teplota chladenia" },
+  cool_battery: { en: "Solar battery - min. % for cooling", sk: "Batérka FVE - min. % pre chladenie" },
+  cool_outdoor_threshold: { en: "Outdoor threshold for Auto season", sk: "Vonkajšia hranica pre Auto-sezónu" },
+
+  times_workday: { en: "Weekday", sk: "Prac. deň" },
+  times_weekend: { en: "Weekend", sk: "Víkend" },
+  times_day_start: { en: "Day starts", sk: "Začiatok dňa" },
+  times_night_start: { en: "Night starts", sk: "Začiatok noci" },
+  times_preheat: { en: "Pre-heating", sk: "Predkúrenie" },
+  times_start: { en: "Start", sk: "Začiatok" },
+  times_end: { en: "End", sk: "Koniec" },
+
+  toggle_preheat: { en: "Pre-heating allowed (Mon-Fri)", sk: "Predkúrenie povolené (Po-Pia)" },
+  toggle_krb: { en: "React to fireplace", sk: "Reaguj na krb" },
+  toggle_pv: { en: "Use solar surplus", sk: "Využi FVE prebytok" },
+
+  boost_running: { en: "Boost running", sk: "Boost beží" },
+  boost_start: { en: "Start Boost", sk: "Spustiť Boost" },
+
+  select_zone_first: { en: "Select a zone in the card settings.", sk: "Vyber zónu v nastaveniach karty." },
+  zone_not_found: { en: "Entities for zone '{zone}' were not found. Check zone_id in the card configuration.", sk: "Entity pre zónu '{zone}' sa nenašli. Skontroluj zone_id v konfigurácii karty." },
+
+  editor_zone: { en: "Zone", sk: "Zóna" },
+  editor_zone_placeholder: { en: "-- select a zone --", sk: "-- vyber zónu --" },
+  editor_name: { en: "Custom name (optional)", sk: "Vlastný názov (voliteľné)" },
+  editor_language: { en: "Language", sk: "Jazyk" },
+};
 
 function eid(zoneId, domain, key) {
   return `${domain}.smart_heating_${zoneId}${key ? "_" + key : ""}`;
@@ -28,6 +101,12 @@ function findZones(hass) {
   return zones;
 }
 
+function resolveLang(hass, configLang) {
+  if (configLang === "en" || configLang === "sk") return configLang;
+  const hLang = (hass && hass.language) || (typeof navigator !== "undefined" ? navigator.language : "en") || "en";
+  return hLang.toLowerCase().startsWith("sk") ? "sk" : "en";
+}
+
 // ============================================================== HLAVNA KARTA
 
 class SmartHeatingCard extends HTMLElement {
@@ -38,11 +117,33 @@ class SmartHeatingCard extends HTMLElement {
 
   setConfig(config) {
     if (!config.zone_id) {
-      throw new Error("smart-heating-card: chyba povinne pole 'zone_id'");
+      throw new Error("smart-heating-card: missing required field 'zone_id'");
     }
     this._config = config;
     this._zoneId = config.zone_id;
     this._built = false;
+  }
+
+  _t(key, vars) {
+    const entry = I18N[key];
+    const lang = resolveLang(this._hass, this._config.language);
+    let text = entry ? entry[lang] || entry.en || key : key;
+    if (vars) {
+      for (const [k, v] of Object.entries(vars)) text = text.replace(`{${k}}`, v);
+    }
+    return text;
+  }
+
+  _modeLabel(mode) {
+    const lang = resolveLang(this._hass, this._config.language);
+    const entry = MODE_LABELS[mode];
+    return entry ? entry[lang] || entry.en : mode;
+  }
+
+  _seasonLabel(season) {
+    const lang = resolveLang(this._hass, this._config.language);
+    const entry = SEASON_LABELS[season];
+    return entry ? entry[lang] || entry.en : season;
   }
 
   set hass(hass) {
@@ -129,39 +230,39 @@ class SmartHeatingCard extends HTMLElement {
           <div class="sh-badges"></div>
 
           <div class="sh-section sh-section--mode">
-            <div class="sh-section-label"><span class="sh-icon">🧭</span>Rezim</div>
+            <div class="sh-section-label"><span class="sh-icon">🧭</span>${this._t("section_mode")}</div>
             <div class="sh-chips sh-mode-chips"></div>
           </div>
 
           <div class="sh-section sh-section--mode sh-season-section" style="display:none">
-            <div class="sh-section-label"><span class="sh-icon">🔄</span>Sezona</div>
+            <div class="sh-section-label"><span class="sh-icon">🔄</span>${this._t("section_season")}</div>
             <div class="sh-chips sh-season-chips"></div>
           </div>
 
           <div class="sh-collapsible-grid">
             <details class="sh-section sh-section--temp">
-              <summary class="sh-section-label"><span class="sh-icon">🌡️</span>Teploty</summary>
+              <summary class="sh-section-label"><span class="sh-icon">🌡️</span>${this._t("section_temps")}</summary>
               <div class="sh-temps"></div>
             </details>
 
             <details class="sh-section sh-section--temp sh-cooling-section" style="display:none">
-              <summary class="sh-section-label"><span class="sh-icon">❄️</span>Chladenie</summary>
+              <summary class="sh-section-label"><span class="sh-icon">❄️</span>${this._t("section_cooling")}</summary>
               <div class="sh-cooling"></div>
             </details>
 
             <details class="sh-section sh-section--time">
-              <summary class="sh-section-label"><span class="sh-icon">⏰</span>Casy</summary>
+              <summary class="sh-section-label"><span class="sh-icon">⏰</span>${this._t("section_times")}</summary>
               <div class="sh-times"></div>
             </details>
 
             <details class="sh-section sh-section--toggle">
-              <summary class="sh-section-label"><span class="sh-icon">🔀</span>Prepinace</summary>
+              <summary class="sh-section-label"><span class="sh-icon">🔀</span>${this._t("section_toggles")}</summary>
               <div class="sh-toggles"></div>
             </details>
           </div>
 
           <div class="sh-section sh-section--boost">
-            <div class="sh-section-label"><span class="sh-icon">🚀</span>Boost</div>
+            <div class="sh-section-label"><span class="sh-icon">🚀</span>${this._t("section_boost")}</div>
             <div class="sh-boost"></div>
           </div>
         </div>
@@ -242,7 +343,7 @@ class SmartHeatingCard extends HTMLElement {
   _updateContent() {
     if (!this._zoneId) {
       if (this.querySelector(".sh-root")) {
-        this.querySelector(".sh-root").innerHTML = `<div class="sh-reason">Vyber zonu v nastaveniach karty.</div>`;
+        this.querySelector(".sh-root").innerHTML = `<div class="sh-reason">${this._t("select_zone_first")}</div>`;
       }
       return;
     }
@@ -253,7 +354,7 @@ class SmartHeatingCard extends HTMLElement {
 
     if (!climate || !stavSensor) {
       this.querySelector(".sh-root").innerHTML =
-        `<div class="sh-reason">Entity pre zonu '${zoneId}' sa nenasli. Skontroluj zone_id v konfiguracii karty.</div>`;
+        `<div class="sh-reason">${this._t("zone_not_found", { zone: zoneId })}</div>`;
       return;
     }
 
@@ -263,11 +364,11 @@ class SmartHeatingCard extends HTMLElement {
 
     this.querySelector(".sh-title").textContent = zoneName;
     this.querySelector(".sh-subtitle").textContent =
-      zAttrs.zdroj_kurenia ? `Zdroj: ${zAttrs.zdroj_kurenia}` : "";
+      zAttrs.zdroj_kurenia ? `${this._t("source")}: ${zAttrs.zdroj_kurenia}` : "";
     this.querySelector(".sh-current-temp").textContent =
       attrs.current_temperature != null ? `${attrs.current_temperature}°` : "--°";
     this.querySelector(".sh-target-temp").textContent =
-      attrs.temperature != null ? `ciel ${attrs.temperature}°` : "";
+      attrs.temperature != null ? `${this._t("target")} ${attrs.temperature}°` : "";
     this.querySelector(".sh-reason").textContent = stavSensor.state || "";
 
     this._renderMeta(zAttrs);
@@ -290,8 +391,8 @@ class SmartHeatingCard extends HTMLElement {
 
   _renderMeta(zAttrs) {
     const parts = [];
-    if (zAttrs.floor_temperature != null) parts.push(`<span>Podlaha: <b>${zAttrs.floor_temperature}°C</b></span>`);
-    if (zAttrs.outdoor_temperature != null) parts.push(`<span>Vonku: <b>${zAttrs.outdoor_temperature}°C</b></span>`);
+    if (zAttrs.floor_temperature != null) parts.push(`<span>${this._t("floor")}: <b>${zAttrs.floor_temperature}°C</b></span>`);
+    if (zAttrs.outdoor_temperature != null) parts.push(`<span>${this._t("outdoor")}: <b>${zAttrs.outdoor_temperature}°C</b></span>`);
     const wrap = this.querySelector(".sh-meta");
     wrap.innerHTML = parts.join("");
     wrap.style.display = parts.length ? "flex" : "none";
@@ -299,13 +400,13 @@ class SmartHeatingCard extends HTMLElement {
 
   _renderBadges(zAttrs) {
     const badges = [];
-    if (zAttrs.emergency_active) badges.push(["err", "Nudzova ochrana"]);
-    if (zAttrs.tariff_blocked) badges.push(["warn", "Zablokovane tarifou"]);
-    if (zAttrs.floor_override) badges.push(["err", "Podlaha - max teplota"]);
-    if (zAttrs.krb_override) badges.push(["warn", "Krb - vypnute"]);
-    if (zAttrs.pv_active) badges.push(["ok", "FVE prebytok"]);
-    if (zAttrs.cold_outdoor_active) badges.push(["info", "Nizka vonkajsia teplota"]);
-    if (zAttrs.boost_active) badges.push(["info", "Boost aktivny"]);
+    if (zAttrs.emergency_active) badges.push(["err", this._t("badge_emergency")]);
+    if (zAttrs.tariff_blocked) badges.push(["warn", this._t("badge_tariff")]);
+    if (zAttrs.floor_override) badges.push(["err", this._t("badge_floor")]);
+    if (zAttrs.krb_override) badges.push(["warn", this._t("badge_krb")]);
+    if (zAttrs.pv_active) badges.push(["ok", this._t("badge_pv")]);
+    if (zAttrs.cold_outdoor_active) badges.push(["info", this._t("badge_cold")]);
+    if (zAttrs.boost_active) badges.push(["info", this._t("badge_boost")]);
     const wrap = this.querySelector(".sh-badges");
     wrap.innerHTML = badges.map(([cls, label]) => `<span class="sh-badge ${cls}">${label}</span>`).join("");
     wrap.style.display = badges.length ? "flex" : "none";
@@ -314,7 +415,7 @@ class SmartHeatingCard extends HTMLElement {
   _renderModeChips(current) {
     const wrap = this.querySelector(".sh-mode-chips");
     wrap.innerHTML = MODES.map(
-      (m) => `<button class="sh-chip ${m === current ? "active" : ""}" data-mode="${m}">${m}</button>`
+      (m) => `<button class="sh-chip ${m === current ? "active" : ""}" data-mode="${m}">${this._modeLabel(m)}</button>`
     ).join("");
     wrap.querySelectorAll(".sh-chip").forEach((btn) => {
       btn.onclick = () => {
@@ -329,7 +430,7 @@ class SmartHeatingCard extends HTMLElement {
   _renderSeasonChips(current) {
     const wrap = this.querySelector(".sh-season-chips");
     wrap.innerHTML = SEASONS.map(
-      (s) => `<button class="sh-chip ${s === current ? "active" : ""}" data-season="${s}">${s}</button>`
+      (s) => `<button class="sh-chip ${s === current ? "active" : ""}" data-season="${s}">${this._seasonLabel(s)}</button>`
     ).join("");
     wrap.querySelectorAll(".sh-chip").forEach((btn) => {
       btn.onclick = () => {
@@ -377,14 +478,14 @@ class SmartHeatingCard extends HTMLElement {
     const wrap = this.querySelector(".sh-temps");
     const hasAc = !!this._hass.states[eid(this._zoneId, "select", "sezona")];
     wrap.innerHTML =
-      this._numberRow("Teplota - den", "teplota_den", 0.5, "°C") +
-      this._numberRow("Teplota - noc", "teplota_noc", 0.5, "°C") +
-      this._numberRow("Teplota - min (baseline)", "teplota_min", 0.5, "°C") +
-      this._numberRow("Teplota - protimrazova", "teplota_mraz", 0.5, "°C") +
-      this._numberRow("Vonkajsia hranica (vynuti kurenie)", "vonkajsia_hranica", 0.5, "°C") +
+      this._numberRow(this._t("temp_day"), "teplota_den", 0.5, "°C") +
+      this._numberRow(this._t("temp_night"), "teplota_noc", 0.5, "°C") +
+      this._numberRow(this._t("temp_min"), "teplota_min", 0.5, "°C") +
+      this._numberRow(this._t("temp_frost"), "teplota_mraz", 0.5, "°C") +
+      this._numberRow(this._t("temp_outdoor_threshold"), "vonkajsia_hranica", 0.5, "°C") +
       (hasAc
-        ? this._numberRow("AC fyzicky setpoint (ked kuri)", "ac_setpoint_teplota", 0.5, "°C") +
-          this._numberRow("AC hysterezia", "ac_hysterezia", 0.1, "°C")
+        ? this._numberRow(this._t("temp_ac_setpoint"), "ac_setpoint_teplota", 0.5, "°C") +
+          this._numberRow(this._t("temp_ac_hysteresis"), "ac_hysterezia", 0.1, "°C")
         : "");
     this._wireNumberRows(wrap);
   }
@@ -392,9 +493,9 @@ class SmartHeatingCard extends HTMLElement {
   _renderCooling() {
     const wrap = this.querySelector(".sh-cooling");
     wrap.innerHTML =
-      this._numberRow("Cielova teplota chladenia", "teplota_chladenie", 0.5, "°C") +
-      this._numberRow("Baterka FVE - min. % pre chladenie", "bateria_hranica_chladenie", 5, "%") +
-      this._numberRow("Vonkajsia hranica pre Auto-sezonu", "vonkajsia_hranica_chladenie", 0.5, "°C");
+      this._numberRow(this._t("cool_target"), "teplota_chladenie", 0.5, "°C") +
+      this._numberRow(this._t("cool_battery"), "bateria_hranica_chladenie", 5, "%") +
+      this._numberRow(this._t("cool_outdoor_threshold"), "vonkajsia_hranica_chladenie", 0.5, "°C");
     this._wireNumberRows(wrap);
   }
 
@@ -407,26 +508,26 @@ class SmartHeatingCard extends HTMLElement {
     const wrap = this.querySelector(".sh-times");
     wrap.innerHTML = `
       <table class="sh-times-table">
-        <tr><th></th><th>Prac. den</th><th>Vikend</th></tr>
+        <tr><th></th><th>${this._t("times_workday")}</th><th>${this._t("times_weekend")}</th></tr>
         <tr>
-          <td>Zaciatok dna</td>
+          <td>${this._t("times_day_start")}</td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("den_od_tyzden")}" data-time-key="den_od_tyzden" /></td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("den_od_vikend")}" data-time-key="den_od_vikend" /></td>
         </tr>
         <tr>
-          <td>Zaciatok noci</td>
+          <td>${this._t("times_night_start")}</td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("noc_od_tyzden")}" data-time-key="noc_od_tyzden" /></td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("noc_od_vikend")}" data-time-key="noc_od_vikend" /></td>
         </tr>
       </table>
       <table class="sh-times-table sh-times-table--predkurenie">
-        <tr><th colspan="2">Predkurenie</th></tr>
+        <tr><th colspan="2">${this._t("times_preheat")}</th></tr>
         <tr>
-          <td>Zaciatok</td>
+          <td>${this._t("times_start")}</td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_od")}" data-time-key="predkurenie_od" /></td>
         </tr>
         <tr>
-          <td>Koniec</td>
+          <td>${this._t("times_end")}</td>
           <td><input class="sh-time-input" type="time" value="${this._timeVal("predkurenie_do")}" data-time-key="predkurenie_do" /></td>
         </tr>
       </table>
@@ -456,9 +557,9 @@ class SmartHeatingCard extends HTMLElement {
   _renderToggles() {
     const wrap = this.querySelector(".sh-toggles");
     wrap.innerHTML =
-      this._switchRow("Predkurenie povolene (Po-Pia)", "predkurenie_povolene") +
-      this._switchRow("Reaguj na krb", "reaguj_na_krb") +
-      this._switchRow("Vyuzi FVE prebytok", "vyuzi_fve_prebytok");
+      this._switchRow(this._t("toggle_preheat"), "predkurenie_povolene") +
+      this._switchRow(this._t("toggle_krb"), "reaguj_na_krb") +
+      this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok");
     wrap.querySelectorAll(".sh-switch").forEach((el) => {
       el.onclick = () => {
         const key = el.dataset.switchKey;
@@ -481,8 +582,8 @@ class SmartHeatingCard extends HTMLElement {
         <span class="sh-val">${dur.toFixed(1)} h</span>
         <button data-boost-act="inc">+</button>
       </div>
-      <div class="sh-boost-status">${active ? "Boost bezi" : ""}</div>
-      <button class="sh-boost-btn" ${active ? "disabled" : ""}>Spustit Boost</button>
+      <div class="sh-boost-status">${active ? this._t("boost_running") : ""}</div>
+      <button class="sh-boost-btn" ${active ? "disabled" : ""}>${this._t("boost_start")}</button>
     `;
     wrap.querySelector('[data-boost-act="dec"]').onclick = () =>
       this._hass.callService("number", "set_value", {
@@ -517,6 +618,12 @@ class SmartHeatingCardEditor extends HTMLElement {
     this._render();
   }
 
+  _t(key) {
+    const entry = I18N[key];
+    const lang = resolveLang(this._hass, this._config.language);
+    return entry ? entry[lang] || entry.en || key : key;
+  }
+
   _render() {
     if (!this._hass) return;
     const zones = findZones(this._hass);
@@ -526,23 +633,36 @@ class SmartHeatingCardEditor extends HTMLElement {
       this.innerHTML = `
         <div style="display:flex; flex-direction:column; gap:12px; padding:8px 0;">
           <label style="display:flex; flex-direction:column; gap:4px; font-size:0.9rem;">
-            Zona
+            <span class="sh-ed-zone-label"></span>
             <select class="sh-ed-zone" style="padding:8px; border-radius:6px;"></select>
           </label>
           <label style="display:flex; flex-direction:column; gap:4px; font-size:0.9rem;">
-            Vlastny nazov (volitelne)
+            <span class="sh-ed-name-label"></span>
             <input class="sh-ed-name" type="text" style="padding:8px; border-radius:6px;" />
+          </label>
+          <label style="display:flex; flex-direction:column; gap:4px; font-size:0.9rem;">
+            <span class="sh-ed-lang-label"></span>
+            <select class="sh-ed-lang" style="padding:8px; border-radius:6px;">
+              <option value="auto">Auto</option>
+              <option value="en">English</option>
+              <option value="sk">Slovenčina</option>
+            </select>
           </label>
         </div>
       `;
       this._built = true;
       this.querySelector(".sh-ed-zone").addEventListener("change", (e) => this._emit({ zone_id: e.target.value }));
       this.querySelector(".sh-ed-name").addEventListener("input", (e) => this._emit({ name: e.target.value || undefined }));
+      this.querySelector(".sh-ed-lang").addEventListener("change", (e) => this._emit({ language: e.target.value === "auto" ? undefined : e.target.value }));
     }
+
+    this.querySelector(".sh-ed-zone-label").textContent = this._t("editor_zone");
+    this.querySelector(".sh-ed-name-label").textContent = this._t("editor_name");
+    this.querySelector(".sh-ed-lang-label").textContent = this._t("editor_language");
 
     const select = this.querySelector(".sh-ed-zone");
     const optionsHtml =
-      `<option value="" disabled ${!currentZoneId ? "selected" : ""}>-- vyber zonu --</option>` +
+      `<option value="" disabled ${!currentZoneId ? "selected" : ""}>${this._t("editor_zone_placeholder")}</option>` +
       zones
         .map((z) => `<option value="${z.zone_id}" ${z.zone_id === currentZoneId ? "selected" : ""}>${z.name} (${z.zone_id})</option>`)
         .join("");
@@ -550,11 +670,15 @@ class SmartHeatingCardEditor extends HTMLElement {
 
     const nameInput = this.querySelector(".sh-ed-name");
     if (document.activeElement !== nameInput) nameInput.value = this._config.name || "";
+
+    const langSelect = this.querySelector(".sh-ed-lang");
+    langSelect.value = this._config.language || "auto";
   }
 
   _emit(patch) {
     const newConfig = { ...this._config, type: "custom:smart-heating-card", ...patch };
     if (!newConfig.name) delete newConfig.name;
+    if (!newConfig.language) delete newConfig.language;
     this._config = newConfig;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
   }
@@ -574,6 +698,6 @@ if (!window.customCards.some((c) => c.type === "smart-heating-card")) {
   window.customCards.push({
     type: "smart-heating-card",
     name: "Smart Heating",
-    description: "Ovladacia karta pre jednu zonu Smart Heating integracie.",
+    description: "Control card for a single Smart Heating zone.",
   });
 }
