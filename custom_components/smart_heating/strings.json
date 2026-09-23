@@ -40,7 +40,8 @@
           "global": "Global settings",
           "add_zone": "Add zone",
           "edit_zone": "Edit zone",
-          "remove_zone": "Remove zone"
+          "remove_zone": "Remove zone",
+          "number_ranges": "Number ranges"
         }
       },
       "global": {
@@ -102,10 +103,48 @@
         "data": {
           "zone_id": "Zone"
         }
+      },
+      "number_ranges": {
+        "title": "Number ranges (min/max)",
+        "data": {
+          "teplota_den__min": "Day temperature - min",
+          "teplota_den__max": "Day temperature - max",
+          "teplota_noc__min": "Night temperature - min",
+          "teplota_noc__max": "Night temperature - max",
+          "teplota_min__min": "Min temperature (baseline) - min",
+          "teplota_min__max": "Min temperature (baseline) - max",
+          "teplota_mraz__min": "Frost protection temperature - min",
+          "teplota_mraz__max": "Frost protection temperature - max",
+          "floor_min__min": "Floor min. temperature - min",
+          "floor_min__max": "Floor min. temperature - max",
+          "floor_max__min": "Floor max. temperature - min",
+          "floor_max__max": "Floor max. temperature - max",
+          "boost_hodiny__min": "Boost duration (h) - min",
+          "boost_hodiny__max": "Boost duration (h) - max",
+          "vonkajsia_hranica__min": "Outdoor threshold - forces heating (°C) - min",
+          "vonkajsia_hranica__max": "Outdoor threshold - forces heating (°C) - max",
+          "ac_priorita_rozdiel__min": "AC priority - temperature difference (°C) - min",
+          "ac_priorita_rozdiel__max": "AC priority - temperature difference (°C) - max",
+          "ac_priorita_minuty__min": "AC priority - time before floor kicks in (min) - min",
+          "ac_priorita_minuty__max": "AC priority - time before floor kicks in (min) - max",
+          "ac_setpoint_teplota__min": "AC physical setpoint when heating (°C) - min",
+          "ac_setpoint_teplota__max": "AC physical setpoint when heating (°C) - max",
+          "ac_hysterezia__min": "AC hysteresis (°C) - min",
+          "ac_hysterezia__max": "AC hysteresis (°C) - max",
+          "vonkajsia_hranica_chladenie__min": "Cooling - outdoor threshold for Auto season (°C) - min",
+          "vonkajsia_hranica_chladenie__max": "Cooling - outdoor threshold for Auto season (°C) - max",
+          "teplota_chladenie__min": "Cooling target temperature (°C) - min",
+          "teplota_chladenie__max": "Cooling target temperature (°C) - max",
+          "bateria_hranica_chladenie__min": "Cooling - min. solar battery charge (%) - min",
+          "bateria_hranica_chladenie__max": "Cooling - min. solar battery charge (%) - max"
+        }
       }
     },
     "abort": {
       "no_zones": "No zone has been created yet."
+    },
+    "error": {
+      "invalid_range": "Minimum must be lower than maximum."
     }
   }
 }

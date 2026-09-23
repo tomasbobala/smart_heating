@@ -55,6 +55,8 @@ const I18N = {
   temp_outdoor_threshold: { en: "Outdoor threshold (forces heating)", sk: "Vonkajšia hranica (vynúti kúrenie)" },
   temp_ac_setpoint: { en: "AC physical setpoint (when heating)", sk: "AC fyzický setpoint (keď kúri)" },
   temp_ac_hysteresis: { en: "AC hysteresis", sk: "AC hysterézia" },
+  temp_ac_priority_diff: { en: "AC priority - temperature difference (floor kicks in)", sk: "AC priorita - rozdiel teploty (nástup podlahy)" },
+  temp_ac_priority_minutes: { en: "AC priority - time before floor kicks in (min)", sk: "AC priorita - čas do nástupu podlahy (min)" },
 
   cool_target: { en: "Cooling target temperature", sk: "Cieľová teplota chladenia" },
   cool_battery: { en: "Solar battery - min. % for cooling", sk: "Batérka FVE - min. % pre chladenie" },
@@ -465,7 +467,11 @@ class SmartHeatingCard extends HTMLElement {
         if (!state) return;
         const current = parseFloat(state.state);
         const delta = btn.dataset.act === "inc" ? step : -step;
-        const next = Math.round((current + delta) * 10) / 10;
+        let next = Math.round((current + delta) * 10) / 10;
+        const min = state.attributes.min;
+        const max = state.attributes.max;
+        if (min != null) next = Math.max(min, next);
+        if (max != null) next = Math.min(max, next);
         this._hass.callService("number", "set_value", {
           entity_id: eid(this._zoneId, "number", key),
           value: next,
@@ -484,8 +490,10 @@ class SmartHeatingCard extends HTMLElement {
       this._numberRow(this._t("temp_frost"), "teplota_mraz", 0.5, "°C") +
       this._numberRow(this._t("temp_outdoor_threshold"), "vonkajsia_hranica", 0.5, "°C") +
       (hasAc
-        ? this._numberRow(this._t("temp_ac_setpoint"), "ac_setpoint_teplota", 0.5, "°C") +
-          this._numberRow(this._t("temp_ac_hysteresis"), "ac_hysterezia", 0.1, "°C")
+        ? this._numberRow(this._t("temp_ac_priority_diff"), "ac_priorita_rozdiel", 0.5, "°C") +
+          this._numberRow(this._t("temp_ac_priority_minutes"), "ac_priorita_minuty", 0.5, " min") +
+          this._numberRow(this._t("temp_ac_setpoint"), "ac_setpoint_teplota", 0.5, "°C") +
+          this._numberRow(this._t("temp_ac_hysteresis"), "ac_hysterezia", 0.5, "°C")
         : "");
     this._wireNumberRows(wrap);
   }
@@ -494,7 +502,7 @@ class SmartHeatingCard extends HTMLElement {
     const wrap = this.querySelector(".sh-cooling");
     wrap.innerHTML =
       this._numberRow(this._t("cool_target"), "teplota_chladenie", 0.5, "°C") +
-      this._numberRow(this._t("cool_battery"), "bateria_hranica_chladenie", 5, "%") +
+      this._numberRow(this._t("cool_battery"), "bateria_hranica_chladenie", 0.5, "%") +
       this._numberRow(this._t("cool_outdoor_threshold"), "vonkajsia_hranica_chladenie", 0.5, "°C");
     this._wireNumberRows(wrap);
   }

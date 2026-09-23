@@ -40,7 +40,8 @@
           "global": "Globálne nastavenia",
           "add_zone": "Pridať zónu",
           "edit_zone": "Upraviť zónu",
-          "remove_zone": "Zmazať zónu"
+          "remove_zone": "Zmazať zónu",
+          "number_ranges": "Rozsahy hodnôt"
         }
       },
       "global": {
@@ -102,10 +103,48 @@
         "data": {
           "zone_id": "Zóna"
         }
+      },
+      "number_ranges": {
+        "title": "Rozsahy hodnôt (min/max)",
+        "data": {
+          "teplota_den__min": "Teplota - den - min",
+          "teplota_den__max": "Teplota - den - max",
+          "teplota_noc__min": "Teplota - noc - min",
+          "teplota_noc__max": "Teplota - noc - max",
+          "teplota_min__min": "Teplota - minimalna (baseline) - min",
+          "teplota_min__max": "Teplota - minimalna (baseline) - max",
+          "teplota_mraz__min": "Teplota - protimrazova - min",
+          "teplota_mraz__max": "Teplota - protimrazova - max",
+          "floor_min__min": "Min. teplota podlahy - min",
+          "floor_min__max": "Min. teplota podlahy - max",
+          "floor_max__min": "Max. teplota podlahy - min",
+          "floor_max__max": "Max. teplota podlahy - max",
+          "boost_hodiny__min": "Boost - trvanie (h) - min",
+          "boost_hodiny__max": "Boost - trvanie (h) - max",
+          "vonkajsia_hranica__min": "Vonkajsia teplota - hranica pre vynutene kurenie (°C) - min",
+          "vonkajsia_hranica__max": "Vonkajsia teplota - hranica pre vynutene kurenie (°C) - max",
+          "ac_priorita_rozdiel__min": "AC priorita - rozdiel teploty (°C) po ktorom nastupi podlaha - min",
+          "ac_priorita_rozdiel__max": "AC priorita - rozdiel teploty (°C) po ktorom nastupi podlaha - max",
+          "ac_priorita_minuty__min": "AC priorita - cas nez dokuri podlaha (min) - min",
+          "ac_priorita_minuty__max": "AC priorita - cas nez dokuri podlaha (min) - max",
+          "ac_setpoint_teplota__min": "AC - fyzicky setpoint pri kureni (°C, nezavisle od cielovej teploty) - min",
+          "ac_setpoint_teplota__max": "AC - fyzicky setpoint pri kureni (°C, nezavisle od cielovej teploty) - max",
+          "ac_hysterezia__min": "AC - hysterezia pre zapnutie/vypnutie (°C, podla externeho teplomera) - min",
+          "ac_hysterezia__max": "AC - hysterezia pre zapnutie/vypnutie (°C, podla externeho teplomera) - max",
+          "vonkajsia_hranica_chladenie__min": "Chladenie - vonkajsia hranica pre Auto-sezonu (°C) - min",
+          "vonkajsia_hranica_chladenie__max": "Chladenie - vonkajsia hranica pre Auto-sezonu (°C) - max",
+          "teplota_chladenie__min": "Chladenie - cielova teplota (°C) - min",
+          "teplota_chladenie__max": "Chladenie - cielova teplota (°C) - max",
+          "bateria_hranica_chladenie__min": "Chladenie - min. nabitie baterie FVE (%) - min",
+          "bateria_hranica_chladenie__max": "Chladenie - min. nabitie baterie FVE (%) - max"
+        }
       }
     },
     "abort": {
       "no_zones": "Zatiaľ nie je vytvorená žiadna zóna."
+    },
+    "error": {
+      "invalid_range": "Minimum musí byť menšie ako maximum."
     }
   }
 }

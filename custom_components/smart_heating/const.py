@@ -19,6 +19,7 @@ CONF_NOTIFY_AC_BACKUP = "notify_ac_backup"
 CONF_NOTIFY_COLD_OUTDOOR = "notify_cold_outdoor"
 CONF_LANGUAGE = "language"
 LANGUAGE_OPTIONS = ["auto", "en", "sk"]
+OPT_NUMBER_RANGES = "number_ranges"
 CONF_PV_SURPLUS_ENTITY = "pv_surplus_entity"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_KRB_THRESHOLD = "krb_threshold"
@@ -132,6 +133,25 @@ COOLING_NUMBER_DEFS = {
         0, 100, "mdi:battery-charging-70", DEFAULT_COOL_BATTERY_THRESHOLD,
     ),
 }
+
+# Vsetky number definicie spolu (pre editaciu rozsahov v Globalnych nastaveniach).
+ALL_NUMBER_DEFS = {**NUMBER_DEFS, **AC_NUMBER_DEFS, **COOLING_NUMBER_DEFS}
+
+
+def resolve_number_range(options: dict, key: str, default_lo: float, default_hi: float) -> tuple[float, float]:
+    """Vrati (lo, hi) pre dane cislo - z pouzivatelom upravenych rozsahov v
+    Globalnych nastaveniach (OPT_NUMBER_RANGES), inak povodne hardcoded
+    hodnoty z NUMBER_DEFS/AC_NUMBER_DEFS/COOLING_NUMBER_DEFS."""
+    overrides = options.get(OPT_NUMBER_RANGES, {})
+    pair = overrides.get(key)
+    if pair and len(pair) == 2:
+        try:
+            lo, hi = float(pair[0]), float(pair[1])
+            if lo < hi:
+                return lo, hi
+        except (TypeError, ValueError):
+            pass
+    return default_lo, default_hi
 
 # key -> (label, default "HH:MM:SS")  -- time entity per zona
 TIME_DEFS = {

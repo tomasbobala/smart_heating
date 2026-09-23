@@ -12,6 +12,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     AC_NUMBER_DEFS,
+    ALL_NUMBER_DEFS,
     CONF_AC_ENTITY,
     CONF_BATTERY_SOC_ENTITY,
     CONF_CLIMATE_ENTITY,
@@ -45,10 +46,12 @@ from .const import (
     DEFAULT_FIREPLACE_THRESHOLD,
     DOMAIN,
     NUMBER_DEFS,
+    OPT_NUMBER_RANGES,
     OPT_ZONES,
     TIME_DEFS,
     ZONE_TYPE_FLOOR,
     ZONE_TYPE_FLOOR_AC,
+    resolve_number_range,
 )
 
 
@@ -59,6 +62,22 @@ def _add_optional(schema_dict: dict, key: str, value, ent_selector) -> None:
         schema_dict[vol.Optional(key, default=value)] = ent_selector
     else:
         schema_dict[vol.Optional(key)] = ent_selector
+
+
+def _number_ranges_schema_dict(options: dict) -> dict:
+    """Min/max polia pre kazdu number entitu (teploty, minuty, hodiny, %...),
+    zoradene abecedne podla kluca pre stabilne poradie vo formulari."""
+    schema_dict: dict = {}
+    for key in sorted(ALL_NUMBER_DEFS.keys()):
+        _label, default_lo, default_hi, _icon, _default = ALL_NUMBER_DEFS[key]
+        lo, hi = resolve_number_range(options, key, default_lo, default_hi)
+        schema_dict[vol.Optional(f"{key}__min", default=lo)] = selector.NumberSelector(
+            selector.NumberSelectorConfig(mode="box", step=0.1)
+        )
+        schema_dict[vol.Optional(f"{key}__max", default=hi)] = selector.NumberSelector(
+            selector.NumberSelectorConfig(mode="box", step=0.1)
+        )
+    return schema_dict
 
 
 def _hub_schema_dict(current: dict) -> dict:
@@ -164,7 +183,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         self._ensure_zones()
         return self.async_show_menu(
             step_id="init",
-            menu_options=["global", "add_zone", "edit_zone", "remove_zone"],
+            menu_options=["global", "number_ranges", "add_zone", "edit_zone", "remove_zone"],
         )
 
     async def async_step_global(self, user_input=None):
@@ -177,6 +196,28 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
 
         schema = vol.Schema(_hub_schema_dict(self.config_entry.options))
         return self.async_show_form(step_id="global", data_schema=schema)
+
+    async def async_step_number_ranges(self, user_input=None):
+        self._ensure_zones()
+        errors: dict = {}
+        if user_input is not None:
+            ranges: dict = {}
+            for key in ALL_NUMBER_DEFS:
+                lo = user_input.get(f"{key}__min")
+                hi = user_input.get(f"{key}__max")
+                if lo is not None and hi is not None:
+                    if lo >= hi:
+                        errors["base"] = "invalid_range"
+                        break
+                    ranges[key] = [lo, hi]
+            if not errors:
+                options = dict(self.config_entry.options)
+                options[OPT_NUMBER_RANGES] = ranges
+                options[OPT_ZONES] = self._zones
+                return self.async_create_entry(title="", data=options)
+
+        schema = vol.Schema(_number_ranges_schema_dict(self.config_entry.options))
+        return self.async_show_form(step_id="number_ranges", data_schema=schema, errors=errors)
 
     async def async_step_add_zone(self, user_input=None):
         self._ensure_zones()

@@ -12,7 +12,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import AC_NUMBER_DEFS, COOLING_NUMBER_DEFS, CONF_ZONE_TYPE, DOMAIN, NUMBER_DEFS, OPT_ZONES, ZONE_TYPE_FLOOR_AC
+from .const import AC_NUMBER_DEFS, COOLING_NUMBER_DEFS, CONF_ZONE_TYPE, DOMAIN, NUMBER_DEFS, OPT_ZONES, ZONE_TYPE_FLOOR_AC, resolve_number_range
 from .coordinator import SmartHeatingCoordinator
 
 
@@ -28,8 +28,11 @@ async def async_setup_entry(
             defs.update(AC_NUMBER_DEFS)
             defs.update(COOLING_NUMBER_DEFS)
         for key, (label, lo, hi, icon, default) in defs.items():
+            lo, hi = resolve_number_range(entry.options, key, lo, hi)
+            value = zone.get(key, default)
+            value = max(lo, min(hi, value))
             entities.append(
-                ZoneNumber(coordinator, zone_id, zone["name"], key, label, lo, hi, icon, zone.get(key, default))
+                ZoneNumber(coordinator, zone_id, zone["name"], key, label, lo, hi, icon, value)
             )
     async_add_entities(entities)
 
@@ -55,7 +58,10 @@ class ZoneNumber(NumberEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state and last_state.state not in (None, "unknown", "unavailable"):
             try:
-                self._attr_native_value = float(last_state.state)
+                restored = float(last_state.state)
+                self._attr_native_value = max(
+                    self._attr_native_min_value, min(self._attr_native_max_value, restored)
+                )
             except ValueError:
                 pass
 
