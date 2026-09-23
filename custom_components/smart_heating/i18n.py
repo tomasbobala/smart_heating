@@ -79,6 +79,7 @@ TEXTS: dict[str, dict[str, str]] = {
 
     # --- heat source labels ---
     "source_none": {"en": "None", "sk": "Žiadny"},
+    "source_floor": {"en": "Floor", "sk": "Podlaha"},
     "source_ac_floor": {"en": "AC + Floor", "sk": "AC + Podlaha"},
     "source_ac": {"en": "AC", "sk": "AC"},
     "source_none_waiting": {"en": "None (AC waiting)", "sk": "Žiadny (AC čaká)"},

@@ -78,3 +78,35 @@ async def test_no_stop_message_when_stop_msg_is_none(hass, coordinator, sent_mes
     coordinator._notify_bool_transition(state, "test", False, True, "START", None)
     await hass.async_block_till_done()
     assert sent_messages == []
+
+
+async def test_async_apply_notifies_listeners_again(hass, coordinator):
+    """Regresny test: _async_apply mutuje zdata (napr. heat_source) PO tom, co uz
+    boli entity raz upovedomene cez async_set_updated_data(). Bez druheho volania
+    async_update_listeners() na konci _async_apply by sa tato zmena nikdy nedostala
+    do stavu entit (napr. 'Zdroj: ...' na karte by ostalo prazdne navzdy)."""
+    hass.states.async_set(
+        "climate.floor_only", "heat", {"current_temperature": 20, "temperature": 21}
+    )
+    coordinator.zones_test = {
+        "z1": {
+            "name": "Test Zone",
+            "zone_type": "floor",
+            "climate_entity": "climate.floor_only",
+            "ac_entity": None,
+            "release_control": False,
+            "heating_allowed": True,
+            "device_mode": "heat",
+            "target_temperature": 21,
+        }
+    }
+    coordinator.data = {"zones": dict(coordinator.zones_test)}
+    coordinator._lang = "sk"
+
+    calls = []
+    coordinator.async_add_listener(lambda: calls.append(1))
+
+    await coordinator._async_apply()
+
+    assert coordinator.data["zones"]["z1"]["heat_source"] == "Podlaha"
+    assert len(calls) >= 1  # async_update_listeners() na konci _async_apply skutocne vystrelil

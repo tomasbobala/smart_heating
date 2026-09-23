@@ -714,10 +714,22 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 if zdata["season"] == SEASON_CHLADENIE:
                     await self._apply_device(zdata["ac_entity"], zdata["device_mode"], zdata["target_temperature"])
                     await self._apply_device(zdata["climate_entity"], "off", None)  # podlaha nikdy nechladi
+                    zdata["heat_source"] = (
+                        self._t("source_ac") if zdata["device_mode"] == "cool" else self._t("source_none")
+                    )
                 else:
                     await self._apply_floor_ac(zone_id, zdata)
             else:
                 await self._apply_device(zdata["climate_entity"], zdata["device_mode"], zdata["target_temperature"])
+                zdata["heat_source"] = (
+                    self._t("source_floor") if zdata["heating_allowed"] else self._t("source_none")
+                )
+
+        # _apply_* vyssie MENI data (napr. heat_source), ktore uz boli raz oznamene
+        # entitam pri poslednom self.async_set_updated_data(). Bez tohto volania by
+        # sa tato zmena nikdy nedostala do stavu entit (napr. "Zdroj: ..." na karte)
+        # az do dalsieho, uplne nesuvisieho prepoctu.
+        self.async_update_listeners()
 
     async def _apply_device(self, entity_id: str, hvac_mode: str, target) -> None:
         state = self.hass.states.get(entity_id)
