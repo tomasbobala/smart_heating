@@ -10,7 +10,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, OPT_ZONES, SWITCH_DEFS
+from .const import AC_SWITCH_DEFS, CONF_ZONE_TYPE, DOMAIN, OPT_ZONES, SWITCH_DEFS, ZONE_TYPE_FLOOR_AC
 from .coordinator import SmartHeatingCoordinator
 
 
@@ -20,7 +20,10 @@ async def async_setup_entry(
     coordinator: SmartHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list = []
     for zone_id, zone in entry.options.get(OPT_ZONES, {}).items():
-        for key, (label, icon, default) in SWITCH_DEFS.items():
+        defs = dict(SWITCH_DEFS)
+        if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC:
+            defs.update(AC_SWITCH_DEFS)
+        for key, (label, icon, default) in defs.items():
             entities.append(ZoneSwitch(coordinator, zone_id, zone["name"], key, label, icon, default))
     async_add_entities(entities)
 

@@ -67,7 +67,8 @@
           "notify_ac_backup": "Notification: floor engaged as AC backup",
           "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
           "language": "Language (backend-generated texts: reasons, notifications)"
-        }
+        },
+        "description": "Smart Heating version {version}"
       },
       "add_zone": {
         "title": "New zone",

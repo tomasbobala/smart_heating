@@ -67,7 +67,8 @@
           "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
           "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
           "language": "Jazyk (texty generované backendom: dôvody, notifikácie)"
-        }
+        },
+        "description": "Smart Heating verzia {version}"
       },
       "add_zone": {
         "title": "Nová zóna",

@@ -112,3 +112,41 @@ def test_reason_uses_configured_language(coordinator):
     coordinator._lang = "en"
     _, _, reason_en, _ = _resolve(coordinator, MODE_VYPNUTE)
     assert "Off" in reason_en
+
+
+async def test_fixed_ac_setpoint_switch_forces_hysteresis_without_external_temp(hass, coordinator):
+    """Regresny test na poziadavku: 'pouzit_pevny_ac_setpoint' ma zapnut nasu
+    vlastnu hysterezou riadenu logiku AJ ked zona NEMA externy teplomer - teda AJ
+    ked current_temperature pochadza priamo z vlastneho senzora AC."""
+    from unittest.mock import AsyncMock, patch
+
+    zone_id = "z1"
+    hass.states.async_set("climate.ac_fixed", "heat", {"current_temperature": 25, "temperature": 23})
+    hass.states.async_set("climate.floor_fixed", "heat", {})
+    hass.states.async_set(
+        f"switch.smart_heating_{zone_id}_pouzit_pevny_ac_setpoint", "on"
+    )
+    hass.states.async_set(f"number.smart_heating_{zone_id}_ac_setpoint_teplota", "28")
+    hass.states.async_set(f"number.smart_heating_{zone_id}_ac_hysterezia", "0.5")
+    hass.states.async_set(f"number.smart_heating_{zone_id}_ac_priorita_rozdiel", "1")
+    hass.states.async_set(f"number.smart_heating_{zone_id}_ac_priorita_minuty", "30")
+    await hass.async_block_till_done()
+
+    zdata = {
+        "name": "Test Zone",
+        "ac_entity": "climate.ac_fixed",
+        "climate_entity": "climate.floor_fixed",
+        "heating_allowed": True,
+        "target_temperature": 23,
+        "current_temperature": 25,  # z vlastneho senzora AC (ziadny externy teplomer)
+        "has_external_temp": False,  # <-- kluc testu: BEZ externeho teplomera
+        "release_control": False,
+    }
+
+    with patch.object(coordinator, "_apply_device", new=AsyncMock()) as mock_apply:
+        await coordinator._apply_floor_ac(zone_id, zdata)
+
+    ac_calls = [c for c in mock_apply.call_args_list if c.args[0] == "climate.ac_fixed"]
+    # 25 >= 23 + 0.5 hysterezie -> AC by MALO byt vypnute (nie poslane "heat" na 23,
+    # co by sa stalo v povodnom kode bez pouzit_pevny_ac_setpoint prepinaca)
+    assert any(c.args[1] == "off" for c in ac_calls), mock_apply.call_args_list

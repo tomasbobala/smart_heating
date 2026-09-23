@@ -169,5 +169,10 @@ SWITCH_DEFS = {
     "reaguj_na_krb": ("Reaguj na krb", "mdi:fireplace", False),
     "vyuzi_fve_prebytok": ("Vyuzi FVE prebytok (kuri aj ked nikto nie je doma)", "mdi:solar-power", True),
 }
+AC_SWITCH_DEFS = {
+    "pouzit_pevny_ac_setpoint": (
+        "Pouzit pevny AC setpoint aj bez externeho teplomera", "mdi:thermostat-box", False,
+    ),
+}
 
 

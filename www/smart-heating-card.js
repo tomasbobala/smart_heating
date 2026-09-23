@@ -9,6 +9,8 @@
  *   language: auto        # optional: auto | en | sk  (auto = follow HA language)
  */
 
+const CARD_VERSION = "0.11.0";
+
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const SEASONS = ["Kurenie", "Chladenie", "Auto"];
 
@@ -267,6 +269,8 @@ class SmartHeatingCard extends HTMLElement {
             <div class="sh-section-label"><span class="sh-icon">🚀</span>${this._t("section_boost")}</div>
             <div class="sh-boost"></div>
           </div>
+
+          <div class="sh-version">v${CARD_VERSION}</div>
         </div>
       </ha-card>
     `;
@@ -330,6 +334,7 @@ class SmartHeatingCard extends HTMLElement {
       .sh-boost-btn { border: none; border-radius: 8px; background: #e0577a; color: #fff; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; }
       .sh-boost-btn:disabled { opacity: .5; cursor: default; }
       .sh-boost-status { font-size: 0.8rem; color: var(--secondary-text-color); }
+      .sh-version { font-size: 0.68rem; color: var(--secondary-text-color); opacity: 0.55; text-align: right; margin-top: -6px; }
 
       .sh-times-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 14px; }
       .sh-times-table:last-child { margin-bottom: 0; }

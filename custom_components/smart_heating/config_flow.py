@@ -9,6 +9,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
+from homeassistant.loader import async_get_integration
 
 from .const import (
     AC_NUMBER_DEFS,
@@ -195,7 +196,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=options)
 
         schema = vol.Schema(_hub_schema_dict(self.config_entry.options))
-        return self.async_show_form(step_id="global", data_schema=schema)
+        try:
+            integration = await async_get_integration(self.hass, DOMAIN)
+            version = str(integration.version)
+        except Exception:  # noqa: BLE001
+            version = "?"
+        return self.async_show_form(
+            step_id="global", data_schema=schema, description_placeholders={"version": version}
+        )
 
     async def async_step_number_ranges(self, user_input=None):
         self._ensure_zones()

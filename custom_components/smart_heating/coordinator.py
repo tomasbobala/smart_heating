@@ -751,10 +751,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         ako dokurovanie, ak AC nestiha dlhsie ako 'ac_priorita_minuty' o viac ako
         'ac_priorita_rozdiel' stupnov.
 
-        Ak ma zona nastaveny externy teplomer (vlastny senzor AC je nepresny), AC sa
-        neriadi svojim vlastnym regulacnym okruhom - namiesto toho posielame pevny
-        'ac_setpoint_teplota' (napr. 26°C, zarucene vysoko nad realny ciel) a MY sami
-        rozhodujeme kedy ma bezat, na zaklade extern. teplomera s hysterezou."""
+        Pevny AC setpoint + nasa vlastna hysterezia (namiesto spoliehania sa na
+        regulaciu samotnej AC jednotky) sa pouzije, ak ma zona bud externy teplomer
+        (vlastny senzor AC je nepresny), ALEBO ak je zapnuty prepinac
+        'pouzit_pevny_ac_setpoint' (uzivatel chce pevny setpoint aj s vlastnym
+        senzorom AC, napr. ked AC ignoruje svoj vlastny cielovy setpoint)."""
         ac_entity = zdata["ac_entity"]
         floor_entity = zdata["climate_entity"]
         heating_allowed = zdata["heating_allowed"]
@@ -769,7 +770,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             zdata["heat_source"] = self._t("source_none")
             return
 
-        if zdata["has_external_temp"]:
+        force_fixed_setpoint = self._state_bool(switch_entity_id(zone_id, "pouzit_pevny_ac_setpoint"), False)
+        use_fixed_setpoint = zdata["has_external_temp"] or force_fixed_setpoint
+
+        if use_fixed_setpoint:
             ac_setpoint = self._state_float(
                 number_entity_id(zone_id, "ac_setpoint_teplota"), AC_NUMBER_DEFS["ac_setpoint_teplota"][4]
             )
