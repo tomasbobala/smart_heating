@@ -17,6 +17,14 @@ s vlastnou logikou a Lovelace kartou.
 Vytvorené pre reálny dom s viacerými nezávislými zónami (izbami), kde každá zóna
 má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-collapsed.png" width="45%" alt="Karta Smart Heating - zbalený pohľad">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-expanded.png" width="45%" alt="Karta Smart Heating - rozbalená sekcia Teploty">
+  <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="45%" alt="Formulár Globálne nastavenia">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="45%" alt="Formulár Upraviť zónu">
+</p>
+
 ---
 
 ## Obsah

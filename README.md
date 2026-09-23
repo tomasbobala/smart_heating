@@ -17,6 +17,14 @@ system with its own decision logic and a Lovelace card.
 Built for a real house with multiple independent zones (rooms), where each
 zone has its own rules but shares common global settings.
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-collapsed.png" width="45%" alt="Smart Heating card - collapsed view">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-expanded.png" width="45%" alt="Smart Heating card - Temperatures section expanded">
+  <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="45%" alt="Global settings form">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="45%" alt="Edit zone form">
+</p>
+
 ---
 
 ## Contents
