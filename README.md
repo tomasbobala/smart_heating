@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
+</p>
+
 # Smart Heating
 
 [![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating)](https://github.com/tomasbobala/smart_heating/releases)
