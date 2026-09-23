@@ -1,17 +1,23 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
+  <a href="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png">
+    <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
+  </a>
 </p>
 
 # Smart Heating
 
-[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating)](https://github.com/tomasbobala/smart_heating/releases)
-[![Validate](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml/badge.svg)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
-[![License](https://img.shields.io/github/license/tomasbobala/smart_heating)](LICENSE)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+**Multi-zone heating & cooling for Home Assistant**
+
+Floor heating · AC heating & cooling · fireplace · solar surplus & battery · tariff aware
+
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating?style=for-the-badge&color=C2410C)](https://github.com/tomasbobala/smart_heating/releases)
+[![License: MIT](https://img.shields.io/github/license/tomasbobala/smart_heating?style=for-the-badge&color=4caf7d)](LICENSE)
+[![Validate](https://img.shields.io/github/actions/workflow/status/tomasbobala/smart_heating/validate.yml?style=for-the-badge&label=validate)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
+
+**English** · [Slovensky](README.sk.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=smart_heating&category=integration)
-
-*[Citat po slovensky](README.sk.md)*
 
 A general-purpose Home Assistant integration for multi-zone **heating and cooling**
 - electric floor heating, air conditioning as a primary heat/cool source, a
@@ -33,7 +39,7 @@ zone has its own rules but shares common global settings.
 
 ## Contents
 
-- [What it does](#what-it-does)
+- [Features](#features)
 - [Architecture](#architecture)
 - [Decision logic - Heating](#decision-logic---heating)
 - [Decision logic - Cooling](#decision-logic---cooling)
@@ -52,27 +58,23 @@ zone has its own rules but shares common global settings.
 
 ---
 
-## What it does
+## Features
 
-- **Multiple independent zones** - each room has its own mode, temperatures, schedule
-- **Electric floor heating** with a floor-temperature safety limit
-- **Air conditioning as the primary heat source** (a heat pump is cheaper to run
-  than resistive heating), with the floor as a backup top-up
-- **Air conditioning for cooling too** - a separate, deliberately simpler logic
-  driven by solar battery charge (optionally with precise control via an
-  external thermometer)
-- **Fireplace** - turns off heating in a room once it's warm enough near the fireplace
-- **Electricity tariff** - a global block on heating during high-tariff periods
-- **Solar (PV)** - uses surplus generation (heating) and battery charge (cooling)
-- **Emergency frost protection** - prevents actual freezing even during a high-tariff block
-- **Pre-heating before arrival** - a fixed time window, independent of actual presence
-- **Forced heating in extreme cold** - a per-zone configurable outdoor threshold
-- **External zone thermometer** - more accurate control when the AC's/floor's
-  built-in sensor doesn't reflect the real room temperature
-- **Boost** - instant, temporary comfort heating on demand
-- **Custom Lovelace card** - one card per zone, full control without YAML
-- **English and Slovak** - both the card and the backend-generated text (reasons,
-  notifications) support both languages
+|   |   |
+|---|---|
+| 🏠 **Multi-zone** | Each room has its own mode, temperatures and schedule, sharing common global settings. |
+| 🔥 **Floor heating** | Electric floor heating with a floor-temperature safety limit. |
+| ❄️ **AC heating & cooling** | Air conditioning as the primary heat source, plus a deliberately simpler cooling logic driven by solar battery charge. |
+| 🪵 **Fireplace aware** | Turns off heating in a room once it's warm enough near the fireplace. |
+| 💶 **Tariff aware** | A global block on heating during high-tariff periods. |
+| ☀️ **Solar surplus** | Uses PV surplus for heating and battery charge for cooling. |
+| 🥶 **Frost protection** | Emergency protection prevents actual freezing, even during a tariff block. |
+| 🧊 **Forced heating in cold** | A per-zone configurable outdoor threshold triggers comfort heating in Auto mode. |
+| ⏰ **Pre-heating** | A fixed time window before arrival, independent of actual presence. |
+| 🌡️ **External thermometer** | More accurate control when the AC's/floor's built-in sensor is off. |
+| 🚀 **Boost** | Instant, temporary comfort heating on demand. |
+| 🎛️ **Custom Lovelace card** | One card per zone, full control without YAML. |
+| 🌍 **English & Slovak** | Both the card and the backend-generated text (reasons, notifications) support both languages. |
 
 ---
 
@@ -501,3 +503,5 @@ first `off` - if that's not happening, check your version (you need at least 0.6
 This project is licensed under the [MIT License](LICENSE) - you're free to
 use, modify and distribute it, including commercially, as long as you keep
 the original copyright notice.
+
+[MIT](https://github.com/tomasbobala/smart_heating/blob/main/LICENSE) © 2026 Tomáš Bobala

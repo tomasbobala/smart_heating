@@ -1,17 +1,23 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
+  <a href="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png">
+    <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
+  </a>
 </p>
 
 # Smart Heating
 
-[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating)](https://github.com/tomasbobala/smart_heating/releases)
-[![Validate](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml/badge.svg)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
-[![License](https://img.shields.io/github/license/tomasbobala/smart_heating)](LICENSE)
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+**Viaczónové kúrenie a chladenie pre Home Assistant**
+
+Podlahové kúrenie · kúrenie a chladenie klimatizáciou · krb · FVE prebytok a batéria · tarifa
+
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating?style=for-the-badge&color=C2410C)](https://github.com/tomasbobala/smart_heating/releases)
+[![License: MIT](https://img.shields.io/github/license/tomasbobala/smart_heating?style=for-the-badge&color=4caf7d)](LICENSE)
+[![Validate](https://img.shields.io/github/actions/workflow/status/tomasbobala/smart_heating/validate.yml?style=for-the-badge&label=validate)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
+
+**Slovensky** · [English](README.md)
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=smart_heating&category=integration)
-
-*[Read this in English](README.md)*
 
 Univerzálna Home Assistant integrácia na riadenie viaczónového kúrenia **aj chladenia**
 — elektrické podlahové kúrenie, klimatizácia ako primárny zdroj tepla alebo chladu,
@@ -33,7 +39,7 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 
 ## Obsah
 
-- [Čo integrácia rieši](#čo-integrácia-rieši)
+- [Funkcie](#funkcie)
 - [Architektúra](#architektúra)
 - [Rozhodovacia logika — Kúrenie](#rozhodovacia-logika--kúrenie)
 - [Rozhodovacia logika — Chladenie](#rozhodovacia-logika--chladenie)
@@ -52,25 +58,23 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 
 ---
 
-## Čo integrácia rieši
+## Funkcie
 
-- **Viacero nezávislých zón** — každá miestnosť má vlastný režim, teploty, časy
-- **Elektrické podlahové kúrenie** s bezpečnostným limitom teploty podlahy
-- **Klimatizácia ako primárny zdroj tepla** (tepelné čerpadlo je lacnejšie než
-  odporové vykurovanie) s podlahou ako záložným dokurovaním
-- **Klimatizácia aj na chladenie** — samostatná, zjednodušená logika riadená
-  nabitím batérie FVE (voliteľne s presným riadením cez externý teplomer)
-- **Krb** — vypnutie kúrenia v miestnosti, keď je pri krbe dostatočne teplo
-- **Tarifa elektriny** — globálne zablokovanie kúrenia pri vysokej tarife
-- **Fotovoltaika** — využitie prebytku (kúrenie) aj nabitia batérie (chladenie)
-- **Núdzová protimrazová ochrana** — zabráni skutočnému zamrznutiu aj počas
-  vysokej tarify
-- **Predkúrenie pred príchodom** — na pevný čas, nezávisle od reálnej prítomnosti
-- **Vynútené kúrenie pri extrémnom mraze** — per zóna nastaviteľná vonkajšia hranica
-- **Externý teplomer zóny** — presnejšie riadenie, keď vstavaný senzor
-  klimatizácie/podlahovky neodráža reálnu teplotu v miestnosti
-- **Boost** — okamžité dočasné vykúrenie na požiadanie
-- **Vlastná Lovelace karta** — jedna karta na zónu, plné ovládanie bez YAML
+|   |   |
+|---|---|
+| 🏠 **Viacero zón** | Každá miestnosť má vlastný režim, teploty a časy, so spoločnými globálnymi nastaveniami. |
+| 🔥 **Podlahové kúrenie** | Elektrické podlahové kúrenie s bezpečnostným limitom teploty podlahy. |
+| ❄️ **Kúrenie aj chladenie klímou** | Klimatizácia ako primárny zdroj tepla, plus zámerne jednoduchšia logika chladenia riadená batériou FVE. |
+| 🪵 **Reaguje na krb** | Vypne kúrenie v miestnosti, keď je pri krbe dostatočne teplo. |
+| 💶 **Sleduje tarifu** | Globálne zablokovanie kúrenia pri vysokej tarife. |
+| ☀️ **FVE prebytok** | Využíva prebytok FVE (kúrenie) aj nabitie batérie (chladenie). |
+| 🥶 **Protimrazová ochrana** | Núdzová ochrana zabráni zamrznutiu, aj počas zablokovania tarifou. |
+| 🧊 **Vynútené kúrenie pri mraze** | Per zóna nastaviteľná vonkajšia hranica spustí komfortné kúrenie v Auto režime. |
+| ⏰ **Predkúrenie** | Pevné časové okno pred príchodom, nezávisle od reálnej prítomnosti. |
+| 🌡️ **Externý teplomer** | Presnejšie riadenie, keď vstavaný senzor AC/podlahovky nestačí. |
+| 🚀 **Boost** | Okamžité, dočasné komfortné kúrenie na požiadanie. |
+| 🎛️ **Vlastná Lovelace karta** | Jedna karta na zónu, plné ovládanie bez YAML. |
+| 🌍 **Slovenčina a angličtina** | Karta aj texty generované backendom (dôvody, notifikácie) podporujú oba jazyky. |
 
 ---
 
@@ -490,3 +494,5 @@ sa to nedeje, over si verziu (potrebuješ min. 0.6.0).
 Tento projekt je licencovaný pod [MIT licenciou](LICENSE) — môžeš ho slobodne
 používať, upravovať aj šíriť, aj na komerčné účely, pokiaľ zachováš pôvodné
 copyright oznámenie.
+
+[MIT](https://github.com/tomasbobala/smart_heating/blob/main/LICENSE) © 2026 Tomáš Bobala
