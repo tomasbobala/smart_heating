@@ -80,7 +80,9 @@
           "presence_entities": "People tracked via GPS (person)",
           "manual_presence_entities": "Manual presence override (e.g. guest)",
           "use_fireplace_guard": "React to fireplace",
-          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)"
+          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
+          "clear_floor_temp_entity": "Clear floor temperature sensor",
+          "clear_external_temp_entity": "Clear external zone thermometer"
         }
       },
       "edit_zone": {
@@ -95,7 +97,9 @@
           "presence_entities": "People tracked via GPS (person)",
           "manual_presence_entities": "Manual presence override (e.g. guest)",
           "use_fireplace_guard": "React to fireplace",
-          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)"
+          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
+          "clear_floor_temp_entity": "Clear floor temperature sensor",
+          "clear_external_temp_entity": "Clear external zone thermometer"
         }
       },
       "remove_zone": {
