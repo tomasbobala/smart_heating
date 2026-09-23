@@ -118,3 +118,104 @@ async def test_remove_zone(hass):
     )
     assert result["type"] == FlowResultType.CREATE_ENTRY
     assert entry.options["zones"] == {}
+
+
+async def test_edit_zone_clear_external_temp_entity(hass):
+    """Regresny test presne na nahlaseny bug: ak formular pri editacii NEODOSLE
+    kluc pre uz nastavenu volitelnu EntitySelector hodnotu (co niektore verzie
+    HA frontendu robia, ked pouzivatel entitu v UI vycisti), voluptuous defaults
+    v schema vedeli tichuckym sposobom povodnu hodnotu vratit spat. Pole
+    "clear_external_temp_entity" tento problem obchadza uplne."""
+    entry = await _create_entry(hass)
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    add_form = await hass.config_entries.options.async_configure(
+        options_result["flow_id"], user_input={"next_step_id": "add_zone"}
+    )
+    await hass.config_entries.options.async_configure(
+        add_form["flow_id"],
+        user_input={
+            "name": "Obyvacka",
+            "zone_type": "floor",
+            "climate_entity": "climate.obyvacka",
+            "external_temp_entity": "sensor.sonoff_obyvacka_temperature",
+        },
+    )
+    zone_id = list(entry.options["zones"].keys())[0]
+    assert entry.options["zones"][zone_id]["external_temp_entity"] == "sensor.sonoff_obyvacka_temperature"
+
+    # otvor editaciu - formular by mal teraz ponuknut aj "clear_external_temp_entity"
+    options_result2 = await hass.config_entries.options.async_init(entry.entry_id)
+    edit_menu = await hass.config_entries.options.async_configure(
+        options_result2["flow_id"], user_input={"next_step_id": "edit_zone"}
+    )
+    edit_form = await hass.config_entries.options.async_configure(
+        edit_menu["flow_id"], user_input={"zone_id": zone_id}
+    )
+    field_names = {str(k) for k in edit_form["data_schema"].schema}
+    assert "clear_external_temp_entity" in field_names
+
+    # simuluj presne nahlaseny bug: kluc external_temp_entity sa VOBEC neodosle
+    # (formular ho pri vycisteni entity jednoducho vynecha), ale clear-prepinac
+    # je zapnuty
+    result = await hass.config_entries.options.async_configure(
+        edit_form["flow_id"],
+        user_input={
+            "name": "Obyvacka",
+            "zone_type": "floor",
+            "climate_entity": "climate.obyvacka",
+            "clear_external_temp_entity": True,
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    assert entry.options["zones"][zone_id]["external_temp_entity"] is None
+
+
+async def test_edit_zone_without_clear_checkbox_keeps_value(hass):
+    """Bez zaskrtnutia 'clear' checkboxu ostava hodnota, ktoru EntitySelector
+    realne odoslal (normalna uprava, ziadne vymazavanie)."""
+    entry = await _create_entry(hass)
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    add_form = await hass.config_entries.options.async_configure(
+        options_result["flow_id"], user_input={"next_step_id": "add_zone"}
+    )
+    await hass.config_entries.options.async_configure(
+        add_form["flow_id"],
+        user_input={
+            "name": "Obyvacka",
+            "zone_type": "floor",
+            "climate_entity": "climate.obyvacka",
+            "external_temp_entity": "sensor.a",
+        },
+    )
+    zone_id = list(entry.options["zones"].keys())[0]
+
+    options_result2 = await hass.config_entries.options.async_init(entry.entry_id)
+    edit_menu = await hass.config_entries.options.async_configure(
+        options_result2["flow_id"], user_input={"next_step_id": "edit_zone"}
+    )
+    edit_form = await hass.config_entries.options.async_configure(
+        edit_menu["flow_id"], user_input={"zone_id": zone_id}
+    )
+    await hass.config_entries.options.async_configure(
+        edit_form["flow_id"],
+        user_input={
+            "name": "Obyvacka",
+            "zone_type": "floor",
+            "climate_entity": "climate.obyvacka",
+            "external_temp_entity": "sensor.b",
+        },
+    )
+    assert entry.options["zones"][zone_id]["external_temp_entity"] == "sensor.b"
+
+
+async def test_add_zone_no_clear_checkbox_shown(hass):
+    """Pri pridavani novej zony (nic nie je este nastavene) sa 'clear' checkbox
+    vobec neponuka - nema co mazat."""
+    entry = await _create_entry(hass)
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    add_form = await hass.config_entries.options.async_configure(
+        options_result["flow_id"], user_input={"next_step_id": "add_zone"}
+    )
+    field_names = {str(k) for k in add_form["data_schema"].schema}
+    assert "clear_external_temp_entity" not in field_names
+    assert "clear_floor_temp_entity" not in field_names
