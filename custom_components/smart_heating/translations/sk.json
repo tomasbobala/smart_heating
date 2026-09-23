@@ -80,7 +80,9 @@
           "presence_entities": "Osoby sledované cez GPS (person)",
           "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
           "use_fireplace_guard": "Reaguj na krb",
-          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)"
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
+          "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny"
         }
       },
       "edit_zone": {
@@ -95,7 +97,9 @@
           "presence_entities": "Osoby sledované cez GPS (person)",
           "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
           "use_fireplace_guard": "Reaguj na krb",
-          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)"
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
+          "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny"
         }
       },
       "remove_zone": {
