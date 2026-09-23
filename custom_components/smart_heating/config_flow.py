@@ -288,10 +288,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             schema_dict, CONF_FLOOR_TEMP_ENTITY, zone.get(CONF_FLOOR_TEMP_ENTITY),
             selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
         )
+        if zone.get(CONF_FLOOR_TEMP_ENTITY):
+            schema_dict[vol.Optional("clear_floor_temp_entity", default=False)] = selector.BooleanSelector()
         _add_optional(
             schema_dict, CONF_EXTERNAL_TEMP_ENTITY, zone.get(CONF_EXTERNAL_TEMP_ENTITY),
             selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
         )
+        if zone.get(CONF_EXTERNAL_TEMP_ENTITY):
+            schema_dict[vol.Optional("clear_external_temp_entity", default=False)] = selector.BooleanSelector()
         schema_dict[
             vol.Optional(CONF_PRESENCE_ENTITIES, default=zone.get(CONF_PRESENCE_ENTITIES, []))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True))
@@ -306,13 +310,17 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         return vol.Schema(schema_dict)
 
     def _zone_from_input(self, user_input: dict) -> dict:
+        floor_temp = None if user_input.get("clear_floor_temp_entity") else user_input.get(CONF_FLOOR_TEMP_ENTITY)
+        external_temp = (
+            None if user_input.get("clear_external_temp_entity") else user_input.get(CONF_EXTERNAL_TEMP_ENTITY)
+        )
         return {
             CONF_ZONE_NAME: user_input[CONF_ZONE_NAME],
             CONF_ZONE_TYPE: user_input.get(CONF_ZONE_TYPE, ZONE_TYPE_FLOOR),
             CONF_CLIMATE_ENTITY: user_input[CONF_CLIMATE_ENTITY],
             CONF_AC_ENTITY: user_input.get(CONF_AC_ENTITY),
-            CONF_FLOOR_TEMP_ENTITY: user_input.get(CONF_FLOOR_TEMP_ENTITY),
-            CONF_EXTERNAL_TEMP_ENTITY: user_input.get(CONF_EXTERNAL_TEMP_ENTITY),
+            CONF_FLOOR_TEMP_ENTITY: floor_temp,
+            CONF_EXTERNAL_TEMP_ENTITY: external_temp,
             CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
             CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
