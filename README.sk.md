@@ -334,24 +334,33 @@ Na dlaždici integrácie klikni **Nastaviť (Configure)** → **Pridať zónu**:
 Po pridaní zóny sa vytvorí ~19–26 entít (podľa typu zóny) s predvolenými
 hodnotami, ktoré si doladíš cez entity alebo priamo cez Lovelace kartu.
 
-### 3. Pridanie karty na dashboard
+### 3. Karta sa pridá automaticky — žiadne ručné kroky
 
-Pridaj JS resource (**Nastavenia → Ovládacie panely → Zdroje**):
+Od verzie 0.12.0 je Lovelace karta zabudovaná **priamo vo vnútri**
+`custom_components/smart_heating/` a pri štarte Home Assistant sa **sama
+zaregistruje** — ako statický súbor **aj** ako automaticky vložený dashboard
+resource. To znamená:
 
-```
-URL: /local/smart-heating-card.js   (skopíruj tam www/smart-heating-card.js)
-Typ: JavaScript modul
-```
+- HACS ju nasadí automaticky spolu so zvyškom kódu (leží pod
+  `custom_components/`, nie v samostatnom priečinku `www/`)
+- **Žiadne** ručné kopírovanie do `config/www/`
+- **Žiadne** ručné pridávanie resource cez Nastavenia → Ovládacie panely → Zdroje
+- Cache sa rieši sama — do vloženej URL sa automaticky zapíše nainštalovaná
+  verzia, takže po aktualizácii stačí len reštart HA
 
-Potom na dashboard pridaj kartu cez UI (Upraviť dashboard → Pridať kartu →
-Smart Heating) — otvorí sa vizuálny výber zóny, netreba písať `zone_id` ručne.
-Alebo priamo v YAML:
+Stačí pridať kartu na dashboard cez UI (Upraviť dashboard → Pridať kartu →
+Smart Heating) — otvorí sa vizuálny výber zóny, netreba písať `zone_id`
+ručne. Alebo priamo v YAML:
 
 ```yaml
 type: custom:smart-heating-card
 zone_id: "xxxxxxxx"
 name: "Obývačka"       # volitelne, inak sa pouzije meno z climate entity
 ```
+
+Ak sa karta neobjaví hneď po inštalácii/aktualizácii, treba **úplný reštart
+Home Assistant** (nie len HACS "reload") — registrácia prebieha len raz, pri
+štarte.
 
 ---
 
@@ -389,7 +398,7 @@ nastavení (Options Flow).
 
 ## Lovelace karta
 
-`www/smart-heating-card.js` — čistý JavaScript web component, žiadny build
+`custom_components/smart_heating/www/smart-heating-card.js` — čistý JavaScript web component, žiadny build
 krok. Jedna karta = jedna zóna. Obsahuje:
 
 - Aktuálnu/cieľovú teplotu, teplotu podlahy a vonkajšiu teplotu, dôvod
@@ -452,10 +461,12 @@ prestane miešať, kým znova neprepneš na iný režim.
 **Zmena Python súboru sa neprejavila** → treba **celý reštart** Home Assistant,
 nie len reload integrácie (platí obzvlášť pri pridaní/zmene platformy).
 
-**Zmena JS karty sa neprejavila** → problém je takmer vždy v **cache
-prehliadača**. V Safari: Shift+klik na tlačidlo obnovenia, alebo zmeň URL
-resource na `?v=N` (zvýš číslo pri každej zmene) v Nastavenia → Ovládacie
-panely → Zdroje.
+**Zmena JS karty sa neprejavila** → urob **celý reštart** Home Assistant (nie
+len HACS "reload"). Karta sa registruje len raz, pri štarte integrácie, s
+nainštalovanou verziou zapísanou priamo v URL — reštart na novej verzii je
+vždy dosť, žiadny ručný cache bump netreba. Ak by to aj tak vyzeralo staro,
+tvrdý refresh v prehliadači (Safari: Shift+klik na obnovenie) dorieši
+posledný kúsok cache na strane prehliadača.
 
 **Options Flow hádže 500 Internal Server Error** → `config_entry` v
 `OptionsFlow` sa od HA 2024.12 nesmie nastavovať manuálne v `__init__` (v tejto

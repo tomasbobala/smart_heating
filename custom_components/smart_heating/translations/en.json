@@ -83,7 +83,8 @@
           "use_fireplace_guard": "React to fireplace",
           "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
           "clear_floor_temp_entity": "Clear floor temperature sensor",
-          "clear_external_temp_entity": "Clear external zone thermometer"
+          "clear_external_temp_entity": "Clear external zone thermometer",
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)"
         }
       },
       "edit_zone": {
@@ -100,7 +101,8 @@
           "use_fireplace_guard": "React to fireplace",
           "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
           "clear_floor_temp_entity": "Clear floor temperature sensor",
-          "clear_external_temp_entity": "Clear external zone thermometer"
+          "clear_external_temp_entity": "Clear external zone thermometer",
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)"
         }
       },
       "remove_zone": {

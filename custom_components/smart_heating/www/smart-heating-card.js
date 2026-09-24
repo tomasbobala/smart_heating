@@ -9,7 +9,7 @@
  *   language: auto        # optional: auto | en | sk  (auto = follow HA language)
  */
 
-const CARD_VERSION = "0.11.0";
+const CARD_VERSION = "0.12.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const SEASONS = ["Kurenie", "Chladenie", "Auto"];
@@ -75,6 +75,7 @@ const I18N = {
   toggle_preheat: { en: "Pre-heating allowed (Mon-Fri)", sk: "Predkúrenie povolené (Po-Pia)" },
   toggle_krb: { en: "React to fireplace", sk: "Reaguj na krb" },
   toggle_pv: { en: "Use solar surplus", sk: "Využi FVE prebytok" },
+  toggle_fixed_ac_setpoint: { en: "Use fixed AC setpoint even without external thermometer", sk: "Použiť pevný AC setpoint aj bez externého teplomera" },
 
   boost_running: { en: "Boost running", sk: "Boost beží" },
   boost_start: { en: "Start Boost", sk: "Spustiť Boost" },
@@ -569,10 +570,12 @@ class SmartHeatingCard extends HTMLElement {
 
   _renderToggles() {
     const wrap = this.querySelector(".sh-toggles");
+    const hasAc = !!this._hass.states[eid(this._zoneId, "select", "sezona")];
     wrap.innerHTML =
       this._switchRow(this._t("toggle_preheat"), "predkurenie_povolene") +
       this._switchRow(this._t("toggle_krb"), "reaguj_na_krb") +
-      this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok");
+      this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok") +
+      (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "");
     wrap.querySelectorAll(".sh-switch").forEach((el) => {
       el.onclick = () => {
         const key = el.dataset.switchKey;

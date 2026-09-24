@@ -337,16 +337,21 @@ Adding a zone creates ~19-26 entities (depending on zone type) with sensible
 defaults, which you fine-tune via the entities or directly through the
 Lovelace card.
 
-### 3. Add the card to your dashboard
+### 3. The card is added automatically - no manual steps
 
-Add the JS resource (**Settings -> Dashboards -> Resources**):
+Since 0.12.0, the Lovelace card is bundled **inside**
+`custom_components/smart_heating/` and self-registers itself at Home
+Assistant startup - as a static file **and** an auto-injected dashboard
+resource. This means:
 
-```
-URL: /local/smart-heating-card.js   (copy www/smart-heating-card.js there)
-Type: JavaScript Module
-```
+- HACS deploys it automatically along with the rest of the code (since it
+  lives under `custom_components/`, not a separate `www/` folder)
+- **No** manual copying into `config/www/`
+- **No** manually adding a resource under Settings -> Dashboards -> Resources
+- Cache-busting is automatic too - the injected URL includes the installed
+  version, so a HA restart after an update is always enough
 
-Then add the card to your dashboard via the UI (Edit dashboard -> Add card ->
+Just add the card to your dashboard via the UI (Edit dashboard -> Add card ->
 Smart Heating) - a visual zone picker opens, no need to type `zone_id` by
 hand. Or directly in YAML:
 
@@ -357,12 +362,16 @@ name: "Living room"     # optional, otherwise uses the climate entity's name
 language: auto           # optional: auto | en | sk
 ```
 
+If the card doesn't show up after installing/updating, a **full Home
+Assistant restart** is required (not just a HACS "reload") - the
+registration only happens once, at startup.
+
 ---
 
 ## Entities created by the integration
 
 The hub has **no** entities of its own - everything global lives in Global
-settings (Options Flow).
+settings.
 
 ### Per zone (`<id>` = the zone's internal ID)
 
@@ -393,7 +402,7 @@ settings (Options Flow).
 
 ## Lovelace card
 
-`www/smart-heating-card.js` - a plain JavaScript web component, no build
+`custom_components/smart_heating/www/smart-heating-card.js` - a plain JavaScript web component, no build
 step. One card = one zone. Includes:
 
 - Current/target temperature, floor and outdoor temperature, the decision
@@ -461,9 +470,12 @@ touching the device until you switch to another mode again.
 Home Assistant, not just an integration reload (especially true when adding
 or changing a platform).
 
-**A card (JS) change didn't take effect** -> almost always **browser cache**.
-In Safari: Shift-click the reload button, or bump the resource URL to `?v=N`
-(increase the number on every change) in Settings -> Dashboards -> Resources.
+**A card (JS) change didn't take effect** -> do a **full Home Assistant
+restart** (not just a HACS "reload"). The card is registered once, at
+integration startup, with the installed version baked into the URL - a
+restart on the new version is both necessary and sufficient, no manual cache
+bump needed. If it still looks stale after that, a browser hard-refresh
+(Safari: Shift-click reload) rules out the last bit of browser-side caching.
 
 **Options Flow throws a 500 Internal Server Error** -> since HA 2024.12,
 `config_entry` in `OptionsFlow` must not be set manually in `__init__` (this

@@ -38,6 +38,7 @@ CONF_EXTERNAL_TEMP_ENTITY = "external_temp_entity"
 CONF_PRESENCE_ENTITIES = "presence_entities"
 CONF_MANUAL_PRESENCE_ENTITIES = "manual_presence_entities"
 CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
+CONF_USE_FIXED_AC_SETPOINT = "use_fixed_ac_setpoint"
 
 ZONE_TYPE_FLOOR = "floor"
 ZONE_TYPE_FLOOR_AC = "floor_ac"

@@ -83,7 +83,8 @@
           "use_fireplace_guard": "Reaguj na krb",
           "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
           "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
-          "clear_external_temp_entity": "Vymazať externý teplomer zóny"
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny",
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')"
         }
       },
       "edit_zone": {
@@ -100,7 +101,8 @@
           "use_fireplace_guard": "Reaguj na krb",
           "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
           "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
-          "clear_external_temp_entity": "Vymazať externý teplomer zóny"
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny",
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')"
         }
       },
       "remove_zone": {

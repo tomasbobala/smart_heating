@@ -45,6 +45,7 @@ from .const import (
     CONF_PV_SURPLUS_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
+    CONF_USE_FIXED_AC_SETPOINT,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
     DEFAULT_EMERGENCY_TEMP,
@@ -770,7 +771,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             zdata["heat_source"] = self._t("source_none")
             return
 
-        force_fixed_setpoint = self._state_bool(switch_entity_id(zone_id, "pouzit_pevny_ac_setpoint"), False)
+        zone_conf = self.zones.get(zone_id, {})
+        force_fixed_setpoint = self._state_bool(
+            switch_entity_id(zone_id, "pouzit_pevny_ac_setpoint"),
+            zone_conf.get(CONF_USE_FIXED_AC_SETPOINT, False),
+        )
         use_fixed_setpoint = zdata["has_external_temp"] or force_fixed_setpoint
 
         if use_fixed_setpoint:

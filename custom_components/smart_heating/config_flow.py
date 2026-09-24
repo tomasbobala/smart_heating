@@ -41,6 +41,7 @@ from .const import (
     CONF_PV_SURPLUS_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
+    CONF_USE_FIXED_AC_SETPOINT,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
     DEFAULT_EMERGENCY_TEMP,
@@ -315,6 +316,9 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         schema_dict[
             vol.Optional(CONF_USE_FIREPLACE_GUARD, default=zone.get(CONF_USE_FIREPLACE_GUARD, False))
         ] = selector.BooleanSelector()
+        schema_dict[
+            vol.Optional(CONF_USE_FIXED_AC_SETPOINT, default=zone.get(CONF_USE_FIXED_AC_SETPOINT, False))
+        ] = selector.BooleanSelector()
         return vol.Schema(schema_dict)
 
     def _zone_from_input(self, user_input: dict) -> dict:
@@ -332,6 +336,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
             CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
+            CONF_USE_FIXED_AC_SETPOINT: user_input.get(CONF_USE_FIXED_AC_SETPOINT, False),
         }
 
     @staticmethod

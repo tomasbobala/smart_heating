@@ -2,3 +2,4 @@ pytest
 pytest-asyncio
 pytest-homeassistant-custom-component
 homeassistant
+home-assistant-frontend

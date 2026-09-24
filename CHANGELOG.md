@@ -2,6 +2,60 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.12.0
+- **The Lovelace card no longer needs to be manually copied or registered.**
+  It now lives inside `custom_components/smart_heating/www/` and
+  self-registers as a static file + auto-injected dashboard resource at
+  integration startup (`async_setup` in `__init__.py`, using
+  `hass.http.async_register_static_paths` + `add_extra_js_url`). Since it's
+  now inside `custom_components/`, HACS deploys it automatically along with
+  the rest of the code - a HA restart after an update is the only step
+  needed, ever again.
+- Added `http` and `frontend` as manifest dependencies (required for the
+  above); added `home-assistant-frontend` to `requirements-test.txt`.
+- New tests (`test_frontend_registration.py`) verifying the static path
+  registration and dashboard auto-injection against a real HA test instance.
+
+## 0.11.3
+- Added `custom_components/smart_heating/brand/` icon assets to the
+  repository (previously only delivered out-of-band, never actually
+  committed)
+- README: added a (now superseded by 0.12.0) warning about the card needing
+  manual deployment
+
+## 0.11.2
+- New structural field "Use fixed AC setpoint even without external
+  thermometer" in the zone edit form, mirroring the existing runtime switch
+
+## 0.11.1
+- Fixed a missing card toggle row for the 0.11.0 switch (backend entity
+  existed, but the card never rendered it)
+
+## 0.11.0
+- New per-zone switch "Use fixed AC setpoint even without external
+  thermometer" - lets the integration take over AC on/off control (via
+  hysteresis against the floor thermostat's own sensor) without requiring a
+  separate external thermometer entity
+- Integration version now shown in Global settings and at the bottom of the
+  card, to make version mismatches easy to spot
+
+## 0.10.3
+- Fixed a real bug: `heat_source` ("Zdroj: ...") was computed *after*
+  entities were already notified of new data, so it never actually reached
+  Home Assistant's state machine until an unrelated later update. Also now
+  set for plain `floor` zones and the cooling season (previously only set
+  for `floor_ac` heating).
+
+## 0.10.2
+- Fixed the "clear" bug on optional `EntitySelector` fields in the zone edit
+  form (voluptuous silently re-applied the old default when the frontend
+  omitted a cleared field) via dedicated "Clear ..." checkboxes for the
+  floor and external temperature sensor fields
+
+## 0.10.1
+- Restored `custom_components/smart_heating/brand/` icon assets after they
+  were accidentally lost during a folder overwrite
+
 ## 0.8.1
 - Fixed `codeowners` in `manifest.json` (invalid GitHub username format)
 - Raised `hacs.json` minimum Home Assistant version to `2024.12.0` (matches an
