@@ -219,3 +219,27 @@ async def test_add_zone_no_clear_checkbox_shown(hass):
     field_names = {str(k) for k in add_form["data_schema"].schema}
     assert "clear_external_temp_entity" not in field_names
     assert "clear_floor_temp_entity" not in field_names
+
+
+async def test_use_fixed_ac_setpoint_field_roundtrip(hass):
+    """Nove strukturalne pole use_fixed_ac_setpoint (Upravit zonu formular) sa
+    ulozi a spatne predvyplni - rovnaky vzor ako use_fireplace_guard."""
+    entry = await _create_entry(hass)
+    options_result = await hass.config_entries.options.async_init(entry.entry_id)
+    add_form = await hass.config_entries.options.async_configure(
+        options_result["flow_id"], user_input={"next_step_id": "add_zone"}
+    )
+    field_names = {str(k) for k in add_form["data_schema"].schema}
+    assert "use_fixed_ac_setpoint" in field_names
+
+    await hass.config_entries.options.async_configure(
+        add_form["flow_id"],
+        user_input={
+            "name": "Obyvacka",
+            "zone_type": "floor_ac",
+            "climate_entity": "climate.obyvacka",
+            "use_fixed_ac_setpoint": True,
+        },
+    )
+    zone_id = list(entry.options["zones"].keys())[0]
+    assert entry.options["zones"][zone_id]["use_fixed_ac_setpoint"] is True
