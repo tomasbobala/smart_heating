@@ -194,6 +194,46 @@ test("season/cooling sections visible when zone has AC (sezona select present)",
   assert.notStrictEqual(card.querySelector(".sh-cooling-section").style.display, "none");
 });
 
+test("fixed AC setpoint toggle shown only for AC zones", () => {
+  const { CardClass, document } = loadCard();
+
+  const cardAc = new CardClass();
+  cardAc.setConfig({ zone_id: ZONE_ID });
+  cardAc.hass = buildHass({ hasAc: true });
+  document.body.appendChild(cardAc);
+  const rowsAc = Array.from(cardAc.querySelectorAll(".sh-row-label")).map((el) => el.textContent);
+  assert.ok(rowsAc.some((t) => /pevný AC setpoint/i.test(t)));
+
+  const cardFloor = new CardClass();
+  cardFloor.setConfig({ zone_id: ZONE_ID });
+  cardFloor.hass = buildHass({ hasAc: false });
+  document.body.appendChild(cardFloor);
+  const rowsFloor = Array.from(cardFloor.querySelectorAll(".sh-row-label")).map((el) => el.textContent);
+  assert.ok(!rowsFloor.some((t) => /pevný AC setpoint/i.test(t)));
+});
+
+test("fixed AC setpoint toggle reflects entity state and toggles via click", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass({ hasAc: true });
+  hass.states[`switch.smart_heating_${ZONE_ID}_pouzit_pevny_ac_setpoint`] = { state: "on" };
+  const calls = [];
+  hass.callService = (domain, service, data) => calls.push({ domain, service, data });
+  card.hass = hass;
+  document.body.appendChild(card);
+
+  const rows = Array.from(card.querySelectorAll(".sh-row"));
+  const row = rows.find((r) => /pevný AC setpoint/i.test(r.querySelector(".sh-row-label").textContent));
+  const toggle = row.querySelector(".sh-switch");
+  assert.ok(toggle.classList.contains("on"));
+
+  toggle.click();
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].service, "turn_off");
+  assert.strictEqual(calls[0].data.entity_id, `switch.smart_heating_${ZONE_ID}_pouzit_pevny_ac_setpoint`);
+});
+
 test("badges render for active safety/status flags", () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
