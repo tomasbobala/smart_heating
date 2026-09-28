@@ -32,7 +32,7 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     if card_path.exists():
         try:
             await hass.http.async_register_static_paths(
-                [StaticPathConfig(CARD_URL_PATH, str(card_path), cache_headers=False)]
+                [StaticPathConfig(CARD_URL_PATH, str(card_path), cache_headers=True)]
             )
             try:
                 integration = await async_get_integration(hass, DOMAIN)
