@@ -7,6 +7,7 @@ from pathlib import Path
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.start import async_at_started
 from homeassistant.loader import async_get_integration
 
 from .const import DOMAIN
@@ -20,14 +21,58 @@ CARD_URL_PATH = "/smart_heating_static/smart-heating-card.js"
 CARD_REGISTERED = "card_registered"
 
 
-async def _async_register_card(hass: HomeAssistant) -> None:
-    """Zaregistruje kartu ako staticky subor a vlozi ju do kazdeho dashboardu.
+def _lovelace_resources(hass: HomeAssistant):
+    """Vrati kolekciu Lovelace zdrojov (nove aj stare verzie HA), alebo None."""
+    lovelace = hass.data.get("lovelace")
+    if lovelace is None:
+        return None
+    resources = getattr(lovelace, "resources", None)
+    if resources is None and isinstance(lovelace, dict):
+        resources = lovelace.get("resources")
+    return resources
 
-    Vola sa z async_setup aj z async_setup_entry - podla toho, co prebehne skor.
-    Druhe volanie sa ticho preskoci. Subor zije v
-    custom_components/smart_heating/www/, takze ho HACS nasadi automaticky
-    spolu so zvyskom kodu a netreba nic kopirovat do config/www/ ani rucne
-    pridavat Lovelace resource.
+
+async def _async_ensure_lovelace_resource(hass: HomeAssistant, url: str) -> bool:
+    """Prida kartu medzi Lovelace zdroje, alebo aktualizuje verziu v existujucom.
+
+    Vrati False, ked to nejde (Lovelace v YAML rezime) - vtedy sa pouzije
+    add_extra_js_url ako zaloha.
+    """
+    resources = _lovelace_resources(hass)
+    if resources is None or not hasattr(resources, "async_create_item"):
+        return False
+
+    if not getattr(resources, "loaded", True):
+        await resources.async_load()
+        resources.loaded = True
+
+    base = url.split("?", 1)[0]
+    for item in resources.async_items():
+        if str(item.get("url", "")).split("?", 1)[0] != base:
+            continue
+        if item.get("url") != url:
+            await resources.async_update_item(item["id"], {"res_type": "module", "url": url})
+            _LOGGER.info("Lovelace zdroj karty aktualizovany na %s", url)
+        return True
+
+    await resources.async_create_item({"res_type": "module", "url": url})
+    _LOGGER.info("Lovelace zdroj karty pridany: %s", url)
+    return True
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Spristupni kartu a zabezpeci, aby ju prehliadac nacital.
+
+    1. Subor custom_components/smart_heating/www/smart-heating-card.js sa
+       zaregistruje ako staticka cesta /smart_heating_static/...
+    2. Po starte HA sa karta prida medzi Lovelace zdroje (Nastavenia ->
+       Dashboardy -> Zdroje), presne tak, ako keby ju pouzivatel pridal rucne.
+       Tieto zdroje prehliadac nacitava spolahlivo. Pri novej verzii sa len
+       prepise ?v= v existujucom zazname, nic sa neduplikuje.
+    3. Ak Lovelace bezi v YAML rezime a zdroje sa menit nedaju, pouzije sa
+       add_extra_js_url ako zaloha.
+
+    Vola sa z async_setup aj z async_setup_entry; druhe volanie sa preskoci.
     """
     data = hass.data.setdefault(DOMAIN, {})
     if data.get(CARD_REGISTERED):
@@ -53,7 +98,7 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         else:  # pragma: no cover - starsie verzie HA
             http.register_static_path(CARD_URL_PATH, str(card_path), cache_headers=False)
     except RuntimeError as err:
-        # opakovana registracia tej istej cesty po reloade integracie
+        # opakovana registracia tej istej cesty
         _LOGGER.debug("Staticka cesta uz je zaregistrovana: %s", err)
     except Exception:  # noqa: BLE001
         _LOGGER.exception("Nepodarilo sa zaregistrovat smart-heating-card.js ako staticky subor")
@@ -65,9 +110,20 @@ async def _async_register_card(hass: HomeAssistant) -> None:
     except Exception:  # noqa: BLE001
         version = "0"
 
-    add_extra_js_url(hass, f"{CARD_URL_PATH}?v={version}")
+    url = f"{CARD_URL_PATH}?v={version}"
     data[CARD_REGISTERED] = True
-    _LOGGER.info("smart-heating-card.js zaregistrovana na %s?v=%s", CARD_URL_PATH, version)
+
+    async def _async_load_card(_hass: HomeAssistant) -> None:
+        try:
+            if await _async_ensure_lovelace_resource(hass, url):
+                return
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception("Nepodarilo sa pridat Lovelace zdroj karty, pouzije sa add_extra_js_url")
+        add_extra_js_url(hass, url)
+        _LOGGER.info("smart-heating-card.js vlozena cez add_extra_js_url: %s", url)
+
+    # Lovelace zdroje sa nacitavaju az pocas startu - preto az po nom
+    async_at_started(hass, _async_load_card)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
