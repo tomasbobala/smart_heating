@@ -396,7 +396,7 @@ settings.
 | `switch..._reaguj_na_krb` | enable/disable reacting to the fireplace |
 | `switch..._vyuzi_fve_prebytok` | enable/disable using solar surplus (heating) |
 | `button..._boost` | trigger Boost immediately |
-| `sensor..._stav` | the diagnostic reason for the current decision + attributes (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`) |
+| `sensor..._stav` | the diagnostic reason for the current decision + attributes (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`, plus `outdoor_entity`, `presence_entities`, `manual_presence_entities` for the overview card) |
 
 ---
 
@@ -442,10 +442,14 @@ language: auto           # optional: auto | en | sk
 
 ### Overview card - `custom:smart-heating-overview`
 
-One card for the whole house, best placed full-width above the zone cards:
+One card for the whole house, best placed full-width above the zone cards.
+It needs no configuration - `type: custom:smart-heating-overview` is enough;
+the outside sensor and presence entities come from the integration:
 
 - **Outside temperature** with the change over the last 3 h and today's range
-- **Condition tiles** - built-in: `heating` (N of M rooms heating), `pv`
+- **Condition tiles** - built-in: `heating` (N of M rooms heating), `presence`
+  (who is home, from the zones' presence entities), `guests` (manual presence),
+  `pv`
   (solar surplus in use), `tariff` (tariff blocks heating), `krb` (fireplace
   stops zones), `emergency`, `boost`; plus any of your own entities. Emergency
   protection and Boost appear automatically while active. Clicking an entity
@@ -455,9 +459,9 @@ One card for the whole house, best placed full-width above the zone cards:
 
 ```yaml
 type: custom:smart-heating-overview
-outdoor_entity: sensor.outdoor_temperature   # optional - enables trend and today's range
+outdoor_entity: sensor.outdoor_temperature   # optional, default = the integration's outdoor sensor
 zones: ["xxxxxxxx", "yyyyyyyy"]              # optional, default = all zones
-tiles:                                       # optional, default = heating, pv, tariff, krb
+tiles:                                       # optional, default = heating, presence, guests, pv, tariff, krb
   - name: Home
     icon: mdi:home-account
     entities: [person.alice, person.bob]     # shows who is home

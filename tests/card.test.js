@@ -664,6 +664,43 @@ test("overview: heating time today is the union of zone heating intervals", asyn
   assert.strictEqual(last.querySelector("b").textContent, expected);
 });
 
+test("overview: without config uses the integration's outdoor sensor and presence entities", () => {
+  const hass = overviewHass();
+  for (const id of Object.keys(hass.states)) {
+    if (id.endsWith("_stav")) {
+      Object.assign(hass.states[id].attributes, {
+        outdoor_entity: "sensor.vonku",
+        presence_entities: ["person.a", "person.b"],
+        manual_presence_entities: ["input_boolean.navsteva"],
+      });
+    }
+  }
+  hass.states["sensor.vonku"] = { state: "3.2", attributes: {} };
+  const card = renderOverview({}, hass);
+  assert.strictEqual(card.querySelector(".sho-out .v").textContent, "3,2 °C");
+  const tiles = Array.from(card.querySelectorAll(".sho-tile")).map((t) => [
+    t.querySelector(".k").textContent,
+    t.querySelector(".s").textContent,
+  ]);
+  assert.deepStrictEqual(tiles.slice(0, 3), [["Kúri sa", "1 z 3 izieb"], ["Doma", "Tomas"], ["Návšteva", "Áno"]]);
+  assert.strictEqual(tiles.length, 6);
+});
+
+test("chart label shows the real span while statistics cover less than a day", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const now = Date.now();
+  const sid = `sensor.smart_heating_${ZONE_ID}_teplota`;
+  const rows = [];
+  for (let k = 0; k < 9 * 12; k++) rows.push({ start: now - 9 * 3600e3 + k * 300e3, mean: 22, min: 22, max: 22 });
+  const { hass } = statsHass(() => ({ [sid]: rows }));
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(card.querySelector(".sh-lg-span").textContent, "9 h");
+});
+
 test("overview: rejects non-list tiles", () => {
   const { OverviewClass } = loadCard();
   const card = new OverviewClass();

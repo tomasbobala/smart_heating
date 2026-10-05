@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.16.1
+- Overview card works without any configuration: the outside temperature
+  sensor and the presence entities are taken from the integration (new
+  attributes `outdoor_entity`, `presence_entities`,
+  `manual_presence_entities` on `sensor.smart_heating_<id>_stav`), so the
+  3 h trend, today's range and the new **Home** and **Guests** tiles show up
+  automatically. Default tiles: heating, presence, guests, pv, tariff, krb.
+- Zone chart: while the statistics cover less than a day (e.g. right after
+  installing), the chart stretches over the available period and the label
+  shows its real length (e.g. "9 h") instead of a mostly empty 24 h axis.
+- Smoother chart line (30-minute buckets, light moving average) - sensors
+  with a 0.5 °C step no longer draw a saw-tooth.
+
 ## 0.16.0
 - **Zone card redesign.** Coloured accent bar and status pill (Heating /
   Not heating / Cooling / Off), big current temperature with a 24 h chart

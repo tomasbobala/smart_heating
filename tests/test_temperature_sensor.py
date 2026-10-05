@@ -31,3 +31,34 @@ async def test_zone_temperature_sensor_is_statistics_ready(hass):
     assert state.attributes["device_class"] == "temperature"
     assert state.attributes["state_class"] == "measurement"
     assert state.attributes["unit_of_measurement"] == "°C"
+
+
+async def test_stav_sensor_exposes_entities_for_overview_card(hass):
+    """Prehladova karta cita vonkajsi senzor a pritomnost z atributov senzora stav."""
+    hass.states.async_set("climate.obyvacka", "heat", {"current_temperature": 22.4, "temperature": 21})
+    hass.states.async_set("sensor.vonku", "5.0")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={},
+        options={
+            "outdoor_sensor": "sensor.vonku",
+            "zones": {
+                "z1": {
+                    "name": "Obyvacka",
+                    "zone_type": "floor",
+                    "climate_entity": "climate.obyvacka",
+                    "presence_entities": ["person.a"],
+                    "manual_presence_entities": ["input_boolean.navsteva"],
+                }
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    attrs = hass.states.get("sensor.smart_heating_z1_stav").attributes
+    assert attrs["outdoor_entity"] == "sensor.vonku"
+    assert attrs["presence_entities"] == ["person.a"]
+    assert attrs["manual_presence_entities"] == ["input_boolean.navsteva"]

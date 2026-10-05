@@ -390,7 +390,7 @@ nastavení (Options Flow).
 | `switch..._reaguj_na_krb` | zapnutie/vypnutie reakcie na krb |
 | `switch..._vyuzi_fve_prebytok` | zapnutie/vypnutie využitia FVE prebytku (kúrenie) |
 | `button..._boost` | okamžité spustenie Boostu |
-| `sensor..._stav` | diagnostický dôvod aktuálneho rozhodnutia + atribúty (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`) |
+| `sensor..._stav` | diagnostický dôvod aktuálneho rozhodnutia + atribúty (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`, a pre prehľadovú kartu `outdoor_entity`, `presence_entities`, `manual_presence_entities`) |
 
 ---
 
@@ -436,10 +436,13 @@ language: auto          # voliteľné: auto | en | sk
 
 ### Prehľadová karta — `custom:smart-heating-overview`
 
-Jedna karta pre celý dom, najlepšie na celú šírku nad kartami zón:
+Jedna karta pre celý dom, najlepšie na celú šírku nad kartami zón.
+Nepotrebuje žiadnu konfiguráciu — stačí `type: custom:smart-heating-overview`;
+vonkajší senzor a entity prítomnosti si vezme z integrácie:
 
 - **Vonkajšia teplota** so zmenou za posledné 3 h a dnešným rozsahom
-- **Dlaždice podmienok** — vstavané: `heating` (kúri N z M izieb), `pv`
+- **Dlaždice podmienok** — vstavané: `heating` (kúri N z M izieb), `presence`
+  (kto je doma, z entít prítomnosti zón), `guests` (návšteva), `pv`
   (využíva sa FVE prebytok), `tariff` (tarifa blokuje kúrenie), `krb` (krb
   vypína zóny), `emergency`, `boost`; plus ľubovoľné vlastné entity. Núdzová
   ochrana a Boost sa objavia samé, keď sú aktívne. Klik na dlaždicu entity
@@ -449,9 +452,9 @@ Jedna karta pre celý dom, najlepšie na celú šírku nad kartami zón:
 
 ```yaml
 type: custom:smart-heating-overview
-outdoor_entity: sensor.outdoor_temperature   # voliteľné - zapne trend a dnešný rozsah
+outdoor_entity: sensor.outdoor_temperature   # voliteľné, predvolene vonkajší senzor z integrácie
 zones: ["xxxxxxxx", "yyyyyyyy"]              # voliteľné, predvolene všetky zóny
-tiles:                                       # voliteľné, predvolene heating, pv, tariff, krb
+tiles:                                       # voliteľné, predvolene heating, presence, guests, pv, tariff, krb
   - name: Doma
     icon: mdi:home-account
     entities: [person.tomas, person.monika]  # ukáže, kto je doma

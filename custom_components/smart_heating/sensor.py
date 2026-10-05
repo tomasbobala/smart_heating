@@ -9,7 +9,13 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, OPT_ZONES
+from .const import (
+    CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_OUTDOOR_SENSOR,
+    CONF_PRESENCE_ENTITIES,
+    DOMAIN,
+    OPT_ZONES,
+)
 from .coordinator import SmartHeatingCoordinator
 
 
@@ -42,6 +48,7 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
     @property
     def extra_state_attributes(self):
         z = self.coordinator.data["zones"][self._zone_id]
+        zone_conf = self.coordinator.zones.get(self._zone_id, {})
         return {
             "zone_id": self._zone_id,
             "season": z["season"],
@@ -57,6 +64,10 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "boost_active": z["boost_active"],
             "heating_allowed": z["heating_allowed"],
             "zdroj_kurenia": z.get("heat_source"),
+            # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
+            "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
+            "presence_entities": list(zone_conf.get(CONF_PRESENCE_ENTITIES, [])),
+            "manual_presence_entities": list(zone_conf.get(CONF_MANUAL_PRESENCE_ENTITIES, [])),
         }
 
 

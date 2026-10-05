@@ -10,9 +10,9 @@
  *
  * Overview card (whole house):
  *   type: custom:smart-heating-overview
- *   outdoor_entity: sensor.outdoor_temperature   # optional - enables trend + today's range
+ *   outdoor_entity: sensor.outdoor_temperature   # optional, default = the integration's outdoor sensor
  *   zones: ["287f437c", ...]                     # optional, default = all zones
- *   tiles:                                       # optional, default = heating, pv, tariff, krb
+ *   tiles:                                       # optional, default = heating, presence, guests, pv, tariff, krb
  *     - heating
  *     - pv
  *     - entity: input_boolean.guests
@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.16.0";
+const CARD_VERSION = "0.16.1";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -136,6 +136,8 @@ const I18N = {
   ov_yes: { en: "Yes", sk: "Áno" },
   ov_no: { en: "No", sk: "Nie" },
   ov_nobody: { en: "Nobody", sk: "Nikto" },
+  ov_home: { en: "Home", sk: "Doma" },
+  ov_guests: { en: "Guests", sk: "Návšteva" },
   ov_on_target: { en: "On target", sk: "V cieli" },
   ov_above: { en: "Above target", sk: "Nad cieľom" },
   ov_below: { en: "Below target", sk: "Pod cieľom" },
@@ -400,7 +402,7 @@ class SmartHeatingCard extends HTMLElement {
             <button class="sh-temp" type="button"></button>
             <div class="sh-chart">
               <svg class="sh-spark" viewBox="0 0 260 46" preserveAspectRatio="none" aria-hidden="true"></svg>
-              <div class="sh-lg"><span>${this._t("h24")}</span><span class="sh-lg-v"></span></div>
+              <div class="sh-lg"><span class="sh-lg-span">${this._t("h24")}</span><span class="sh-lg-v"></span></div>
             </div>
           </div>
 
@@ -863,7 +865,7 @@ class SmartHeatingCard extends HTMLElement {
           if (lo != null) mn = mn == null ? lo : Math.min(mn, lo);
           if (hi != null) mx = mx == null ? hi : Math.max(mx, hi);
         }
-        this._stats = { points: downsample(points, 96), avg: cnt ? sum / cnt : null, min: mn, max: mx, at: now };
+        this._stats = { points: smooth(downsample(points, 48)), avg: cnt ? sum / cnt : null, min: mn, max: mx, at: now };
         this._statsFetchedAt = Date.now();
         this._renderChart();
       })
@@ -889,10 +891,16 @@ class SmartHeatingCard extends HTMLElement {
       ? `min ${fmtNum(st.min, lang)}° · Ø ${fmtNum(st.avg, lang)}° · max ${fmtNum(st.max, lang)}°`
       : "";
 
+    // Kym sa statistiky nenazbieraju za cely den (napr. hned po instalacii),
+    // graf sa roztiahne na dostupny usek a popis ukaze jeho skutocnu dlzku.
     const now = Date.now();
     const pts = (st.points || []).filter(([t]) => t >= now - DAY_MS);
+    let t0 = now - DAY_MS;
+    if (pts.length >= 2 && pts[0][0] > t0 + 3600 * 1000) t0 = pts[0][0];
+    const hours = Math.max(1, Math.round((now - t0) / 3600000));
+    this.querySelector(".sh-lg-span").textContent = hours >= 23 ? this._t("h24") : `${hours} h`;
     if (current != null) pts.push([now, current]);
-    this.querySelector(".sh-spark").innerHTML = sparkSvg(pts, target, now - DAY_MS, now);
+    this.querySelector(".sh-spark").innerHTML = sparkSvg(pts, target, t0, now);
   }
 
   // ------------------------------------------------------------------ nastavenia
@@ -1087,6 +1095,15 @@ function downsample(points, max) {
   return out;
 }
 
+/** Kĺzavý priemer cez 3 body - zjemni schodiky zo senzorov s krokom 0,5 °C. */
+function smooth(points) {
+  if (points.length < 3) return points;
+  return points.map(([t, v], i) => {
+    if (i === 0 || i === points.length - 1) return [t, v];
+    return [t, (points[i - 1][1] + v + points[i + 1][1]) / 3];
+  });
+}
+
 function sparkSvg(points, target, t0, t1) {
   const W = 260;
   const H = 46;
@@ -1095,10 +1112,10 @@ function sparkSvg(points, target, t0, t1) {
   if (!values.length) return "";
   let lo = Math.min(...values) - 0.3;
   let hi = Math.max(...values) + 0.3;
-  if (hi - lo < 1.5) {
+  if (hi - lo < 2) {
     const c = (hi + lo) / 2;
-    lo = c - 0.75;
-    hi = c + 0.75;
+    lo = c - 1;
+    hi = c + 1;
   }
   const x = (t) => ((t - t0) / (t1 - t0)) * W;
   const y = (v) => H - 3 - ((v - lo) / (hi - lo)) * (H - 6);
@@ -1125,7 +1142,7 @@ function sparkSvg(points, target, t0, t1) {
 
 // ============================================================== PREHLAD DOMU
 
-const DEFAULT_TILES = ["heating", "pv", "tariff", "krb"];
+const DEFAULT_TILES = ["heating", "presence", "guests", "pv", "tariff", "krb"];
 const ON_STATES = new Set(["on", "home", "true", "open", "heat", "heating", "active", "detected"]);
 
 class SmartHeatingOverview extends HTMLElement {
@@ -1189,10 +1206,27 @@ class SmartHeatingOverview extends HTMLElement {
       : all;
   }
 
+  /** Entity z konfiguracie integracie (atributy senzora stav), zjednotene cez zony. */
+  _zoneEntities(attr) {
+    const out = [];
+    for (const z of this._zones()) {
+      const s = this._hass.states[eid(z, "sensor", "stav")];
+      const v = s && s.attributes[attr];
+      for (const e of Array.isArray(v) ? v : v ? [v] : []) if (!out.includes(e)) out.push(e);
+    }
+    return out;
+  }
+
+  _outdoorEntity() {
+    return this._config.outdoor_entity || this._zoneEntities("outdoor_entity")[0] || null;
+  }
+
   _watched() {
     const ids = [];
     for (const z of this._zones()) ids.push(eid(z, "climate"), eid(z, "sensor", "stav"));
-    if (this._config.outdoor_entity) ids.push(this._config.outdoor_entity);
+    const outdoor = this._outdoorEntity();
+    if (outdoor) ids.push(outdoor);
+    ids.push(...this._zoneEntities("presence_entities"), ...this._zoneEntities("manual_presence_entities"));
     for (const tile of this._config.tiles || []) {
       if (tile && typeof tile === "object") {
         if (tile.entity) ids.push(tile.entity);
@@ -1276,7 +1310,8 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-sum"></div>
       </div></ha-card>`;
       this.querySelector(".sho-out").addEventListener("click", () => {
-        if (this._config.outdoor_entity) fireMoreInfo(this, this._config.outdoor_entity);
+        const outdoor = this._outdoorEntity();
+        if (outdoor) fireMoreInfo(this, outdoor);
       });
       this.querySelector(".sho-tiles").addEventListener("click", (e) => {
         const tile = e.target.closest(".sho-tile[data-entity]");
@@ -1293,7 +1328,7 @@ class SmartHeatingOverview extends HTMLElement {
   // ------------------------------------------------------------------ vonku
 
   _outdoorNow(zones) {
-    const e = this._config.outdoor_entity;
+    const e = this._outdoorEntity();
     if (e && this._hass.states[e]) return num(this._hass.states[e].state);
     for (const z of zones) {
       const v = num(z.s.outdoor_temperature ?? z.c.vonkajsia_teplota);
@@ -1350,6 +1385,23 @@ class SmartHeatingOverview extends HTMLElement {
       case "tariff": {
         const c = n((z) => z.s.tariff_blocked);
         return { icon: "mdi:flash", label: this._t("ov_tariff"), value: this._t(c ? "ov_tariff_blocked" : "ov_tariff_ok"), cls: c ? "warn" : "" };
+      }
+      case "presence": {
+        const ents = this._zoneEntities("presence_entities");
+        if (!ents.length) return null;
+        return this._entityTile({ name: this._t("ov_home"), icon: "mdi:home-account", entities: ents });
+      }
+      case "guests": {
+        const ents = this._zoneEntities("manual_presence_entities");
+        if (!ents.length) return null;
+        const on = ents.some((e) => ON_STATES.has(String((this._hass.states[e] || {}).state).toLowerCase()));
+        return {
+          icon: "mdi:account-group",
+          label: this._t("ov_guests"),
+          value: this._t(on ? "ov_yes" : "ov_no"),
+          cls: on ? "on" : "",
+          entity: ents[0],
+        };
       }
       case "krb": {
         const c = n((z) => z.s.krb_override);
@@ -1471,7 +1523,7 @@ class SmartHeatingOverview extends HTMLElement {
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
 
-    const outdoor = this._config.outdoor_entity;
+    const outdoor = this._outdoorEntity();
     if (outdoor && hass.states[outdoor] && now - this._outdoorFetchedAt > OVERVIEW_REFRESH_MS) {
       const start = Math.min(midnight.getTime(), now - 3 * 3600 * 1000);
       jobs.push(
