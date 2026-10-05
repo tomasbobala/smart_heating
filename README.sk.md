@@ -28,11 +28,11 @@ Vytvorené pre reálny dom s viacerými nezávislými zónami (izbami), kde kaž
 má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-collapsed.png" width="45%" alt="Karta Smart Heating - zbalený pohľad">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-expanded.png" width="45%" alt="Karta Smart Heating - rozbalená sekcia Teploty">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - prehľadová karta a karty zón">
   <br>
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="45%" alt="Formulár Globálne nastavenia">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="45%" alt="Formulár Upraviť zónu">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Karta zóny - otvorené nastavenia">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="32%" alt="Formulár Globálne nastavenia">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="32%" alt="Formulár Upraviť zónu">
 </p>
 
 ---
@@ -51,7 +51,7 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 - [Instalácia](#instalácia)
 - [Nastavenie](#nastavenie)
 - [Entity vytvorené integráciou](#entity-vytvorené-integráciou)
-- [Lovelace karta](#lovelace-karta)
+- [Lovelace karty](#lovelace-karty)
 - [Príklady použitia](#príklady-použitia)
 - [Riešenie problémov](#riešenie-problémov)
 - [Známe obmedzenia](#známe-obmedzenia)
@@ -73,7 +73,7 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 | ⏰ **Predkúrenie** | Pevné časové okno pred príchodom, nezávisle od reálnej prítomnosti. |
 | 🌡️ **Externý teplomer** | Presnejšie riadenie, keď vstavaný senzor AC/podlahovky nestačí. |
 | 🚀 **Boost** | Okamžité, dočasné komfortné kúrenie na požiadanie. |
-| 🎛️ **Vlastná Lovelace karta** | Jedna karta na zónu, plné ovládanie bez YAML. |
+| 🎛️ **Vlastné Lovelace karty** | Jedna karta na zónu s grafom za 24 h a plným ovládaním bez YAML, plus prehľadová karta celého domu. |
 | 🌍 **Slovenčina a angličtina** | Karta aj texty generované backendom (dôvody, notifikácie) podporujú oba jazyky. |
 
 ---
@@ -219,8 +219,6 @@ zdroj ako krb). Riešenie:
 
 Ak zóna **nemá** externý teplomer nastavený, všetko funguje presne ako predtým
 (AC sa riadi vlastným senzorom a regulačným okruhom).
-
----
 
 ---
 
@@ -396,33 +394,88 @@ nastavení (Options Flow).
 
 ---
 
-## Lovelace karta
+## Lovelace karty
 
-`custom_components/smart_heating/www/smart-heating-card.js` — čistý JavaScript web component, žiadny build
-krok. Jedna karta = jedna zóna. Obsahuje:
+`custom_components/smart_heating/www/smart-heating-card.js` — čisté JavaScript web components, žiadny build
+krok. Súbor obsahuje dve karty.
 
-- Aktuálnu teplotu zafarbenú podľa pevnej škály (do 18 °C modrá, okolo
-  21,5 °C jantárová, od 25 °C červená), cieľovú teplotu a **skutočný** stav
-  zóny: Kúri / Nekúri / Chladí / Vypnuté. Stav vychádza z toho, čo reálne
-  beží (ak zariadenie hlási vlastný `hvac_action`, použije sa ten), nie len
-  z toho, že je kúrenie povolené
-- Priemernú teplotu za 24 h a najnižšiu a najvyššiu za 48 h v tej istej
-  farebnej škále. Berú sa z 5-minútových štatistík, ktoré si Home Assistant
-  sám počíta pre teplotný senzor zóny (`sensor.smart_heating_<id>_teplota`),
-  takže ich načítanie je lacné. Tento senzor nevylučuj z recordera; hodnoty
-  sa objavia pár minút po inštalácii a postupne sa doplnia na 48 h
-- Teplotu podlahy a vonkajšiu teplotu, dôvod rozhodnutia, farebné odznaky
-- Všetko ostatné pod jedným tlačidlom **Nastavenia** ako zbaliteľné sekcie:
-  režim, sezóna (len zóny s AC), teploty, chladenie, časy, prepínače a Boost.
-  Zbalený režim, sezóna a Boost ukazujú aktuálnu hodnotu v hlavičke. Ich
-  obsah sa vykresľuje len pri otvorených Nastaveniach, takže karta je na
-  mobile ľahká
-- **Vizuálny editor** pri pridávaní karty (dropdown zón namiesto ručného `zone_id`)
+### Karta zóny — `custom:smart-heating-card`
 
-Karta prekresľuje obsah **len** keď sa zmení niečo z jej vlastnej zóny (nie
-pri každej zmene v celom Home Assistant) — dôležité pre výkon pri väčšom
-počte kariet na dashboarde. Sekcie Sezóna/Chladenie/AC nastavenia sa
-zobrazujú **len** pre zóny typu `floor_ac`.
+Jedna karta = jedna zóna:
+
+- **Stav na prvý pohľad** — farebný pásik vľavo a odznak stavu: Kúri
+  (oranžový, pulzuje) / Nekúri / Chladí / Vypnuté. Stav vychádza z toho, čo
+  reálne beží (ak zariadenie hlási vlastný `hvac_action`, použije sa ten), nie
+  len z toho, že je kúrenie povolené
+- **Veľká aktuálna teplota** a vedľa nej **graf za 24 h** s cieľom ako
+  prerušovanou čiarou, pod ním min · Ø · max za 24 h. Údaje sú z
+  5-minútových štatistík, ktoré si Home Assistant sám počíta pre teplotný
+  senzor zóny (`sensor.smart_heating_<id>_teplota`), takže načítanie je lacné.
+  Tento senzor nevylučuj z recordera; graf sa doplní počas prvého dňa.
+  Kliknutím na teplotu sa otvorí jej história
+- **Štítok odchýlky** — `v cieli` (±0,5 °C), `+1,0° nad`, `−1,6° pod` — a
+  teplota podlahy
+- **Cieľ − / +** priamo na karte. Viac klikov sa spojí do jedného volania
+  `climate.set_temperature`; hodnota sa uloží pre práve aktívny podrežim
+  (Deň / Noc / Min)
+- **Lišta režimov** Auto / Deň / Noc / Min. Mráz a Vypnuté sa na nej ukážu
+  len keď sú aktívne; všetkých šesť režimov je v nastaveniach
+- **Riadok s dôvodom** rozhodnutia a farebné odznaky (tarifa, FVE prebytok,
+  krb, núdzová ochrana, Boost…)
+- **Ozubené koliesko** otvára nastavenia ako zbaliteľné sekcie: režim, sezóna
+  (len zóny s AC), teploty, chladenie, časy, prepínače a Boost. Ich obsah sa
+  vykresľuje len keď sú otvorené, takže karta je na mobile ľahká
+- **Vizuálny editor** pri pridávaní karty (dropdown zón, výber jazyka)
+
+```yaml
+type: custom:smart-heating-card
+zone_id: "xxxxxxxx"
+name: "Obývačka"       # voliteľné, inak sa použije meno z climate entity
+language: auto          # voliteľné: auto | en | sk
+```
+
+### Prehľadová karta — `custom:smart-heating-overview`
+
+Jedna karta pre celý dom, najlepšie na celú šírku nad kartami zón:
+
+- **Vonkajšia teplota** so zmenou za posledné 3 h a dnešným rozsahom
+- **Dlaždice podmienok** — vstavané: `heating` (kúri N z M izieb), `pv`
+  (využíva sa FVE prebytok), `tariff` (tarifa blokuje kúrenie), `krb` (krb
+  vypína zóny), `emergency`, `boost`; plus ľubovoľné vlastné entity. Núdzová
+  ochrana a Boost sa objavia samé, keď sú aktívne. Klik na dlaždicu entity
+  otvorí jej detail
+- **Súhrn** — koľko izieb je v cieli / nad cieľom / pod cieľom a ako dlho dnes
+  kúrilo (čas, keď kúrila aspoň jedna zóna)
+
+```yaml
+type: custom:smart-heating-overview
+outdoor_entity: sensor.outdoor_temperature   # voliteľné - zapne trend a dnešný rozsah
+zones: ["xxxxxxxx", "yyyyyyyy"]              # voliteľné, predvolene všetky zóny
+tiles:                                       # voliteľné, predvolene heating, pv, tariff, krb
+  - name: Doma
+    icon: mdi:home-account
+    entities: [person.tomas, person.monika]  # ukáže, kto je doma
+  - entity: input_boolean.navsteva
+    name: Návšteva
+    icon: mdi:account-group
+  - entity: input_boolean.krb_hori
+    name: Krb
+    icon: mdi:fireplace
+    on_text: Horí
+    off_text: Nehorí
+    color: hot                               # on (zelená) | hot | cold | warn
+  - tariff
+  - pv
+  - heating
+grid_options:
+  columns: full
+```
+
+Obe karty prekresľujú obsah **len** keď sa zmení niečo, čo zobrazujú (nie pri
+každej zmene v celom Home Assistant) — dôležité pre výkon pri väčšom počte
+kariet na dashboarde. História a štatistiky sa načítavajú najviac raz za
+10–15 minút. Sekcie Sezóna/Chladenie/AC nastavenia sa zobrazujú **len** pre
+zóny typu `floor_ac`.
 
 ---
 

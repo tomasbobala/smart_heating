@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.16.0
+- **Zone card redesign.** Coloured accent bar and status pill (Heating /
+  Not heating / Cooling / Off), big current temperature with a 24 h chart
+  (target as a dashed line, min · avg · max for 24 h, from the 5-minute
+  statistics of `sensor.smart_heating_<id>_teplota`), deviation chip
+  (on target within ±0.5 °C / above / below) and floor temperature.
+- Target temperature − / + directly on the card; repeated clicks are merged
+  into one `climate.set_temperature` call.
+- Mode bar Auto / Day / Night / Min on the card (Frost and Off shown only
+  while active), gear button for the settings, reason line with badges.
+- Removed the version label and the per-zone outdoor temperature from the
+  card; min/max now cover 24 h instead of 48 h.
+- **New overview card** `custom:smart-heating-overview`: outside temperature
+  with 3 h trend and today's range, condition tiles (built-in heating / pv /
+  tariff / krb / emergency / boost plus any custom entities), summary of rooms
+  on target / above / below and heating time today.
+- Card tests rewritten for the new layout, plus overview tests.
+
 ## 0.15.0
 - Removed the 24 h chart from the card: every card downloaded the full 24 h
   history of its climate entity including all attributes, which was very slow

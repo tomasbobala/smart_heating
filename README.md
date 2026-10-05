@@ -28,11 +28,11 @@ Built for a real house with multiple independent zones (rooms), where each
 zone has its own rules but shares common global settings.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-collapsed.png" width="45%" alt="Smart Heating card - collapsed view">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-expanded.png" width="45%" alt="Smart Heating card - Temperatures section expanded">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - overview card and zone cards">
   <br>
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="45%" alt="Global settings form">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="45%" alt="Edit zone form">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Smart Heating zone card - settings open">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="32%" alt="Global settings form">
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="32%" alt="Edit zone form">
 </p>
 
 ---
@@ -51,7 +51,7 @@ zone has its own rules but shares common global settings.
 - [Installation](#installation)
 - [Setup](#setup)
 - [Entities created by the integration](#entities-created-by-the-integration)
-- [Lovelace card](#lovelace-card)
+- [Lovelace cards](#lovelace-cards)
 - [Usage examples](#usage-examples)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
@@ -73,7 +73,7 @@ zone has its own rules but shares common global settings.
 | ⏰ **Pre-heating** | A fixed time window before arrival, independent of actual presence. |
 | 🌡️ **External thermometer** | More accurate control when the AC's/floor's built-in sensor is off. |
 | 🚀 **Boost** | Instant, temporary comfort heating on demand. |
-| 🎛️ **Custom Lovelace card** | One card per zone, full control without YAML. |
+| 🎛️ **Custom Lovelace cards** | One card per zone with a 24 h chart and full control without YAML, plus a whole-house overview card. |
 | 🌍 **English & Slovak** | Both the card and the backend-generated text (reasons, notifications) support both languages. |
 
 ---
@@ -272,7 +272,7 @@ The project has a real test suite (not just manual verification):
 - **Python** (`pytest` + `pytest-homeassistant-custom-component`) - decision
   logic, i18n, notifications, config/options flow (including regression tests
   for specific bugs found during development)
-- **JavaScript** (`node:test` + `jsdom`) - the card, i18n, render-skipping optimization
+- **JavaScript** (`node:test` + `jsdom`) - both cards, i18n, render-skipping optimization
 
 ```bash
 # Python
@@ -400,33 +400,87 @@ settings.
 
 ---
 
-## Lovelace card
+## Lovelace cards
 
-`custom_components/smart_heating/www/smart-heating-card.js` - a plain JavaScript web component, no build
-step. One card = one zone. Includes:
+`custom_components/smart_heating/www/smart-heating-card.js` - plain JavaScript web components, no build
+step. The file contains two cards.
 
-- Current temperature, colour-coded on a fixed scale (blue up to 18 °C,
-  amber around 21.5 °C, red from 25 °C), target temperature and the **real**
-  state of the zone: Heating / Not heating / Cooling / Off. The state comes
-  from what is actually running (the device's own `hvac_action` when it
-  reports one), not just from heating being allowed
-- Average temperature over 24 h plus the lowest and highest over 48 h, in the
-  same colour scale. They come from Home Assistant's own 5-minute statistics
-  of the zone temperature sensor (`sensor.smart_heating_<id>_teplota`), so
-  loading them is cheap. Keep that sensor in the recorder; values appear
-  within a few minutes after installing and fill up to 48 h over time
-- Floor and outdoor temperature, the decision reason, coloured badges
-- Everything else behind a single **Settings** button, as collapsible
-  sections: mode, season (AC zones only), temperatures, cooling, schedule,
-  switches and Boost. Collapsed mode, season and Boost show their current
-  value in the header. Their content is only rendered while Settings is open,
-  which keeps the card light on phones
-- **Visual editor** when adding the card (zone dropdown instead of typing
-  `zone_id` by hand, plus a language picker)
+### Zone card - `custom:smart-heating-card`
 
-The card only re-renders when something from its own zone actually changes
-(not on every state change in the whole of Home Assistant) - important for
-performance with many cards on one dashboard.
+One card = one zone:
+
+- **State at a glance** - a coloured accent bar and a status pill: Heating
+  (orange, pulsing) / Not heating / Cooling / Off. The state comes from what
+  is actually running (the device's own `hvac_action` when it reports one),
+  not just from heating being allowed
+- **Big current temperature** and next to it a **24 h chart** with the target
+  drawn as a dashed line, plus min · avg · max for the last 24 h. The data
+  comes from Home Assistant's own 5-minute statistics of the zone temperature
+  sensor (`sensor.smart_heating_<id>_teplota`), so loading it is cheap. Keep
+  that sensor in the recorder; the chart fills up over the first day.
+  Clicking the temperature opens its history
+- **Deviation chip** - `on target` (within ±0.5 °C), `+1.0° above`,
+  `−1.6° below` - and the floor temperature
+- **Target − / +** right on the card. Repeated clicks are merged into one
+  `climate.set_temperature` call; the value is stored for the currently
+  active sub-mode (Day / Night / Min)
+- **Mode bar** Auto / Day / Night / Min. Frost and Off appear there only while
+  active; all six modes are in the settings
+- **Reason line** - why the integration decided what it did, with coloured
+  badges (tariff, solar surplus, fireplace, emergency protection, Boost...)
+- The **gear** opens the settings as collapsible sections: mode, season (AC
+  zones only), temperatures, cooling, schedule, switches and Boost. Their
+  content is only rendered while open, which keeps the card light on phones
+- **Visual editor** when adding the card (zone dropdown, language picker)
+
+```yaml
+type: custom:smart-heating-card
+zone_id: "xxxxxxxx"
+name: "Living room"     # optional, otherwise uses the climate entity's name
+language: auto           # optional: auto | en | sk
+```
+
+### Overview card - `custom:smart-heating-overview`
+
+One card for the whole house, best placed full-width above the zone cards:
+
+- **Outside temperature** with the change over the last 3 h and today's range
+- **Condition tiles** - built-in: `heating` (N of M rooms heating), `pv`
+  (solar surplus in use), `tariff` (tariff blocks heating), `krb` (fireplace
+  stops zones), `emergency`, `boost`; plus any of your own entities. Emergency
+  protection and Boost appear automatically while active. Clicking an entity
+  tile opens its more-info dialog
+- **Summary** - rooms on target / above / below, and how long the house heated
+  today (time when at least one zone was heating)
+
+```yaml
+type: custom:smart-heating-overview
+outdoor_entity: sensor.outdoor_temperature   # optional - enables trend and today's range
+zones: ["xxxxxxxx", "yyyyyyyy"]              # optional, default = all zones
+tiles:                                       # optional, default = heating, pv, tariff, krb
+  - name: Home
+    icon: mdi:home-account
+    entities: [person.alice, person.bob]     # shows who is home
+  - entity: input_boolean.guests
+    name: Guests
+    icon: mdi:account-group
+  - entity: input_boolean.fireplace
+    name: Fireplace
+    icon: mdi:fireplace
+    on_text: Burning
+    off_text: Out
+    color: hot                               # on (green) | hot | cold | warn
+  - tariff
+  - pv
+  - heating
+grid_options:
+  columns: full
+```
+
+Both cards only re-render when something they display actually changes (not
+on every state change in the whole of Home Assistant) - important for
+performance with many cards on one dashboard. History and statistics are
+fetched at most every 10-15 minutes.
 
 ---
 

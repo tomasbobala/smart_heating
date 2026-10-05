@@ -25,13 +25,14 @@ function loadCard() {
     document: window.document,
     CardClass: window.customElements.get("smart-heating-card"),
     EditorClass: window.customElements.get("smart-heating-card-editor"),
+    OverviewClass: window.customElements.get("smart-heating-overview"),
   };
 }
 
 const ZONE_ID = "abc12345";
 
 function openSettings(card) {
-  card.querySelector(".sh-settings-toggle").click();
+  card.querySelector(".sh-gear").click();
 }
 
 function buildHass(overrides = {}) {
@@ -112,7 +113,7 @@ test("shows 'not found' message when zone entities are missing", () => {
   card.setConfig({ zone_id: "doesnotexist" });
   card.hass = buildHass();
   document.body.appendChild(card);
-  const reason = card.querySelector(".sh-reason").textContent;
+  const reason = card.querySelector(".sh-msg").textContent;
   assert.match(reason, /doesnotexist/);
 });
 
@@ -123,8 +124,8 @@ test("renders zone name, current and target temperature", () => {
   card.hass = buildHass();
   document.body.appendChild(card);
   assert.strictEqual(card.querySelector(".sh-title").textContent, "Obyvacka");
-  assert.match(card.querySelector(".sh-current-temp").textContent, /22\.5/);
-  assert.match(card.querySelector(".sh-target-temp").textContent, /23/);
+  assert.strictEqual(card.querySelector(".sh-temp").textContent, "22,5°");
+  assert.strictEqual(card.querySelector(".sh-tgt b").textContent, "23°");
 });
 
 test("custom name in config overrides climate friendly_name", () => {
@@ -361,14 +362,15 @@ function statusText(hassOverrides) {
   card.setConfig({ zone_id: ZONE_ID, language: "sk" });
   card.hass = buildHass(hassOverrides);
   document.body.appendChild(card);
-  const el = card.querySelector(".sh-status");
-  return { text: el.querySelector(".sh-status-text").textContent, cls: el.className };
+  const el = card.querySelector(".sh-pill");
+  return { text: el.textContent, cls: el.className, root: card.querySelector(".sh-root").className };
 }
 
 test("status: heating", () => {
   const r = statusText({ climateAttrs: { hvac_action: "heating" } });
   assert.strictEqual(r.text, "Kúri");
-  assert.match(r.cls, /heating/);
+  assert.match(r.cls, /\bheat\b/);
+  assert.match(r.root, /is-heat/);
 });
 
 test("status: idle in heating season = Nekúri", () => {
@@ -396,7 +398,7 @@ function statsHass(rowsFn) {
   return { hass, calls };
 }
 
-test("stats: avg over 24 h, min/max over 48 h from 5-minute statistics", async () => {
+test("chart legend: min / avg / max over 24 h from 5-minute statistics", async () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID });
@@ -404,8 +406,6 @@ test("stats: avg over 24 h, min/max over 48 h from 5-minute statistics", async (
   const sid = `sensor.smart_heating_${ZONE_ID}_teplota`;
   const { hass, calls } = statsHass(() => ({
     [sid]: [
-      // starsie ako 24 h - nepocita sa do priemeru, ale do min/max ano
-      { start: now - 40 * 3600e3, mean: 30, min: 15.0, max: 30.0 },
       { start: now - 2 * 3600e3, mean: 21, min: 20.5, max: 21.5 },
       { start: new Date(now - 1 * 3600e3).toISOString(), mean: 23, min: 22.5, max: 23.5 },
     ],
@@ -417,14 +417,14 @@ test("stats: avg over 24 h, min/max over 48 h from 5-minute statistics", async (
   assert.strictEqual(calls[0].type, "recorder/statistics_during_period");
   assert.deepStrictEqual(Array.from(calls[0].statistic_ids), [sid]);
   assert.strictEqual(calls[0].period, "5minute");
-  const val = (k) => card.querySelector(`.sh-stat-val[data-k="${k}"]`).textContent;
-  assert.strictEqual(val("avg24"), "22.0°");
-  assert.strictEqual(val("min48"), "15.0°");
-  assert.strictEqual(val("max48"), "30.0°");
-  assert.strictEqual(card.querySelector(".sh-stats").hidden, false);
+  const span = Date.parse(calls[0].end_time) - Date.parse(calls[0].start_time);
+  assert.ok(Math.abs(span - 24 * 3600e3) < 5000);
+  assert.strictEqual(card.querySelector(".sh-lg-v").textContent, "min 20,5° · Ø 22,0° · max 23,5°");
+  assert.ok(card.querySelector(".sh-spark path"), "sparkline path rendered");
+  assert.ok(!card.querySelector(".sh-mid").classList.contains("no-chart"));
 });
 
-test("stats row hidden when the integration has no temperature sensor (old version)", () => {
+test("chart hidden when the integration has no temperature sensor (old version)", () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID });
@@ -433,11 +433,11 @@ test("stats row hidden when the integration has no temperature sensor (old versi
   hass.callWS = async () => { called = true; return {}; };
   card.hass = hass;
   document.body.appendChild(card);
-  assert.strictEqual(card.querySelector(".sh-stats").hidden, true);
+  assert.ok(card.querySelector(".sh-mid").classList.contains("no-chart"));
   assert.strictEqual(called, false);
 });
 
-test("stats show a dash while there is no data yet", async () => {
+test("chart legend is empty while there is no data yet", async () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID });
@@ -445,7 +445,7 @@ test("stats show a dash while there is no data yet", async () => {
   card.hass = hass;
   document.body.appendChild(card);
   await new Promise((r) => setTimeout(r, 20));
-  assert.strictEqual(card.querySelector('.sh-stat-val[data-k="avg24"]').textContent, "–");
+  assert.strictEqual(card.querySelector(".sh-lg-v").textContent, "");
 });
 
 test("stats are not re-fetched on every state update", async () => {
@@ -466,25 +466,208 @@ test("stats are not re-fetched on every state update", async () => {
   assert.strictEqual(calls.length, 1);
 });
 
-test("target temperature is shown as its own prominent element", () => {
+function deltaOf(current, target) {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID, language: "sk" });
-  card.hass = buildHass();
+  card.hass = buildHass({ climateAttrs: { current_temperature: current, temperature: target } });
   document.body.appendChild(card);
-  assert.strictEqual(card.querySelector(".sh-target-temp").textContent, "23°");
-  assert.strictEqual(card.querySelector(".sh-target-label").textContent, "cieľ");
+  const el = card.querySelector(".sh-delta");
+  return { text: el.textContent, cls: el.className };
+}
+
+test("delta chip: on target within ±0.5 °C, otherwise above / below", () => {
+  assert.deepStrictEqual(deltaOf(23.4, 23), { text: "v cieli", cls: "sh-delta ok" });
+  assert.deepStrictEqual(deltaOf(24.5, 23), { text: "+1,5° nad", cls: "sh-delta up" });
+  assert.deepStrictEqual(deltaOf(21.4, 23), { text: "−1,6° pod", cls: "sh-delta dn" });
 });
 
-test("temperature colour scale: cold blue, warm red, middle never grey", () => {
-  const { window } = loadCard();
-  const hue = (c) => Number(/hsl\(([\d.]+)/.exec(c)[1]);
-  assert.ok(Math.abs(hue(window.tempColor(16)) - 217) < 1);
-  const hot = hue(window.tempColor(27));
-  assert.ok(hot > 350 || hot < 5);
-  for (let t = 18; t <= 25; t += 0.5) {
-    assert.match(window.tempColor(t), /hsl\([\d.]+, 82%, 60%\)/); // vzdy plna sytost = nikdy siva
+test("floor chip shows floor temperature", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass({ stavAttrs: { floor_temperature: 26.5 } });
+  document.body.appendChild(card);
+  assert.match(card.querySelector(".sh-chip-floor").textContent, /Podlaha\s*26,5°/);
+});
+
+test("target +/- buttons are debounced into one climate.set_temperature call", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = buildHass({ climateAttrs: { temperature: 23, min_temp: 7, max_temp: 35 } });
+  const calls = [];
+  hass.callService = (domain, service, data) => { calls.push({ domain, service, data }); return Promise.resolve(); };
+  card.hass = hass;
+  document.body.appendChild(card);
+
+  const plus = card.querySelector('.sh-tgt button[data-tgt="1"]');
+  plus.click();
+  plus.click();
+  assert.strictEqual(card.querySelector(".sh-tgt b").textContent, "24°");
+  assert.strictEqual(calls.length, 0);
+  await new Promise((r) => setTimeout(r, 800));
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].domain, "climate");
+  assert.strictEqual(calls[0].service, "set_temperature");
+  assert.strictEqual(calls[0].data.temperature, 24);
+});
+
+test("target buttons are disabled in mode Vypnute", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ climateAttrs: { rezim: "Vypnute", hvac_action: "off" } });
+  document.body.appendChild(card);
+  card.querySelectorAll(".sh-tgt button").forEach((b) => assert.strictEqual(b.disabled, true));
+  assert.strictEqual(card.querySelector(".sh-delta").textContent, "");
+});
+
+test("mode bar: quick modes, active one highlighted, click selects option", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass({ climateAttrs: { rezim: "Auto" } });
+  const calls = [];
+  hass.callService = (domain, service, data) => calls.push({ domain, service, data });
+  card.hass = hass;
+  document.body.appendChild(card);
+  const modes = Array.from(card.querySelectorAll(".sh-seg button")).map((b) => b.dataset.mode);
+  assert.deepStrictEqual(modes, ["Auto", "Den", "Noc", "Min"]);
+  assert.strictEqual(card.querySelector(".sh-seg button.a").dataset.mode, "Auto");
+  card.querySelector('.sh-seg button[data-mode="Noc"]').click();
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls[0])), {
+    domain: "select",
+    service: "select_option",
+    data: { entity_id: `select.smart_heating_${ZONE_ID}_rezim`, option: "Noc" },
+  });
+});
+
+test("mode bar shows Mraz / Vypnute only while it is the active mode", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ climateAttrs: { rezim: "Mraz" } });
+  document.body.appendChild(card);
+  const active = card.querySelector(".sh-seg button.a");
+  assert.strictEqual(active.dataset.mode, "Mraz");
+  assert.ok(active.classList.contains("special"));
+  assert.strictEqual(card.querySelectorAll(".sh-seg button").length, 5);
+});
+
+test("reason line shows the stav sensor state; no version label on the card", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-why-t").textContent, "Auto: test dovod");
+  assert.strictEqual(card.querySelector(".sh-version"), null);
+});
+
+// ------------------------------------------------------------------ overview
+
+function overviewHass() {
+  const zones = [
+    ["aaa11111", "Alpha", 22.0, 22, "heating", "Auto", { pv_active: true }],
+    ["bbb22222", "Beta", 24.0, 22, "idle", "Auto", {}],
+    ["ccc33333", "Gamma", 20.0, 22, "idle", "Noc", { tariff_blocked: true }],
+    ["ddd44444", "Delta", 15.0, 8, "off", "Vypnute", {}],
+  ];
+  const states = {};
+  for (const [id, name, cur, tgt, action, mode, flags] of zones) {
+    states[`climate.smart_heating_${id}`] = {
+      state: "heat",
+      attributes: { friendly_name: name, current_temperature: cur, temperature: tgt, hvac_action: action, rezim: mode },
+    };
+    states[`sensor.smart_heating_${id}_stav`] = {
+      state: "x",
+      attributes: Object.assign({ season: "Kurenie", outdoor_temperature: 7.5 }, flags),
+    };
   }
+  states["input_boolean.navsteva"] = { state: "on", attributes: { friendly_name: "Navsteva" } };
+  states["person.a"] = { state: "home", attributes: { friendly_name: "Tomas B" } };
+  states["person.b"] = { state: "not_home", attributes: { friendly_name: "Monika B" } };
+  return { states, language: "sk", callService: () => {} };
+}
+
+function renderOverview(config, hass) {
+  const { OverviewClass, document } = loadCard();
+  const card = new OverviewClass();
+  card.setConfig({ type: "custom:smart-heating-overview", ...config });
+  card.hass = hass || overviewHass();
+  document.body.appendChild(card);
+  return card;
+}
+
+test("overview: outdoor temperature falls back to the integration attribute", () => {
+  const card = renderOverview({});
+  assert.strictEqual(card.querySelector(".sho-out .v").textContent, "7,5 °C");
+});
+
+test("overview: default tiles and heating count (off zones not counted)", () => {
+  const card = renderOverview({});
+  const tiles = Array.from(card.querySelectorAll(".sho-tile")).map((t) => ({
+    k: t.querySelector(".k").textContent,
+    s: t.querySelector(".s").textContent,
+    cls: t.className,
+  }));
+  assert.deepStrictEqual(tiles.map((t) => t.k), ["Kúri sa", "FVE prebytok", "Tarifa", "Krb"]);
+  assert.strictEqual(tiles[0].s, "1 z 3 izieb");
+  assert.match(tiles[0].cls, /hot/);
+  assert.match(tiles[1].cls, /\bon\b/);
+  assert.match(tiles[2].cls, /warn/);
+});
+
+test("overview: custom entity tiles and multi-entity presence tile", () => {
+  const card = renderOverview({
+    tiles: [
+      { entity: "input_boolean.navsteva", name: "Návšteva" },
+      { name: "Doma", entities: ["person.a", "person.b"] },
+    ],
+  });
+  const tiles = Array.from(card.querySelectorAll(".sho-tile"));
+  assert.strictEqual(tiles[0].querySelector(".s").textContent, "Áno");
+  assert.strictEqual(tiles[0].dataset.entity, "input_boolean.navsteva");
+  assert.strictEqual(tiles[1].querySelector(".s").textContent, "Tomas");
+});
+
+test("overview: summary counts on target / above / below, skipping Vypnute", () => {
+  const card = renderOverview({});
+  const rows = Array.from(card.querySelectorAll(".sho-sum .r")).map((r) => r.querySelector("b").textContent);
+  assert.deepStrictEqual(rows.slice(0, 3), ["1", "1", "1"]);
+});
+
+test("overview: heating time today is the union of zone heating intervals", async () => {
+  const hass = overviewHass();
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const t0 = midnight.getTime() / 1000;
+  const now = Date.now() / 1000;
+  hass.callWS = async (msg) => {
+    if (msg.type !== "history/history_during_period") return {};
+    const out = {};
+    for (const id of msg.entity_ids) out[id] = [{ s: "heat", a: { hvac_action: "idle" }, lu: t0 }];
+    if (now - t0 > 3 * 3600) {
+      // Alpha 60 min, Beta 60 min s prekryvom 30 min -> spolu 90 min
+      out[msg.entity_ids[0]].push({ s: "heat", a: { hvac_action: "heating" }, lu: now - 3 * 3600 });
+      out[msg.entity_ids[0]].push({ s: "heat", a: { hvac_action: "idle" }, lu: now - 2 * 3600 });
+      out[msg.entity_ids[1]].push({ s: "heat", a: { hvac_action: "heating" }, lu: now - 2.5 * 3600 });
+      out[msg.entity_ids[1]].push({ s: "heat", a: { hvac_action: "idle" }, lu: now - 1.5 * 3600 });
+    }
+    return out;
+  };
+  const card = renderOverview({}, hass);
+  await new Promise((r) => setTimeout(r, 30));
+  const last = Array.from(card.querySelectorAll(".sho-sum .r")).pop();
+  const expected = now - t0 > 3 * 3600 ? "1 h 30 min" : "0 min";
+  assert.strictEqual(last.querySelector("b").textContent, expected);
+});
+
+test("overview: rejects non-list tiles", () => {
+  const { OverviewClass } = loadCard();
+  const card = new OverviewClass();
+  assert.throws(() => card.setConfig({ tiles: "heating" }), /tiles/);
 });
 
 test("loading the card script twice does not throw (double-registration guard)", () => {
