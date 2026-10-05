@@ -30,6 +30,10 @@ function loadCard() {
 
 const ZONE_ID = "abc12345";
 
+function openSettings(card) {
+  card.querySelector(".sh-settings-toggle").click();
+}
+
 function buildHass(overrides = {}) {
   const z = ZONE_ID;
   const climateAttrs = Object.assign(
@@ -170,6 +174,7 @@ test("mode chip matching climate attrs.rezim is marked active", () => {
   card.setConfig({ zone_id: ZONE_ID });
   card.hass = buildHass({ climateAttrs: { rezim: "Noc" } });
   document.body.appendChild(card);
+  openSettings(card);
   const active = card.querySelector(".sh-mode-chips .sh-chip.active");
   assert.strictEqual(active.dataset.mode, "Noc");
 });
@@ -201,6 +206,7 @@ test("fixed AC setpoint toggle shown only for AC zones", () => {
   cardAc.setConfig({ zone_id: ZONE_ID });
   cardAc.hass = buildHass({ hasAc: true });
   document.body.appendChild(cardAc);
+  openSettings(cardAc);
   const rowsAc = Array.from(cardAc.querySelectorAll(".sh-row-label")).map((el) => el.textContent);
   assert.ok(rowsAc.some((t) => /pevný AC setpoint/i.test(t)));
 
@@ -208,6 +214,7 @@ test("fixed AC setpoint toggle shown only for AC zones", () => {
   cardFloor.setConfig({ zone_id: ZONE_ID });
   cardFloor.hass = buildHass({ hasAc: false });
   document.body.appendChild(cardFloor);
+  openSettings(cardFloor);
   const rowsFloor = Array.from(cardFloor.querySelectorAll(".sh-row-label")).map((el) => el.textContent);
   assert.ok(!rowsFloor.some((t) => /pevný AC setpoint/i.test(t)));
 });
@@ -222,6 +229,7 @@ test("fixed AC setpoint toggle reflects entity state and toggles via click", () 
   hass.callService = (domain, service, data) => calls.push({ domain, service, data });
   card.hass = hass;
   document.body.appendChild(card);
+  openSettings(card);
 
   const rows = Array.from(card.querySelectorAll(".sh-row"));
   const row = rows.find((r) => /pevný AC setpoint/i.test(r.querySelector(".sh-row-label").textContent));
@@ -322,6 +330,102 @@ test("card only re-renders when a relevant entity actually changed", () => {
   };
   card.hass = hass2;
   assert.strictEqual(renderCount, 1);
+});
+
+test("settings are closed by default and their content is not rendered", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-settings").hidden, true);
+  assert.strictEqual(card.querySelector(".sh-mode-chips").children.length, 0);
+  openSettings(card);
+  assert.strictEqual(card.querySelector(".sh-settings").hidden, false);
+  assert.ok(card.querySelector(".sh-mode-chips").children.length > 0);
+});
+
+test("mode summary shows current mode even when collapsed", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass({ climateAttrs: { rezim: "Noc" } });
+  document.body.appendChild(card);
+  const val = card.querySelector(".sh-section--mode:not(.sh-season-section) .sh-sum-val").textContent;
+  assert.strictEqual(val, "Noc");
+});
+
+function statusText(hassOverrides) {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass(hassOverrides);
+  document.body.appendChild(card);
+  const el = card.querySelector(".sh-status");
+  return { text: el.querySelector(".sh-status-text").textContent, cls: el.className };
+}
+
+test("status: heating", () => {
+  const r = statusText({ climateAttrs: { hvac_action: "heating" } });
+  assert.strictEqual(r.text, "Kúri");
+  assert.match(r.cls, /heating/);
+});
+
+test("status: idle in heating season = Nekúri", () => {
+  assert.strictEqual(statusText({ climateAttrs: { hvac_action: "idle" } }).text, "Nekúri");
+});
+
+test("status: idle in cooling season = Nechladí", () => {
+  const r = statusText({ climateAttrs: { hvac_action: "idle" }, stavAttrs: { season: "Chladenie" } });
+  assert.strictEqual(r.text, "Nechladí");
+});
+
+test("status: cooling", () => {
+  assert.strictEqual(statusText({ climateAttrs: { hvac_action: "cooling" } }).text, "Chladí");
+});
+
+test("status: mode Vypnute = Vypnuté", () => {
+  assert.strictEqual(statusText({ climateAttrs: { rezim: "Vypnute", hvac_action: "off" } }).text, "Vypnuté");
+});
+
+test("chart is hidden without history and drawn when history arrives", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass();
+  const now = Date.now() / 1000;
+  hass.callWS = async () => ({
+    [`climate.smart_heating_${ZONE_ID}`]: Array.from({ length: 20 }, (_, i) => ({
+      s: "heat", a: { current_temperature: 19 + i * 0.2 }, lu: now - 86400 + i * 4000,
+    })),
+  });
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 20));
+  const chart = card.querySelector(".sh-chart");
+  assert.strictEqual(chart.hidden, false);
+  assert.ok(chart.querySelector("svg path"));
+  assert.match(card.querySelector(".sh-chart-range").textContent, /°/);
+});
+
+test("chart stays hidden when history API is unavailable", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass(); // bez callWS
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-chart").hidden, true);
+});
+
+test("temperature colour scale: cold blue, warm red, middle never grey", () => {
+  const { window } = loadCard();
+  const hue = (c) => Number(/hsl\(([\d.]+)/.exec(c)[1]);
+  assert.ok(Math.abs(hue(window.tempColor(16)) - 217) < 1);
+  const hot = hue(window.tempColor(27));
+  assert.ok(hot > 350 || hot < 5);
+  for (let t = 18; t <= 25; t += 0.5) {
+    assert.match(window.tempColor(t), /hsl\([\d.]+, 82%, 60%\)/); // vzdy plna sytost = nikdy siva
+  }
 });
 
 test("loading the card script twice does not throw (double-registration guard)", () => {
