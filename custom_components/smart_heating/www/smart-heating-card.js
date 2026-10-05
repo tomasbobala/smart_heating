@@ -9,7 +9,7 @@
  *   language: auto        # optional: auto | en | sk  (auto = follow HA language)
  */
 
-const CARD_VERSION = "0.12.0";
+const CARD_VERSION = "0.14.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const SEASONS = ["Kurenie", "Chladenie", "Auto"];
@@ -78,6 +78,14 @@ const I18N = {
   toggle_fixed_ac_setpoint: { en: "Use fixed AC setpoint even without external thermometer", sk: "Použiť pevný AC setpoint aj bez externého teplomera" },
 
   boost_running: { en: "Boost running", sk: "Boost beží" },
+
+  settings: { en: "Settings", sk: "Nastavenia" },
+  status_heating: { en: "Heating", sk: "Kúri" },
+  status_cooling: { en: "Cooling", sk: "Chladí" },
+  status_idle_heat: { en: "Not heating", sk: "Nekúri" },
+  status_idle_cool: { en: "Not cooling", sk: "Nechladí" },
+  status_off: { en: "Off", sk: "Vypnuté" },
+  chart_span: { en: "last 24 h", sk: "posledných 24 h" },
   boost_start: { en: "Start Boost", sk: "Spustiť Boost" },
 
   select_zone_first: { en: "Select a zone in the card settings.", sk: "Vyber zónu v nastaveniach karty." },
@@ -88,6 +96,29 @@ const I18N = {
   editor_name: { en: "Custom name (optional)", sk: "Vlastný názov (voliteľné)" },
   editor_language: { en: "Language", sk: "Jazyk" },
 };
+
+// Farebna skala teploty: do 18 °C modra, okolo 21,5 °C jantarova, od 25 °C cervena.
+// Interpolacia cez odtien (HSL), nie RGB - inak by stred medzi modrou a
+// jantarovou vysiel spinavo sivy.
+const TEMP_COLD = 18;
+const TEMP_HOT = 25;
+const HUE_STOPS = [[18, 217], [21.5, 40], [25, -3]];   // [teplota, odtien]
+const COLOR_COLD = [76, 141, 246];   // #4C8DF6 - modra (chladi, studena)
+const COLOR_HOT = [229, 72, 77];     // #E5484D - cervena (kuri, teplo)
+const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+
+function tempColor(t) {
+  if (t == null || isNaN(t)) return "var(--primary-text-color)";
+  const [a, b, c] = HUE_STOPS;
+  let hue;
+  if (t <= a[0]) hue = a[1];
+  else if (t >= c[0]) hue = c[1];
+  else if (t <= b[0]) hue = a[1] + (b[1] - a[1]) * ((t - a[0]) / (b[0] - a[0]));
+  else hue = b[1] + (c[1] - b[1]) * ((t - b[0]) / (c[0] - b[0]));
+  return `hsl(${((hue % 360) + 360) % 360}, 82%, 60%)`;
+}
+
+const rgbStr = (c) => `rgb(${c.join(",")})`;
 
 function eid(zoneId, domain, key) {
   return `${domain}.smart_heating_${zoneId}${key ? "_" + key : ""}`;
@@ -118,6 +149,11 @@ class SmartHeatingCard extends HTMLElement {
   constructor() {
     super();
     this._config = {};
+    this._settingsOpen = false;
+    this._history = [];
+    this._historyFetchedAt = 0;
+    this._historyLoading = false;
+    this._uid = Math.random().toString(36).slice(2, 9);
   }
 
   setConfig(config) {
@@ -215,6 +251,12 @@ class SmartHeatingCard extends HTMLElement {
   // ------------------------------------------------------------------ DOM
 
   _buildSkeleton() {
+    const section = (cls, icon, key, body, extra = "") =>
+      `<details class="sh-section ${cls}" ${extra}>
+         <summary class="sh-section-label"><span class="sh-icon">${icon}</span>${this._t(key)}<span class="sh-sum-val"></span></summary>
+         ${body}
+       </details>`;
+
     this.innerHTML = `
       <ha-card>
         <style>${this._styles()}</style>
@@ -226,122 +268,148 @@ class SmartHeatingCard extends HTMLElement {
             </div>
             <div class="sh-temp-wrap">
               <div class="sh-current-temp"></div>
-              <div class="sh-target-temp"></div>
+              <div class="sh-target-line">
+                <span class="sh-status"><span class="sh-status-dot"></span><span class="sh-status-text"></span></span>
+                <span class="sh-target-temp"></span>
+              </div>
             </div>
+          </div>
+
+          <div class="sh-chart" hidden>
+            <div class="sh-chart-plot"></div>
+            <div class="sh-chart-legend"><span class="sh-chart-span"></span><span class="sh-chart-range"></span></div>
           </div>
 
           <div class="sh-meta"></div>
           <div class="sh-reason"></div>
           <div class="sh-badges"></div>
 
-          <div class="sh-section sh-section--mode">
-            <div class="sh-section-label"><span class="sh-icon">🧭</span>${this._t("section_mode")}</div>
-            <div class="sh-chips sh-mode-chips"></div>
-          </div>
+          <button class="sh-settings-toggle" type="button" aria-expanded="false">
+            <span class="sh-icon">⚙️</span><span>${this._t("settings")}</span><span class="sh-chev"></span>
+          </button>
 
-          <div class="sh-section sh-section--mode sh-season-section" style="display:none">
-            <div class="sh-section-label"><span class="sh-icon">🔄</span>${this._t("section_season")}</div>
-            <div class="sh-chips sh-season-chips"></div>
-          </div>
-
-          <div class="sh-collapsible-grid">
-            <details class="sh-section sh-section--temp">
-              <summary class="sh-section-label"><span class="sh-icon">🌡️</span>${this._t("section_temps")}</summary>
-              <div class="sh-temps"></div>
-            </details>
-
-            <details class="sh-section sh-section--temp sh-cooling-section" style="display:none">
-              <summary class="sh-section-label"><span class="sh-icon">❄️</span>${this._t("section_cooling")}</summary>
-              <div class="sh-cooling"></div>
-            </details>
-
-            <details class="sh-section sh-section--time">
-              <summary class="sh-section-label"><span class="sh-icon">⏰</span>${this._t("section_times")}</summary>
-              <div class="sh-times"></div>
-            </details>
-
-            <details class="sh-section sh-section--toggle">
-              <summary class="sh-section-label"><span class="sh-icon">🔀</span>${this._t("section_toggles")}</summary>
-              <div class="sh-toggles"></div>
-            </details>
-          </div>
-
-          <div class="sh-section sh-section--boost">
-            <div class="sh-section-label"><span class="sh-icon">🚀</span>${this._t("section_boost")}</div>
-            <div class="sh-boost"></div>
+          <div class="sh-settings" hidden>
+            ${section("sh-section--mode", "🧭", "section_mode", `<div class="sh-chips sh-mode-chips"></div>`)}
+            ${section("sh-section--mode sh-season-section", "🔄", "section_season", `<div class="sh-chips sh-season-chips"></div>`, 'style="display:none"')}
+            ${section("sh-section--temp", "🌡️", "section_temps", `<div class="sh-temps"></div>`)}
+            ${section("sh-section--temp sh-cooling-section", "❄️", "section_cooling", `<div class="sh-cooling"></div>`, 'style="display:none"')}
+            ${section("sh-section--time", "⏰", "section_times", `<div class="sh-times"></div>`)}
+            ${section("sh-section--toggle", "🔀", "section_toggles", `<div class="sh-toggles"></div>`)}
+            ${section("sh-section--boost", "🚀", "section_boost", `<div class="sh-boost"></div>`)}
           </div>
 
           <div class="sh-version">v${CARD_VERSION}</div>
         </div>
       </ha-card>
     `;
+
+    const toggle = this.querySelector(".sh-settings-toggle");
+    toggle.addEventListener("click", () => {
+      this._settingsOpen = !this._settingsOpen;
+      toggle.setAttribute("aria-expanded", String(this._settingsOpen));
+      this.querySelector(".sh-settings").hidden = !this._settingsOpen;
+      if (this._settingsOpen) this._renderSettings();
+    });
   }
 
   _styles() {
     return `
-      .sh-root { padding: 16px; display: flex; flex-direction: column; gap: 20px; container-type: inline-size; }
-      .sh-header { display: flex; justify-content: space-between; align-items: flex-start; }
-      .sh-title { font-size: 1.25rem; font-weight: 500; color: var(--primary-text-color); }
-      .sh-subtitle { font-size: 0.85rem; color: var(--secondary-text-color); margin-top: 2px; }
-      .sh-temp-wrap { text-align: right; }
-      .sh-current-temp { font-size: 1.6rem; font-weight: 600; color: var(--primary-text-color); line-height: 1.1; }
-      .sh-target-temp { font-size: 0.85rem; color: var(--secondary-text-color); }
-      .sh-meta { display: flex; gap: 14px; font-size: 0.8rem; color: var(--secondary-text-color); }
-      .sh-meta span b { color: var(--primary-text-color); font-weight: 600; }
-      .sh-reason { font-size: 0.85rem; color: var(--secondary-text-color); background: var(--secondary-background-color, rgba(127,127,127,0.08)); border-radius: 8px; padding: 8px 10px; }
+      .sh-root { padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+
+      .sh-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+      .sh-title { font-size: 1.15rem; font-weight: 500; color: var(--primary-text-color); line-height: 1.3; }
+      .sh-subtitle { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 3px; }
+      .sh-temp-wrap { text-align: right; flex-shrink: 0; }
+      .sh-current-temp { font-size: 2.5rem; font-weight: 400; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; transition: color .6s ease; }
+      .sh-target-line { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+      .sh-target-temp { font-size: 0.8rem; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+
+      .sh-status { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 500;
+        padding: 3px 9px 3px 7px; border-radius: 999px; background: rgba(127,127,127,0.12); color: var(--secondary-text-color); }
+      .sh-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+      .sh-status.heating { color: ${rgbStr(COLOR_HOT)}; background: rgba(229,72,77,0.14); }
+      .sh-status.cooling { color: ${rgbStr(COLOR_COLD)}; background: rgba(76,141,246,0.14); }
+      .sh-status.off { opacity: 0.7; }
+      .sh-status.heating .sh-status-dot, .sh-status.cooling .sh-status-dot { animation: sh-pulse 1.8s ease-in-out infinite; }
+      @keyframes sh-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+      @media (prefers-reduced-motion: reduce) {
+        .sh-status-dot { animation: none !important; }
+        .sh-current-temp { transition: none; }
+      }
+
+      .sh-chart { display: flex; flex-direction: column; gap: 4px; }
+      .sh-chart[hidden] { display: none; }
+      .sh-chart-plot { position: relative; height: 64px; }
+      .sh-chart-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+      .sh-chart-now { position: absolute; right: -4px; width: 8px; height: 8px; border-radius: 50%;
+        transform: translateY(-50%); box-shadow: 0 0 0 3px var(--card-background-color, #1c1c1c); }
+      .sh-chart-legend { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+
+      .sh-meta { display: flex; gap: 16px; font-size: 0.8rem; color: var(--secondary-text-color); }
+      .sh-meta span b { color: var(--primary-text-color); font-weight: 500; }
+      .sh-reason { font-size: 0.8rem; color: var(--secondary-text-color); line-height: 1.4; }
       .sh-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-      .sh-badge { font-size: 0.72rem; padding: 3px 8px; border-radius: 999px; font-weight: 600; }
-      .sh-badge.warn { background: rgba(255,152,0,0.18); color: #b26a00; }
-      .sh-badge.err { background: rgba(244,67,54,0.18); color: #c62828; }
-      .sh-badge.ok { background: rgba(76,175,80,0.18); color: #2e7d32; }
-      .sh-badge.info { background: rgba(33,150,243,0.18); color: #1565c0; }
+      .sh-badges:empty { display: none; }
+      .sh-badge { font-size: 0.72rem; padding: 3px 9px; border-radius: 999px; font-weight: 500; }
+      .sh-badge.warn { background: rgba(255,152,0,0.16); color: #d98a1a; }
+      .sh-badge.err { background: rgba(229,72,77,0.16); color: ${rgbStr(COLOR_HOT)}; }
+      .sh-badge.ok { background: rgba(76,175,80,0.16); color: #4caf7d; }
+      .sh-badge.info { background: rgba(76,141,246,0.16); color: ${rgbStr(COLOR_COLD)}; }
+
+      .sh-settings-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
+        border: 1px solid var(--divider-color); border-radius: 10px; background: transparent; cursor: pointer;
+        color: var(--primary-text-color); font: inherit; font-size: 0.85rem; text-align: left; }
+      .sh-settings-toggle:hover { background: rgba(127,127,127,0.07); }
+      .sh-settings-toggle:focus-visible, details.sh-section > summary:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      .sh-chev { margin-left: auto; width: 7px; height: 7px; border-right: 1.5px solid var(--secondary-text-color);
+        border-bottom: 1.5px solid var(--secondary-text-color); transform: rotate(45deg); transition: transform .2s ease; margin-top: -3px; }
+      .sh-settings-toggle[aria-expanded="true"] .sh-chev { transform: rotate(-135deg); margin-top: 3px; }
+
+      .sh-settings { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; }
+      .sh-settings[hidden] { display: none; }
+      @container (min-width: 480px) { .sh-settings { grid-template-columns: 1fr 1fr; } }
 
       .sh-section { border-radius: 10px; }
-      .sh-section-label {
-        display: flex; align-items: center; gap: 8px;
-        font-size: 0.85rem; font-weight: 500; color: var(--primary-text-color);
-        padding: 9px 12px; border-radius: 9px;
-        background: rgba(127,127,127,0.07);
-      }
+      .sh-section-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500;
+        color: var(--primary-text-color); padding: 9px 12px; border-radius: 9px; background: rgba(127,127,127,0.07); }
       .sh-icon { font-size: 0.95rem; line-height: 1; }
+      .sh-sum-val { margin-left: auto; font-size: 0.78rem; font-weight: 400; color: var(--secondary-text-color); }
       details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; user-select: none; }
       details.sh-section > summary.sh-section-label::-webkit-details-marker { display: none; }
-      details.sh-section > summary.sh-section-label::after { content: "\\25B8"; font-size: 0.7rem; margin-left: auto; color: var(--secondary-text-color); transition: transform .15s ease; }
+      details.sh-section > summary.sh-section-label::after { content: "\\25B8"; font-size: 0.7rem; margin-left: 10px;
+        color: var(--secondary-text-color); transition: transform .15s ease; }
       details.sh-section[open] > summary.sh-section-label::after { transform: rotate(90deg); }
       details.sh-section > summary.sh-section-label:hover { background: rgba(127,127,127,0.12); }
       details.sh-section > div { margin-top: 12px; padding: 0 2px; }
 
-      .sh-collapsible-grid { display: grid; grid-template-columns: 1fr; gap: 16px; align-items: start; }
-      @container (min-width: 480px) {
-        .sh-collapsible-grid { grid-template-columns: 1fr 1fr; }
-      }
-
-      .sh-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-      .sh-chip { border: 1px solid var(--divider-color); border-radius: 999px; padding: 6px 14px; font-size: 0.85rem; cursor: pointer; color: var(--primary-text-color); background: transparent; user-select: none; }
-      .sh-chip.active { background: #8e6ecb; border-color: #8e6ecb; color: #fff; }
+      .sh-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+      .sh-chip { font: inherit; font-size: 0.85rem; border: 1px solid var(--divider-color); border-radius: 999px; padding: 6px 14px;
+        cursor: pointer; color: var(--primary-text-color); background: transparent; user-select: none; }
+      .sh-chip.active { background: var(--primary-color); border-color: var(--primary-color); color: var(--text-primary-color, #fff); }
       .sh-temps, .sh-cooling { display: flex; flex-direction: column; gap: 10px; }
       .sh-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-      .sh-row-label { font-size: 0.9rem; color: var(--primary-text-color); flex: 1; }
+      .sh-row-label { font-size: 0.88rem; color: var(--primary-text-color); flex: 1; }
       .sh-stepper { display: flex; align-items: center; gap: 8px; }
-      .sh-stepper button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--divider-color); background: var(--card-background-color); color: var(--primary-text-color); font-size: 1rem; cursor: pointer; line-height: 1; }
-      .sh-stepper .sh-val { min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
-      .sh-time-input { border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color); color: var(--primary-text-color); padding: 4px 6px; font-size: 0.85rem; width: 90px; }
+      .sh-stepper button { width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--divider-color);
+        background: var(--card-background-color); color: var(--primary-text-color); font-size: 1rem; cursor: pointer; line-height: 1; }
+      .sh-stepper .sh-val { min-width: 52px; text-align: center; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
+      .sh-time-input { border: 1px solid var(--divider-color); border-radius: 6px; background: var(--card-background-color);
+        color: var(--primary-text-color); padding: 4px 6px; font-size: 0.85rem; width: 90px; }
       .sh-toggles { display: flex; flex-direction: column; gap: 10px; }
       .sh-switch { position: relative; width: 40px; height: 22px; border-radius: 999px; background: var(--divider-color); cursor: pointer; flex-shrink: 0; }
       .sh-switch.on { background: #4caf7d; }
       .sh-switch .knob { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: left .15s ease; }
       .sh-switch.on .knob { left: 20px; }
-      .sh-boost { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
-      .sh-boost-btn { border: none; border-radius: 8px; background: #e0577a; color: #fff; padding: 8px 16px; font-size: 0.9rem; cursor: pointer; }
+      .sh-boost { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+      .sh-boost-btn { font: inherit; font-size: 0.88rem; border: none; border-radius: 8px; background: ${rgbStr(COLOR_HOT)}; color: #fff; padding: 8px 16px; cursor: pointer; }
       .sh-boost-btn:disabled { opacity: .5; cursor: default; }
       .sh-boost-status { font-size: 0.8rem; color: var(--secondary-text-color); }
-      .sh-version { font-size: 0.68rem; color: var(--secondary-text-color); opacity: 0.55; text-align: right; margin-top: -6px; }
+      .sh-version { font-size: 0.66rem; color: var(--secondary-text-color); opacity: 0.5; text-align: right; margin-top: -4px; }
 
       .sh-times-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 14px; }
       .sh-times-table:last-child { margin-bottom: 0; }
       .sh-times-table th { text-align: left; font-weight: 500; color: var(--secondary-text-color); font-size: 0.78rem; padding-bottom: 6px; }
       .sh-times-table td { padding: 4px 6px 4px 0; color: var(--primary-text-color); }
-      .sh-times-table td:first-child { padding-left: 0; }
       .sh-times-table--predkurenie { max-width: 220px; }
     `;
   }
@@ -369,32 +437,181 @@ class SmartHeatingCard extends HTMLElement {
     const zoneName = this._config.name || climate.attributes.friendly_name || zoneId;
     const attrs = climate.attributes;
     const zAttrs = stavSensor.attributes;
+    const current = attrs.current_temperature;
 
     this.querySelector(".sh-title").textContent = zoneName;
     this.querySelector(".sh-subtitle").textContent =
       zAttrs.zdroj_kurenia ? `${this._t("source")}: ${zAttrs.zdroj_kurenia}` : "";
-    this.querySelector(".sh-current-temp").textContent =
-      attrs.current_temperature != null ? `${attrs.current_temperature}°` : "--°";
+
+    const tempEl = this.querySelector(".sh-current-temp");
+    tempEl.textContent = current != null ? `${current}°` : "--°";
+    tempEl.style.color = tempColor(current != null ? Number(current) : null);
+
     this.querySelector(".sh-target-temp").textContent =
       attrs.temperature != null ? `${this._t("target")} ${attrs.temperature}°` : "";
+    this._renderStatus(attrs, zAttrs);
     this.querySelector(".sh-reason").textContent = stavSensor.state || "";
 
     this._renderMeta(zAttrs);
     this._renderBadges(zAttrs);
-    this._renderModeChips(attrs.rezim || "Auto");
 
     const hasAc = !!hass.states[eid(zoneId, "select", "sezona")];
     this.querySelector(".sh-season-section").style.display = hasAc ? "" : "none";
     this.querySelector(".sh-cooling-section").style.display = hasAc ? "" : "none";
+    this._renderSummaries(attrs, zAttrs, hasAc);
+
+    // Obsah nastaveni sa kresli len ked su otvorene - setri vykon (hlavne na mobile).
+    if (this._settingsOpen) this._renderSettings();
+
+    this._renderChart(current != null ? Number(current) : null, attrs.temperature);
+    this._maybeFetchHistory();
+  }
+
+  _renderStatus(attrs, zAttrs) {
+    const action = attrs.hvac_action;
+    const isCoolSeason = (zAttrs.season || zAttrs.sezona) === "Chladenie";
+    let cls = "idle";
+    let key = isCoolSeason ? "status_idle_cool" : "status_idle_heat";
+    if ((attrs.rezim || "") === "Vypnute" || action === "off") { cls = "off"; key = "status_off"; }
+    if (action === "heating") { cls = "heating"; key = "status_heating"; }
+    if (action === "cooling") { cls = "cooling"; key = "status_cooling"; }
+    const el = this.querySelector(".sh-status");
+    el.className = `sh-status ${cls}`;
+    el.querySelector(".sh-status-text").textContent = this._t(key);
+  }
+
+  _renderSummaries(attrs, zAttrs, hasAc) {
+    const set = (cls, text) => {
+      const el = this.querySelector(`${cls} .sh-sum-val`);
+      if (el) el.textContent = text;
+    };
+    set(".sh-section--mode:not(.sh-season-section)", this._modeLabel(attrs.rezim || "Auto"));
+    if (hasAc) set(".sh-season-section", this._seasonLabel(zAttrs.sezona || zAttrs.season || "Auto"));
+    const durState = this._hass.states[eid(this._zoneId, "number", "boost_hodiny")];
+    set(".sh-section--boost", zAttrs.boost_active
+      ? this._t("boost_running")
+      : (durState ? `${parseFloat(durState.state).toFixed(1)} h` : ""));
+  }
+
+  _renderSettings() {
+    const hass = this._hass;
+    const climate = hass.states[eid(this._zoneId, "climate")];
+    const stavSensor = hass.states[eid(this._zoneId, "sensor", "stav")];
+    if (!climate || !stavSensor) return;
+    const attrs = climate.attributes;
+    const zAttrs = stavSensor.attributes;
+    const hasAc = !!hass.states[eid(this._zoneId, "select", "sezona")];
+
+    this._renderModeChips(attrs.rezim || "Auto");
     if (hasAc) {
       this._renderSeasonChips(zAttrs.sezona || "Auto");
       this._renderCooling();
     }
-
     this._renderTemps();
     this._renderTimes();
     this._renderToggles();
     this._renderBoost(zAttrs);
+  }
+
+  // ------------------------------------------------------------------ graf
+
+  _maybeFetchHistory() {
+    const hass = this._hass;
+    if (!hass || typeof hass.callWS !== "function" || this._historyLoading) return;
+    if (Date.now() - this._historyFetchedAt < HISTORY_REFRESH_MS) return;
+    const entityId = eid(this._zoneId, "climate");
+    this._historyLoading = true;
+    const start = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+    hass
+      .callWS({
+        type: "history/history_during_period",
+        start_time: start,
+        entity_ids: [entityId],
+        minimal_response: false,
+        no_attributes: false,
+        significant_changes_only: false,
+      })
+      .then((res) => {
+        const rows = (res && res[entityId]) || [];
+        const pts = [];
+        let last = null;
+        for (const r of rows) {
+          const a = r.a || r.attributes;
+          const v = a && a.current_temperature != null ? Number(a.current_temperature) : last;
+          const t = r.lu != null ? r.lu * 1000 : Date.parse(r.last_updated || r.last_changed);
+          if (v != null && !isNaN(v) && !isNaN(t)) { pts.push({ t, v }); last = v; }
+        }
+        this._history = pts;
+        this._historyFetchedAt = Date.now();
+        const c = this._hass.states[entityId];
+        this._renderChart(c ? Number(c.attributes.current_temperature) : null, c ? c.attributes.temperature : null);
+      })
+      .catch(() => { this._historyFetchedAt = Date.now(); })
+      .finally(() => { this._historyLoading = false; });
+  }
+
+  _renderChart(current, target) {
+    const wrap = this.querySelector(".sh-chart");
+    if (!wrap) return;
+    const now = Date.now();
+    let pts = this._history.filter((p) => p.t >= now - 24 * 3600 * 1000);
+    if (current != null && !isNaN(current)) pts = pts.concat([{ t: now, v: current }]);
+    if (pts.length < 2) { wrap.hidden = true; return; }
+
+    // max ~150 bodov - na mobile netreba viac
+    if (pts.length > 150) {
+      const step = Math.ceil(pts.length / 150);
+      pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+    }
+
+    const vals = pts.map((p) => p.v);
+    let lo = Math.min(...vals);
+    let hi = Math.max(...vals);
+    const tgt = target != null ? Number(target) : null;
+    if (tgt != null && tgt >= lo - 2 && tgt <= hi + 2) { lo = Math.min(lo, tgt); hi = Math.max(hi, tgt); }
+    if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
+    const pad = (hi - lo) * 0.12;
+    lo -= pad; hi += pad;
+
+    const W = 300, H = 64;
+    const t0 = now - 24 * 3600 * 1000;
+    const x = (t) => ((Math.max(t, t0) - t0) / (now - t0)) * W;
+    const y = (v) => H - ((v - lo) / (hi - lo)) * H;
+
+    const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
+    const area = `${line} L${x(pts[pts.length - 1].t).toFixed(1)},${H} L${x(pts[0].t).toFixed(1)},${H} Z`;
+    const gid = `sh-g-${this._uid}`;
+    const aid = `sh-a-${this._uid}`;
+    const yHot = y(TEMP_HOT).toFixed(1), yCold = y(TEMP_COLD).toFixed(1);
+    const stops = (op) => {
+      let out = "";
+      for (let tv = TEMP_HOT; tv >= TEMP_COLD - 1e-9; tv -= 0.5) {
+        const off = (TEMP_HOT - tv) / (TEMP_HOT - TEMP_COLD);
+        out += `<stop offset="${off.toFixed(3)}" stop-color="${tempColor(tv)}" stop-opacity="${op}"/>`;
+      }
+      return out;
+    };
+    const targetLine = tgt != null && tgt > lo && tgt < hi
+      ? `<line x1="0" x2="${W}" y1="${y(tgt).toFixed(1)}" y2="${y(tgt).toFixed(1)}" stroke="var(--secondary-text-color)" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`
+      : "";
+
+    const lastV = pts[pts.length - 1].v;
+    this.querySelector(".sh-chart-plot").innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${this._t("chart_span")}">
+        <defs>
+          <linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="${yHot}" x2="0" y2="${yCold}">${stops(1)}</linearGradient>
+          <linearGradient id="${aid}" gradientUnits="userSpaceOnUse" x1="0" y1="${yHot}" x2="0" y2="${yCold}">${stops(0.18)}</linearGradient>
+        </defs>
+        <path d="${area}" fill="url(#${aid})" stroke="none"/>
+        ${targetLine}
+        <path d="${line}" fill="none" stroke="url(#${gid})" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+      </svg>
+      <span class="sh-chart-now" style="top:${((y(lastV) / H) * 100).toFixed(1)}%; background:${tempColor(lastV)}"></span>`;
+
+    const fmt = (v) => `${v.toFixed(1)}°`;
+    this.querySelector(".sh-chart-span").textContent = this._t("chart_span");
+    this.querySelector(".sh-chart-range").textContent = `${fmt(Math.min(...vals))} – ${fmt(Math.max(...vals))}`;
+    wrap.hidden = false;
   }
 
   _renderMeta(zAttrs) {
