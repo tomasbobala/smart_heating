@@ -2,6 +2,23 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.16.2
+- New per-zone `binary_sensor.smart_heating_<id>_v_chode` (device_class
+  running): on while the zone is actually heating or cooling. Its history has
+  no attributes, so the overview card's "heating today" is now a tiny query
+  instead of the climate history with all attributes (that query could time
+  out and leave "–"). Older installs fall back to the climate history.
+- Overview: a failed history request is retried after 2 minutes instead of 10.
+- Overview tiles:
+  - **Tariff** follows the configured tariff entity: green "Active" while it
+    allows heating, amber "Blocks heating" otherwise.
+  - **Solar surplus** follows the configured surplus entity (green when there
+    is a surplus, "In use" when a zone heats from it).
+  - **Guests** and custom `input_boolean` / `switch` / `light` / `fan` tiles
+    toggle on tap instead of opening the more-info dialog. Override per tile
+    with `tap_action: more-info | toggle | none`.
+- `sensor..._stav` exposes `tariff_entity` and `pv_surplus_entity`.
+
 ## 0.16.1
 - Overview card works without any configuration: the outside temperature
   sensor and the presence entities are taken from the integration (new

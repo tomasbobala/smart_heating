@@ -396,6 +396,7 @@ settings.
 | `switch..._reaguj_na_krb` | enable/disable reacting to the fireplace |
 | `switch..._vyuzi_fve_prebytok` | enable/disable using solar surplus (heating) |
 | `button..._boost` | trigger Boost immediately |
+| `binary_sensor.smart_heating_<id>_v_chode` | on while the zone is actually heating or cooling (`action` attribute: heating / cooling / idle / off) - cheap history for the overview card, usable in `history_stats` |
 | `sensor..._stav` | the diagnostic reason for the current decision + attributes (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`, plus `outdoor_entity`, `presence_entities`, `manual_presence_entities` for the overview card) |
 
 ---
@@ -452,8 +453,10 @@ the outside sensor and presence entities come from the integration:
   `pv`
   (solar surplus in use), `tariff` (tariff blocks heating), `krb` (fireplace
   stops zones), `emergency`, `boost`; plus any of your own entities. Emergency
-  protection and Boost appear automatically while active. Clicking an entity
-  tile opens its more-info dialog
+  protection and Boost appear automatically while active. Tapping a Guests
+  tile or an `input_boolean` / `switch` / `light` / `fan` tile toggles it,
+  other tiles open the more-info dialog (per tile: `tap_action: more-info |
+  toggle | none`)
 - **Summary** - rooms on target / above / below, and how long the house heated
   today (time when at least one zone was heating)
 
@@ -474,6 +477,7 @@ tiles:                                       # optional, default = heating, pres
     on_text: Burning
     off_text: Out
     color: hot                               # on (green) | hot | cold | warn
+    tap_action: toggle                       # default for input_boolean/switch/light/fan
   - tariff
   - pv
   - heating

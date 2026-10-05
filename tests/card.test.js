@@ -701,6 +701,76 @@ test("chart label shows the real span while statistics cover less than a day", a
   assert.strictEqual(card.querySelector(".sh-lg-span").textContent, "9 h");
 });
 
+function withIntegrationAttrs(hass, attrs) {
+  for (const id of Object.keys(hass.states)) {
+    if (id.endsWith("_stav")) Object.assign(hass.states[id].attributes, attrs);
+  }
+  return hass;
+}
+
+test("overview: guests tile toggles the input_boolean instead of opening more-info", () => {
+  const hass = withIntegrationAttrs(overviewHass(), { manual_presence_entities: ["input_boolean.navsteva"] });
+  const calls = [];
+  hass.callService = (domain, service, data) => { calls.push({ domain, service, data }); return Promise.resolve(); };
+  const card = renderOverview({ tiles: ["guests"] }, hass);
+  let moreInfo = 0;
+  card.addEventListener("hass-more-info", () => { moreInfo += 1; });
+  card.querySelector(".sho-tile").click();
+  assert.strictEqual(moreInfo, 0);
+  assert.strictEqual(calls.length, 1);
+  assert.strictEqual(calls[0].domain, "input_boolean");
+  assert.strictEqual(calls[0].service, "toggle");
+  assert.strictEqual(calls[0].data.entity_id, "input_boolean.navsteva");
+});
+
+test("overview: custom tile tap_action more-info opens the dialog", () => {
+  const card = renderOverview({ tiles: [{ entity: "input_boolean.navsteva", tap_action: "more-info" }] });
+  let opened = null;
+  card.addEventListener("hass-more-info", (e) => { opened = e.detail.entityId; });
+  card.querySelector(".sho-tile").click();
+  assert.strictEqual(opened, "input_boolean.navsteva");
+});
+
+test("overview: tariff tile lights up when the tariff entity allows heating", () => {
+  const hass = withIntegrationAttrs(overviewHass(), { tariff_entity: "input_boolean.tarifa", tariff_blocked: false });
+  hass.states["input_boolean.tarifa"] = { state: "on", attributes: {} };
+  let card = renderOverview({ tiles: ["tariff"] }, hass);
+  let tile = card.querySelector(".sho-tile");
+  assert.match(tile.className, /\bon\b/);
+  assert.strictEqual(tile.querySelector(".s").textContent, "Aktívna");
+  hass.states["input_boolean.tarifa"] = { state: "off", attributes: {} };
+  card = renderOverview({ tiles: ["tariff"] }, hass);
+  tile = card.querySelector(".sho-tile");
+  assert.match(tile.className, /warn/);
+  assert.strictEqual(tile.querySelector(".s").textContent, "Blokuje kúrenie");
+});
+
+test("overview: heating time uses the light binary_sensor history when available", async () => {
+  const hass = overviewHass();
+  const ids = Object.keys(hass.states).filter((id) => id.startsWith("climate.")).map((id) => id.replace("climate.", "binary_sensor.") + "_v_chode");
+  for (const id of ids) hass.states[id] = { state: "off", attributes: {} };
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const t0 = midnight.getTime() / 1000;
+  const now = Date.now() / 1000;
+  let msg = null;
+  hass.callWS = async (m) => {
+    msg = m;
+    const out = {};
+    for (const id of m.entity_ids) out[id] = [{ s: "off", lu: t0 }];
+    if (now - t0 > 2 * 3600) {
+      out[m.entity_ids[0]].push({ s: "on", lu: now - 2 * 3600 }, { s: "off", lu: now - 3600 });
+    }
+    return out;
+  };
+  const card = renderOverview({}, hass);
+  await new Promise((r) => setTimeout(r, 30));
+  assert.ok(msg.entity_ids.every((id) => id.startsWith("binary_sensor.")));
+  assert.strictEqual(msg.no_attributes, true);
+  const last = Array.from(card.querySelectorAll(".sho-sum .r")).pop();
+  assert.strictEqual(last.querySelector("b").textContent, now - t0 > 2 * 3600 ? "1 h" : "0 min");
+});
+
 test("overview: rejects non-list tiles", () => {
   const { OverviewClass } = loadCard();
   const card = new OverviewClass();

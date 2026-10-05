@@ -13,6 +13,8 @@ from .const import (
     CONF_MANUAL_PRESENCE_ENTITIES,
     CONF_OUTDOOR_SENSOR,
     CONF_PRESENCE_ENTITIES,
+    CONF_PV_SURPLUS_ENTITY,
+    CONF_TARIFF_ENTITY,
     DOMAIN,
     OPT_ZONES,
 )
@@ -66,6 +68,8 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "zdroj_kurenia": z.get("heat_source"),
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
+            "tariff_entity": self.coordinator.entry.options.get(CONF_TARIFF_ENTITY),
+            "pv_surplus_entity": self.coordinator.entry.options.get(CONF_PV_SURPLUS_ENTITY),
             "presence_entities": list(zone_conf.get(CONF_PRESENCE_ENTITIES, [])),
             "manual_presence_entities": list(zone_conf.get(CONF_MANUAL_PRESENCE_ENTITIES, [])),
         }

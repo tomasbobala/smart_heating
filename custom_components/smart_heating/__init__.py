@@ -16,7 +16,7 @@ from .coordinator import SmartHeatingCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS = ["climate", "select", "number", "sensor", "time", "switch", "button"]
+PLATFORMS = ["climate", "select", "number", "sensor", "binary_sensor", "time", "switch", "button"]
 
 # Integracia sa nastavuje len cez UI (config entry), YAML konfiguraciu nema.
 # Hassfest to vyzaduje pri kazdej integracii, ktora ma async_setup.

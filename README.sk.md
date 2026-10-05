@@ -390,6 +390,7 @@ nastavení (Options Flow).
 | `switch..._reaguj_na_krb` | zapnutie/vypnutie reakcie na krb |
 | `switch..._vyuzi_fve_prebytok` | zapnutie/vypnutie využitia FVE prebytku (kúrenie) |
 | `button..._boost` | okamžité spustenie Boostu |
+| `binary_sensor.smart_heating_<id>_v_chode` | zapnutý, keď zóna reálne kúri alebo chladí (atribút `action`: heating / cooling / idle / off) — lacná história pre prehľadovú kartu, použiteľný aj v `history_stats` |
 | `sensor..._stav` | diagnostický dôvod aktuálneho rozhodnutia + atribúty (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`, a pre prehľadovú kartu `outdoor_entity`, `presence_entities`, `manual_presence_entities`) |
 
 ---
@@ -445,8 +446,9 @@ vonkajší senzor a entity prítomnosti si vezme z integrácie:
   (kto je doma, z entít prítomnosti zón), `guests` (návšteva), `pv`
   (využíva sa FVE prebytok), `tariff` (tarifa blokuje kúrenie), `krb` (krb
   vypína zóny), `emergency`, `boost`; plus ľubovoľné vlastné entity. Núdzová
-  ochrana a Boost sa objavia samé, keď sú aktívne. Klik na dlaždicu entity
-  otvorí jej detail
+  ochrana a Boost sa objavia samé, keď sú aktívne. Klik na Návštevu alebo na
+  dlaždicu `input_boolean` / `switch` / `light` / `fan` ju prepne, ostatné
+  otvoria detail entity (pre dlaždicu: `tap_action: more-info | toggle | none`)
 - **Súhrn** — koľko izieb je v cieli / nad cieľom / pod cieľom a ako dlho dnes
   kúrilo (čas, keď kúrila aspoň jedna zóna)
 
@@ -467,6 +469,7 @@ tiles:                                       # voliteľné, predvolene heating, 
     on_text: Horí
     off_text: Nehorí
     color: hot                               # on (zelená) | hot | cold | warn
+    tap_action: toggle                       # predvolené pre input_boolean/switch/light/fan
   - tariff
   - pv
   - heating

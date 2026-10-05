@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.16.1";
+const CARD_VERSION = "0.16.2";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -127,6 +127,7 @@ const I18N = {
   ov_tariff: { en: "Tariff", sk: "Tarifa" },
   ov_tariff_blocked: { en: "Blocks heating", sk: "Blokuje kúrenie" },
   ov_tariff_ok: { en: "Allowed", sk: "Povolená" },
+  ov_tariff_active: { en: "Active", sk: "Aktívna" },
   ov_krb: { en: "Fireplace", sk: "Krb" },
   ov_krb_on: { en: "Stops {n} zones", sk: "Vypína zóny: {n}" },
   ov_krb_off: { en: "No effect", sk: "Bez vplyvu" },
@@ -1143,6 +1144,7 @@ function sparkSvg(points, target, t0, t1) {
 // ============================================================== PREHLAD DOMU
 
 const DEFAULT_TILES = ["heating", "presence", "guests", "pv", "tariff", "krb"];
+const TOGGLE_DOMAINS = ["input_boolean", "switch", "light", "fan"];
 const ON_STATES = new Set(["on", "home", "true", "open", "heat", "heating", "active", "detected"]);
 
 class SmartHeatingOverview extends HTMLElement {
@@ -1226,7 +1228,12 @@ class SmartHeatingOverview extends HTMLElement {
     for (const z of this._zones()) ids.push(eid(z, "climate"), eid(z, "sensor", "stav"));
     const outdoor = this._outdoorEntity();
     if (outdoor) ids.push(outdoor);
-    ids.push(...this._zoneEntities("presence_entities"), ...this._zoneEntities("manual_presence_entities"));
+    ids.push(
+      ...this._zoneEntities("presence_entities"),
+      ...this._zoneEntities("manual_presence_entities"),
+      ...this._zoneEntities("tariff_entity"),
+      ...this._zoneEntities("pv_surplus_entity"),
+    );
     for (const tile of this._config.tiles || []) {
       if (tile && typeof tile === "object") {
         if (tile.entity) ids.push(tile.entity);
@@ -1266,7 +1273,10 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-tiles { display: grid; grid-template-columns: repeat(var(--sho-cols, 3), minmax(0, 1fr)); gap: 10px; padding: 12px; }
       .sho-tile { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--sh-fill); min-width: 0; }
       .sho-tile.click { cursor: pointer; }
-      .sho-tile.click:hover { background: var(--sh-fill-hover); }
+      .sho-tile.click:hover { filter: brightness(1.15); }
+      .sho-tile.click:active { transform: scale(0.98); }
+      .sho-tile.click:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+      .sho-tile.busy { opacity: .6; }
       .sho-tile .i { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; flex-shrink: 0;
         background: var(--sh-fill); color: var(--sh-sub); --mdc-icon-size: 18px; }
       .sho-tile .tx { min-width: 0; }
@@ -1313,9 +1323,26 @@ class SmartHeatingOverview extends HTMLElement {
         const outdoor = this._outdoorEntity();
         if (outdoor) fireMoreInfo(this, outdoor);
       });
-      this.querySelector(".sho-tiles").addEventListener("click", (e) => {
+      const tiles = this.querySelector(".sho-tiles");
+      const activate = (tile) => {
+        const entityId = tile.dataset.entity;
+        if (tile.dataset.tap !== "toggle") {
+          fireMoreInfo(this, entityId);
+          return;
+        }
+        const domain = entityId.split(".")[0];
+        tile.classList.add("busy");
+        Promise.resolve(
+          this._hass.callService(TOGGLE_DOMAINS.includes(domain) ? domain : "homeassistant", "toggle", { entity_id: entityId })
+        ).catch(() => {}).finally(() => setTimeout(() => tile.classList.remove("busy"), 3000));
+      };
+      tiles.addEventListener("click", (e) => {
         const tile = e.target.closest(".sho-tile[data-entity]");
-        if (tile) fireMoreInfo(this, tile.dataset.entity);
+        if (tile) activate(tile);
+      });
+      tiles.addEventListener("keydown", (e) => {
+        const tile = e.target.closest(".sho-tile[data-entity]");
+        if (tile && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); activate(tile); }
       });
     }
     const zones = this._zoneData();
@@ -1379,12 +1406,33 @@ class SmartHeatingOverview extends HTMLElement {
         };
       }
       case "pv": {
-        const c = n((z) => z.s.pv_active);
-        return { icon: "mdi:solar-power-variant", label: this._t("ov_pv"), value: c ? this._t("ov_pv_on") : this._t("ov_no"), cls: c ? "on" : "" };
+        const used = n((z) => z.s.pv_active);
+        const ent = this._zoneEntities("pv_surplus_entity")[0];
+        const surplus = ent ? this._isOn(ent) : used > 0;
+        return {
+          icon: "mdi:solar-power-variant",
+          label: this._t("ov_pv"),
+          value: used ? this._t("ov_pv_on") : surplus ? this._t("ov_yes") : this._t("ov_no"),
+          cls: surplus || used ? "on" : "",
+          entity: ent,
+          tap: "more-info",
+        };
       }
       case "tariff": {
-        const c = n((z) => z.s.tariff_blocked);
-        return { icon: "mdi:flash", label: this._t("ov_tariff"), value: this._t(c ? "ov_tariff_blocked" : "ov_tariff_ok"), cls: c ? "warn" : "" };
+        const blocked = n((z) => z.s.tariff_blocked);
+        const ent = this._zoneEntities("tariff_entity")[0];
+        if (ent) {
+          const on = this._isOn(ent);
+          return {
+            icon: "mdi:flash",
+            label: this._t("ov_tariff"),
+            value: this._t(on ? "ov_tariff_active" : "ov_tariff_blocked"),
+            cls: on ? "on" : "warn",
+            entity: ent,
+            tap: "more-info",
+          };
+        }
+        return { icon: "mdi:flash", label: this._t("ov_tariff"), value: this._t(blocked ? "ov_tariff_blocked" : "ov_tariff_ok"), cls: blocked ? "warn" : "" };
       }
       case "presence": {
         const ents = this._zoneEntities("presence_entities");
@@ -1394,13 +1442,14 @@ class SmartHeatingOverview extends HTMLElement {
       case "guests": {
         const ents = this._zoneEntities("manual_presence_entities");
         if (!ents.length) return null;
-        const on = ents.some((e) => ON_STATES.has(String((this._hass.states[e] || {}).state).toLowerCase()));
+        const on = ents.some((e) => this._isOn(e));
         return {
           icon: "mdi:account-group",
           label: this._t("ov_guests"),
           value: this._t(on ? "ov_yes" : "ov_no"),
           cls: on ? "on" : "",
           entity: ents[0],
+          tap: TOGGLE_DOMAINS.includes(ents[0].split(".")[0]) ? "toggle" : "more-info",
         };
       }
       case "krb": {
@@ -1420,6 +1469,11 @@ class SmartHeatingOverview extends HTMLElement {
     }
   }
 
+  _isOn(entityId) {
+    const st = this._hass.states[entityId];
+    return !!st && ON_STATES.has(String(st.state).toLowerCase());
+  }
+
   _entityTile(tile) {
     const hass = this._hass;
     const color = tile.color || "on";
@@ -1433,6 +1487,7 @@ class SmartHeatingOverview extends HTMLElement {
         value: on.length ? names.join(", ") : tile.off_text || this._t("ov_nobody"),
         cls: on.length ? color : "",
         entity: tile.entities[0],
+        tap: tile.tap_action || "more-info",
       };
     }
     const st = hass.states[tile.entity];
@@ -1456,6 +1511,7 @@ class SmartHeatingOverview extends HTMLElement {
       value,
       cls: isOn ? color : "",
       entity: tile.entity,
+      tap: tile.tap_action || (TOGGLE_DOMAINS.includes(domain) ? "toggle" : "more-info"),
     };
   }
 
@@ -1471,7 +1527,7 @@ class SmartHeatingOverview extends HTMLElement {
     if (!keys.includes("boost") && zones.some((z) => z.s.boost_active)) tiles.push(this._builtinTile("boost", zones));
 
     const html = tiles.map((t) => `
-      <div class="sho-tile ${t.cls}${t.entity ? " click" : ""}"${t.entity ? ` data-entity="${esc(t.entity)}"` : ""}>
+      <div class="sho-tile ${t.cls}${t.entity && t.tap !== "none" ? " click" : ""}"${t.entity && t.tap !== "none" ? ` data-entity="${esc(t.entity)}" data-tap="${esc(t.tap || "more-info")}" role="button" tabindex="0"` : ""}>
         <div class="i"><ha-icon icon="${esc(t.icon)}"></ha-icon></div>
         <div class="tx"><div class="k">${esc(t.label)}</div><div class="s">${esc(t.value)}</div></div>
       </div>`).join("");
@@ -1547,24 +1603,33 @@ class SmartHeatingOverview extends HTMLElement {
             min: today.length ? Math.min(...today) : null,
             max: today.length ? Math.max(...today) : null,
           };
-        }).finally(() => { this._outdoorFetchedAt = Date.now(); })
+          this._outdoorOk = true;
+        }).catch(() => { this._outdoorOk = false; })
+          .finally(() => { this._outdoorFetchedAt = retryAt(this._outdoorOk); })
       );
     }
 
     if (zones.length && now - this._runtimeFetchedAt > OVERVIEW_REFRESH_MS) {
-      const ids = zones.map((z) => eid(z.id, "climate"));
+      // Od 0.16.2 ma kazda zona binary_sensor ..._v_chode - jeho historia je bez
+      // atributov a drobna. Starsie verzie: historia climate s atributmi.
+      const useBinary = zones.every((z) => hass.states[eid(z.id, "binary_sensor", "v_chode")]);
+      const ids = zones.map((z) => (useBinary ? eid(z.id, "binary_sensor", "v_chode") : eid(z.id, "climate")));
+      const onAction = {};
+      zones.forEach((z, i) => { onAction[ids[i]] = (z.s.season || z.c.sezona) === "Chladenie" ? "cooling" : "heating"; });
       jobs.push(
         hass.callWS({
           type: "history/history_during_period",
           start_time: midnight.toISOString(),
           end_time: new Date(now).toISOString(),
           entity_ids: ids,
-          minimal_response: false,
-          no_attributes: false,
+          minimal_response: useBinary,
+          no_attributes: useBinary,
           significant_changes_only: false,
         }).then((res) => {
-          this._runtime = runtimeUnion(res || {}, ids, midnight.getTime(), now);
-        }).finally(() => { this._runtimeFetchedAt = Date.now(); })
+          this._runtime = runtimeUnion(res || {}, ids, midnight.getTime(), now, useBinary ? onAction : null);
+          this._runtimeOk = true;
+        }).catch(() => { this._runtimeOk = false; })
+          .finally(() => { this._runtimeFetchedAt = retryAt(this._runtimeOk); })
       );
     }
 
@@ -1579,6 +1644,11 @@ class SmartHeatingOverview extends HTMLElement {
   }
 }
 
+/** Po chybe skusi znova o 2 minuty, inak az o OVERVIEW_REFRESH_MS. */
+function retryAt(ok) {
+  return ok ? Date.now() : Date.now() - OVERVIEW_REFRESH_MS + 2 * 60 * 1000;
+}
+
 function lastBefore(series, t) {
   let v = null;
   for (const [ts, val] of series) {
@@ -1589,7 +1659,7 @@ function lastBefore(series, t) {
 }
 
 /** Minuty dnes, ked aspon jedna zona kurila / chladila (zjednotenie, nie sucet). */
-function runtimeUnion(res, ids, t0, t1) {
+function runtimeUnion(res, ids, t0, t1, onAction) {
   const minutes = Math.max(1, Math.ceil((t1 - t0) / 60000));
   const heat = new Uint8Array(minutes);
   const cool = new Uint8Array(minutes);
@@ -1610,8 +1680,14 @@ function runtimeUnion(res, ids, t0, t1) {
     for (const r of rows) {
       const t = Math.max(t0, tsOf(r.lu ?? r.last_updated ?? r.lc ?? r.last_changed));
       if (isNaN(t)) continue;
-      const attrs = r.a || r.attributes;
-      const next = attrs && "hvac_action" in attrs ? attrs.hvac_action : action;
+      let next = action;
+      if (onAction) {
+        const s = r.s ?? r.state;
+        next = s === "on" ? onAction[id] : "idle";
+      } else {
+        const attrs = r.a || r.attributes;
+        if (attrs && "hvac_action" in attrs) next = attrs.hvac_action;
+      }
       if (next !== action) {
         flush(t);
         action = next;

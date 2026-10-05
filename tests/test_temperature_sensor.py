@@ -62,3 +62,36 @@ async def test_stav_sensor_exposes_entities_for_overview_card(hass):
     assert attrs["outdoor_entity"] == "sensor.vonku"
     assert attrs["presence_entities"] == ["person.a"]
     assert attrs["manual_presence_entities"] == ["input_boolean.navsteva"]
+
+
+async def test_running_binary_sensor_and_tariff_pv_attributes(hass):
+    """binary_sensor ..._v_chode + entity tarify a FVE v atributoch senzora stav."""
+    hass.states.async_set("climate.obyvacka", "heat", {"current_temperature": 18.0, "temperature": 21})
+    hass.states.async_set("input_boolean.tarifa", "on")
+    hass.states.async_set("input_boolean.fve", "off")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=2,
+        data={},
+        options={
+            "tariff_entity": "input_boolean.tarifa",
+            "pv_surplus_entity": "input_boolean.fve",
+            "zones": {
+                "z1": {"name": "Obyvacka", "zone_type": "floor", "climate_entity": "climate.obyvacka"}
+            },
+        },
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    attrs = hass.states.get("sensor.smart_heating_z1_stav").attributes
+    assert attrs["tariff_entity"] == "input_boolean.tarifa"
+    assert attrs["pv_surplus_entity"] == "input_boolean.fve"
+
+    running = hass.states.get("binary_sensor.smart_heating_z1_v_chode")
+    assert running is not None
+    assert running.state in ("on", "off")
+    assert running.attributes["device_class"] == "running"
+    action = hass.states.get("climate.smart_heating_z1").attributes.get("hvac_action")
+    assert (running.state == "on") == (action in ("heating", "cooling"))
