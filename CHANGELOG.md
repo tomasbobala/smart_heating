@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.14.0
+- **Card redesign.** Everything except the zone overview now lives behind a
+  single Settings button as collapsible sections (mode, season,
+  temperatures, cooling, schedule, switches, Boost). Collapsed mode, season
+  and Boost show their current value. Section content is only rendered while
+  Settings is open - lighter on phones.
+- New zone state next to the target temperature: Heating / Not heating /
+  Cooling / Off.
+- New 24 h room temperature chart; the line and the big current temperature
+  share one colour scale (blue <= 18 °C, amber ~21.5 °C, red >= 25 °C,
+  interpolated through hue so the middle never turns grey).
+- `climate.hvac_action` now reports what is **actually** running
+  (`actual_action` from the coordinator): the device's own `hvac_action`
+  wins when it reports one, otherwise it's derived from what the integration
+  switched on. Previously it said "heating" whenever heating was merely
+  allowed, e.g. also while the AC was waiting on hysteresis.
+
+## 0.13.3
+- CI fix: `tests/test_frontend_registration.py` still tested the 0.12.0
+  behaviour (card injected via `add_extra_js_url`). Since 0.13.x the card is
+  added as a regular Lovelace resource after HA start, with `add_extra_js_url`
+  only as a YAML-mode fallback. Tests now cover: resource created, no
+  duplicates, old `?v=` updated in place, YAML fallback.
+- Added `CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)`
+  (hassfest warning for integrations with `async_setup`).
+- CI: `actions/setup-python@v6` (Node 24; v5 triggered the Node 20
+  deprecation warning).
+- `package.json` and the version label on the card aligned with the
+  integration version.
+
 ## 0.12.0
 - **The Lovelace card no longer needs to be manually copied or registered.**
   It now lives inside `custom_components/smart_heating/www/` and

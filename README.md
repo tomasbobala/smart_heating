@@ -405,15 +405,19 @@ settings.
 `custom_components/smart_heating/www/smart-heating-card.js` - a plain JavaScript web component, no build
 step. One card = one zone. Includes:
 
-- Current/target temperature, floor and outdoor temperature, the decision
-  reason, colored badges
-- Mode switching (chips) and **season** switching (AC zones only)
-- Steppers for every temperature, including cooling- and AC-specific ones
-- Time fields (weekday / weekend / pre-heating)
-- Toggles (pre-heating, fireplace, solar)
-- Boost (duration + button)
-- Collapsible sections (temperatures, cooling, schedule, switches) - mode,
-  season and Boost stay expanded; a two-column layout kicks in on wider cards
+- Current temperature, colour-coded on a fixed scale (blue up to 18 °C,
+  amber around 21.5 °C, red from 25 °C), target temperature and the **real**
+  state of the zone: Heating / Not heating / Cooling / Off. The state comes
+  from what is actually running (the device's own `hvac_action` when it
+  reports one), not just from heating being allowed
+- A 24 h room temperature chart in the same colour scale, with the target as
+  a dashed line (needs the climate entity in the recorder)
+- Floor and outdoor temperature, the decision reason, coloured badges
+- Everything else behind a single **Settings** button, as collapsible
+  sections: mode, season (AC zones only), temperatures, cooling, schedule,
+  switches and Boost. Collapsed mode, season and Boost show their current
+  value in the header. Their content is only rendered while Settings is open,
+  which keeps the card light on phones
 - **Visual editor** when adding the card (zone dropdown instead of typing
   `zone_id` by hand, plus a language picker)
 

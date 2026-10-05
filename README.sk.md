@@ -401,13 +401,19 @@ nastavení (Options Flow).
 `custom_components/smart_heating/www/smart-heating-card.js` — čistý JavaScript web component, žiadny build
 krok. Jedna karta = jedna zóna. Obsahuje:
 
-- Aktuálnu/cieľovú teplotu, teplotu podlahy a vonkajšiu teplotu, dôvod
-  rozhodnutia, farebné odznaky
-- Prepínanie režimu (chipy) a **sezóny** (len pre zóny s AC)
-- Steppery na všetky teploty vrátane chladiacich a AC-špecifických
-- Časové polia (pracovný deň / víkend / predkúrenie)
-- Prepínače (predkúrenie, krb, FVE)
-- Boost (trvanie + tlačidlo)
+- Aktuálnu teplotu zafarbenú podľa pevnej škály (do 18 °C modrá, okolo
+  21,5 °C jantárová, od 25 °C červená), cieľovú teplotu a **skutočný** stav
+  zóny: Kúri / Nekúri / Chladí / Vypnuté. Stav vychádza z toho, čo reálne
+  beží (ak zariadenie hlási vlastný `hvac_action`, použije sa ten), nie len
+  z toho, že je kúrenie povolené
+- Graf teploty v miestnosti za posledných 24 h v tej istej farebnej škále,
+  s cieľom ako prerušovanou čiarou (vyžaduje climate entitu v recorderi)
+- Teplotu podlahy a vonkajšiu teplotu, dôvod rozhodnutia, farebné odznaky
+- Všetko ostatné pod jedným tlačidlom **Nastavenia** ako zbaliteľné sekcie:
+  režim, sezóna (len zóny s AC), teploty, chladenie, časy, prepínače a Boost.
+  Zbalený režim, sezóna a Boost ukazujú aktuálnu hodnotu v hlavičke. Ich
+  obsah sa vykresľuje len pri otvorených Nastaveniach, takže karta je na
+  mobile ľahká
 - **Vizuálny editor** pri pridávaní karty (dropdown zón namiesto ručného `zone_id`)
 
 Karta prekresľuje obsah **len** keď sa zmení niečo z jej vlastnej zóny (nie
