@@ -410,8 +410,11 @@ step. One card = one zone. Includes:
   state of the zone: Heating / Not heating / Cooling / Off. The state comes
   from what is actually running (the device's own `hvac_action` when it
   reports one), not just from heating being allowed
-- A 24 h room temperature chart in the same colour scale, with the target as
-  a dashed line (needs the climate entity in the recorder)
+- Average temperature over 24 h plus the lowest and highest over 48 h, in the
+  same colour scale. They come from Home Assistant's own 5-minute statistics
+  of the zone temperature sensor (`sensor.smart_heating_<id>_teplota`), so
+  loading them is cheap. Keep that sensor in the recorder; values appear
+  within a few minutes after installing and fill up to 48 h over time
 - Floor and outdoor temperature, the decision reason, coloured badges
 - Everything else behind a single **Settings** button, as collapsible
   sections: mode, season (AC zones only), temperatures, cooling, schedule,

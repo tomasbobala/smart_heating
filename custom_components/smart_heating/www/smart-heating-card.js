@@ -9,7 +9,7 @@
  *   language: auto        # optional: auto | en | sk  (auto = follow HA language)
  */
 
-const CARD_VERSION = "0.14.0";
+const CARD_VERSION = "0.15.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const SEASONS = ["Kurenie", "Chladenie", "Auto"];
@@ -85,7 +85,9 @@ const I18N = {
   status_idle_heat: { en: "Not heating", sk: "Nekúri" },
   status_idle_cool: { en: "Not cooling", sk: "Nechladí" },
   status_off: { en: "Off", sk: "Vypnuté" },
-  chart_span: { en: "last 24 h", sk: "posledných 24 h" },
+  stat_avg24: { en: "Avg 24 h", sk: "Priemer 24 h" },
+  stat_min48: { en: "Min 48 h", sk: "Min 48 h" },
+  stat_max48: { en: "Max 48 h", sk: "Max 48 h" },
   boost_start: { en: "Start Boost", sk: "Spustiť Boost" },
 
   select_zone_first: { en: "Select a zone in the card settings.", sk: "Vyber zónu v nastaveniach karty." },
@@ -105,7 +107,7 @@ const TEMP_HOT = 25;
 const HUE_STOPS = [[18, 217], [21.5, 40], [25, -3]];   // [teplota, odtien]
 const COLOR_COLD = [76, 141, 246];   // #4C8DF6 - modra (chladi, studena)
 const COLOR_HOT = [229, 72, 77];     // #E5484D - cervena (kuri, teplo)
-const HISTORY_REFRESH_MS = 5 * 60 * 1000;
+const STATS_REFRESH_MS = 15 * 60 * 1000;
 
 function tempColor(t) {
   if (t == null || isNaN(t)) return "var(--primary-text-color)";
@@ -150,9 +152,9 @@ class SmartHeatingCard extends HTMLElement {
     super();
     this._config = {};
     this._settingsOpen = false;
-    this._history = [];
-    this._historyFetchedAt = 0;
-    this._historyLoading = false;
+    this._stats = null;
+    this._statsFetchedAt = 0;
+    this._statsLoading = false;
     this._uid = Math.random().toString(36).slice(2, 9);
   }
 
@@ -262,22 +264,19 @@ class SmartHeatingCard extends HTMLElement {
         <style>${this._styles()}</style>
         <div class="sh-root">
           <div class="sh-header">
-            <div class="sh-title-wrap">
-              <div class="sh-title"></div>
-              <div class="sh-subtitle"></div>
-            </div>
-            <div class="sh-temp-wrap">
-              <div class="sh-current-temp"></div>
-              <div class="sh-target-line">
-                <span class="sh-status"><span class="sh-status-dot"></span><span class="sh-status-text"></span></span>
-                <span class="sh-target-temp"></span>
-              </div>
+            <div class="sh-title"></div>
+            <div class="sh-subtitle"></div>
+            <div class="sh-current-temp"></div>
+            <div class="sh-target-line">
+              <span class="sh-status"><span class="sh-status-dot"></span><span class="sh-status-text"></span></span>
+              <span class="sh-target"><span class="sh-target-label">${this._t("target")}</span><span class="sh-target-temp"></span></span>
             </div>
           </div>
 
-          <div class="sh-chart" hidden>
-            <div class="sh-chart-plot"></div>
-            <div class="sh-chart-legend"><span class="sh-chart-span"></span><span class="sh-chart-range"></span></div>
+          <div class="sh-stats" hidden>
+            <div class="sh-stat"><span class="sh-stat-val" data-k="avg24">–</span><span class="sh-stat-label">${this._t("stat_avg24")}</span></div>
+            <div class="sh-stat"><span class="sh-stat-val" data-k="min48">–</span><span class="sh-stat-label">${this._t("stat_min48")}</span></div>
+            <div class="sh-stat"><span class="sh-stat-val" data-k="max48">–</span><span class="sh-stat-label">${this._t("stat_max48")}</span></div>
           </div>
 
           <div class="sh-meta"></div>
@@ -314,21 +313,21 @@ class SmartHeatingCard extends HTMLElement {
 
   _styles() {
     return `
-      .sh-root { padding: 18px 18px 12px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
+      smart-heating-card { display: block; height: 100%; }
+      smart-heating-card > ha-card { height: 100%; display: flex; flex-direction: column; }
+      .sh-root { flex: 1; padding: 20px 18px 12px; display: flex; flex-direction: column; gap: 14px; container-type: inline-size; }
 
-      .sh-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
-      .sh-title { font-size: 1.15rem; font-weight: 500; color: var(--primary-text-color); line-height: 1.3; }
-      .sh-subtitle { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 3px; }
-      .sh-temp-wrap { text-align: right; flex-shrink: 0; }
-      .sh-current-temp { font-size: 2.5rem; font-weight: 400; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; transition: color .6s ease; }
-      .sh-target-line { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 8px; }
-      .sh-target-temp { font-size: 0.8rem; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+      .sh-header { display: flex; flex-direction: column; align-items: center; text-align: center; }
+      .sh-title { font-size: 1.45rem; font-weight: 500; color: var(--primary-text-color); line-height: 1.25; }
+      .sh-subtitle { font-size: 0.8rem; color: var(--secondary-text-color); margin-top: 2px; min-height: 1.2em; }
+      .sh-current-temp { font-size: 3rem; font-weight: 400; line-height: 1; letter-spacing: -0.02em;
+        font-variant-numeric: tabular-nums; margin-top: 14px; transition: color .6s ease; }
+      .sh-target-line { display: flex; align-items: baseline; justify-content: center; gap: 18px; margin-top: 10px; }
 
-      .sh-status { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; font-weight: 500;
-        padding: 3px 9px 3px 7px; border-radius: 999px; background: rgba(127,127,127,0.12); color: var(--secondary-text-color); }
-      .sh-status-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-      .sh-status.heating { color: ${rgbStr(COLOR_HOT)}; background: rgba(229,72,77,0.14); }
-      .sh-status.cooling { color: ${rgbStr(COLOR_COLD)}; background: rgba(76,141,246,0.14); }
+      .sh-status { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 500; color: var(--secondary-text-color); }
+      .sh-status-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; align-self: center; }
+      .sh-status.heating { color: ${rgbStr(COLOR_HOT)}; }
+      .sh-status.cooling { color: ${rgbStr(COLOR_COLD)}; }
       .sh-status.off { opacity: 0.7; }
       .sh-status.heating .sh-status-dot, .sh-status.cooling .sh-status-dot { animation: sh-pulse 1.8s ease-in-out infinite; }
       @keyframes sh-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
@@ -336,27 +335,33 @@ class SmartHeatingCard extends HTMLElement {
         .sh-status-dot { animation: none !important; }
         .sh-current-temp { transition: none; }
       }
+      .sh-target { display: inline-flex; align-items: baseline; gap: 6px; }
+      .sh-target-label { font-size: 0.85rem; color: var(--secondary-text-color); }
+      .sh-target-temp { font-size: 1.25rem; font-weight: 600; color: var(--primary-text-color); font-variant-numeric: tabular-nums; }
 
-      .sh-chart { display: flex; flex-direction: column; gap: 4px; }
-      .sh-chart[hidden] { display: none; }
-      .sh-chart-plot { position: relative; height: 64px; }
-      .sh-chart-plot svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-      .sh-chart-now { position: absolute; right: -4px; width: 8px; height: 8px; border-radius: 50%;
-        transform: translateY(-50%); box-shadow: 0 0 0 3px var(--card-background-color, #1c1c1c); }
-      .sh-chart-legend { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--secondary-text-color); font-variant-numeric: tabular-nums; }
+      .sh-stats { display: grid; grid-template-columns: repeat(3, 1fr); padding: 12px 0;
+        border-top: 1px solid var(--divider-color); border-bottom: 1px solid var(--divider-color); }
+      .sh-stats[hidden] { display: none; }
+      .sh-stat { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+      .sh-stat + .sh-stat { border-left: 1px solid var(--divider-color); }
+      .sh-stat-val { font-size: 1.1rem; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--primary-text-color); }
+      .sh-stat-label { font-size: 0.72rem; color: var(--secondary-text-color); }
 
-      .sh-meta { display: flex; gap: 16px; font-size: 0.8rem; color: var(--secondary-text-color); }
+      .sh-meta { display: flex; justify-content: center; gap: 18px; font-size: 0.8rem; color: var(--secondary-text-color); }
       .sh-meta span b { color: var(--primary-text-color); font-weight: 500; }
-      .sh-reason { font-size: 0.8rem; color: var(--secondary-text-color); line-height: 1.4; }
-      .sh-badges { display: flex; flex-wrap: wrap; gap: 6px; }
-      .sh-badges:empty { display: none; }
-      .sh-badge { font-size: 0.72rem; padding: 3px 9px; border-radius: 999px; font-weight: 500; }
-      .sh-badge.warn { background: rgba(255,152,0,0.16); color: #d98a1a; }
-      .sh-badge.err { background: rgba(229,72,77,0.16); color: ${rgbStr(COLOR_HOT)}; }
-      .sh-badge.ok { background: rgba(76,175,80,0.16); color: #4caf7d; }
-      .sh-badge.info { background: rgba(76,141,246,0.16); color: ${rgbStr(COLOR_COLD)}; }
+      /* rezervovane miesto - aby mali vsetky karty rovnaku vysku aj ked sa text dovodu
+         alebo odznaky lisia */
+      .sh-reason { font-size: 0.8rem; color: var(--secondary-text-color); line-height: 1.4; text-align: center;
+        min-height: 2.8em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .sh-badges { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; min-height: 1.2em; }
+      .sh-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.76rem; font-weight: 500; }
+      .sh-badge::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+      .sh-badge.warn { color: #d98a1a; }
+      .sh-badge.err { color: ${rgbStr(COLOR_HOT)}; }
+      .sh-badge.ok { color: #4caf7d; }
+      .sh-badge.info { color: ${rgbStr(COLOR_COLD)}; }
 
-      .sh-settings-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
+      .sh-settings-toggle { margin-top: auto; display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px;
         border: 1px solid var(--divider-color); border-radius: 10px; background: transparent; cursor: pointer;
         color: var(--primary-text-color); font: inherit; font-size: 0.85rem; text-align: left; }
       .sh-settings-toggle:hover { background: rgba(127,127,127,0.07); }
@@ -448,7 +453,7 @@ class SmartHeatingCard extends HTMLElement {
     tempEl.style.color = tempColor(current != null ? Number(current) : null);
 
     this.querySelector(".sh-target-temp").textContent =
-      attrs.temperature != null ? `${this._t("target")} ${attrs.temperature}°` : "";
+      attrs.temperature != null ? `${attrs.temperature}°` : "–";
     this._renderStatus(attrs, zAttrs);
     this.querySelector(".sh-reason").textContent = stavSensor.state || "";
 
@@ -463,8 +468,8 @@ class SmartHeatingCard extends HTMLElement {
     // Obsah nastaveni sa kresli len ked su otvorene - setri vykon (hlavne na mobile).
     if (this._settingsOpen) this._renderSettings();
 
-    this._renderChart(current != null ? Number(current) : null, attrs.temperature);
-    this._maybeFetchHistory();
+    this._renderStats();
+    this._maybeFetchStats();
   }
 
   _renderStatus(attrs, zAttrs) {
@@ -513,105 +518,62 @@ class SmartHeatingCard extends HTMLElement {
     this._renderBoost(zAttrs);
   }
 
-  // ------------------------------------------------------------------ graf
+  // ------------------------------------------------------------------ statistiky
 
-  _maybeFetchHistory() {
-    const hass = this._hass;
-    if (!hass || typeof hass.callWS !== "function" || this._historyLoading) return;
-    if (Date.now() - this._historyFetchedAt < HISTORY_REFRESH_MS) return;
-    const entityId = eid(this._zoneId, "climate");
-    this._historyLoading = true;
-    const start = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-    hass
-      .callWS({
-        type: "history/history_during_period",
-        start_time: start,
-        entity_ids: [entityId],
-        minimal_response: false,
-        no_attributes: false,
-        significant_changes_only: false,
-      })
-      .then((res) => {
-        const rows = (res && res[entityId]) || [];
-        const pts = [];
-        let last = null;
-        for (const r of rows) {
-          const a = r.a || r.attributes;
-          const v = a && a.current_temperature != null ? Number(a.current_temperature) : last;
-          const t = r.lu != null ? r.lu * 1000 : Date.parse(r.last_updated || r.last_changed);
-          if (v != null && !isNaN(v) && !isNaN(t)) { pts.push({ t, v }); last = v; }
-        }
-        this._history = pts;
-        this._historyFetchedAt = Date.now();
-        const c = this._hass.states[entityId];
-        this._renderChart(c ? Number(c.attributes.current_temperature) : null, c ? c.attributes.temperature : null);
-      })
-      .catch(() => { this._historyFetchedAt = Date.now(); })
-      .finally(() => { this._historyLoading = false; });
+  _statId() {
+    return eid(this._zoneId, "sensor", "teplota");
   }
 
-  _renderChart(current, target) {
-    const wrap = this.querySelector(".sh-chart");
-    if (!wrap) return;
+  _maybeFetchStats() {
+    const hass = this._hass;
+    if (!hass || typeof hass.callWS !== "function" || this._statsLoading) return;
+    if (!hass.states[this._statId()]) return;           // stara verzia integracie bez senzora
+    if (Date.now() - this._statsFetchedAt < STATS_REFRESH_MS) return;
+    this._statsLoading = true;
     const now = Date.now();
-    let pts = this._history.filter((p) => p.t >= now - 24 * 3600 * 1000);
-    if (current != null && !isNaN(current)) pts = pts.concat([{ t: now, v: current }]);
-    if (pts.length < 2) { wrap.hidden = true; return; }
+    // Kratkodobe statistiky (5 min) pocita HA sam - par stoviek malych riadkov,
+    // nie cela historia entity s atributmi.
+    hass
+      .callWS({
+        type: "recorder/statistics_during_period",
+        start_time: new Date(now - 48 * 3600 * 1000).toISOString(),
+        end_time: new Date(now).toISOString(),
+        statistic_ids: [this._statId()],
+        period: "5minute",
+        types: ["mean", "min", "max"],
+      })
+      .then((res) => {
+        const rows = (res && res[this._statId()]) || [];
+        const t24 = now - 24 * 3600 * 1000;
+        const num = (v) => (v == null || isNaN(Number(v)) ? null : Number(v));
+        const ts = (v) => (typeof v === "number" ? v : Date.parse(v));
+        const means24 = rows.filter((r) => ts(r.start) >= t24).map((r) => num(r.mean)).filter((v) => v != null);
+        const mins = rows.map((r) => num(r.min)).filter((v) => v != null);
+        const maxs = rows.map((r) => num(r.max)).filter((v) => v != null);
+        this._stats = {
+          avg24: means24.length ? means24.reduce((a, b) => a + b, 0) / means24.length : null,
+          min48: mins.length ? Math.min(...mins) : null,
+          max48: maxs.length ? Math.max(...maxs) : null,
+        };
+        this._statsFetchedAt = Date.now();
+        this._renderStats();
+      })
+      .catch(() => { this._statsFetchedAt = Date.now(); })
+      .finally(() => { this._statsLoading = false; });
+  }
 
-    // max ~150 bodov - na mobile netreba viac
-    if (pts.length > 150) {
-      const step = Math.ceil(pts.length / 150);
-      pts = pts.filter((_, i) => i % step === 0 || i === pts.length - 1);
+  _renderStats() {
+    const wrap = this.querySelector(".sh-stats");
+    if (!wrap) return;
+    // riadok je vidiet, len ked integracia ma teplotny senzor (od 0.15.0)
+    wrap.hidden = !(this._hass && this._hass.states[this._statId()]);
+    const st = this._stats || {};
+    for (const k of ["avg24", "min48", "max48"]) {
+      const el = wrap.querySelector(`[data-k="${k}"]`);
+      const v = st[k];
+      el.textContent = v != null ? `${v.toFixed(1)}°` : "–";
+      el.style.color = v != null ? tempColor(v) : "";
     }
-
-    const vals = pts.map((p) => p.v);
-    let lo = Math.min(...vals);
-    let hi = Math.max(...vals);
-    const tgt = target != null ? Number(target) : null;
-    if (tgt != null && tgt >= lo - 2 && tgt <= hi + 2) { lo = Math.min(lo, tgt); hi = Math.max(hi, tgt); }
-    if (hi - lo < 1) { const m = (hi + lo) / 2; lo = m - 0.5; hi = m + 0.5; }
-    const pad = (hi - lo) * 0.12;
-    lo -= pad; hi += pad;
-
-    const W = 300, H = 64;
-    const t0 = now - 24 * 3600 * 1000;
-    const x = (t) => ((Math.max(t, t0) - t0) / (now - t0)) * W;
-    const y = (v) => H - ((v - lo) / (hi - lo)) * H;
-
-    const line = pts.map((p, i) => `${i ? "L" : "M"}${x(p.t).toFixed(1)},${y(p.v).toFixed(1)}`).join(" ");
-    const area = `${line} L${x(pts[pts.length - 1].t).toFixed(1)},${H} L${x(pts[0].t).toFixed(1)},${H} Z`;
-    const gid = `sh-g-${this._uid}`;
-    const aid = `sh-a-${this._uid}`;
-    const yHot = y(TEMP_HOT).toFixed(1), yCold = y(TEMP_COLD).toFixed(1);
-    const stops = (op) => {
-      let out = "";
-      for (let tv = TEMP_HOT; tv >= TEMP_COLD - 1e-9; tv -= 0.5) {
-        const off = (TEMP_HOT - tv) / (TEMP_HOT - TEMP_COLD);
-        out += `<stop offset="${off.toFixed(3)}" stop-color="${tempColor(tv)}" stop-opacity="${op}"/>`;
-      }
-      return out;
-    };
-    const targetLine = tgt != null && tgt > lo && tgt < hi
-      ? `<line x1="0" x2="${W}" y1="${y(tgt).toFixed(1)}" y2="${y(tgt).toFixed(1)}" stroke="var(--secondary-text-color)" stroke-opacity="0.55" stroke-width="1" stroke-dasharray="3 4" vector-effect="non-scaling-stroke"/>`
-      : "";
-
-    const lastV = pts[pts.length - 1].v;
-    this.querySelector(".sh-chart-plot").innerHTML = `
-      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${this._t("chart_span")}">
-        <defs>
-          <linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="0" y1="${yHot}" x2="0" y2="${yCold}">${stops(1)}</linearGradient>
-          <linearGradient id="${aid}" gradientUnits="userSpaceOnUse" x1="0" y1="${yHot}" x2="0" y2="${yCold}">${stops(0.18)}</linearGradient>
-        </defs>
-        <path d="${area}" fill="url(#${aid})" stroke="none"/>
-        ${targetLine}
-        <path d="${line}" fill="none" stroke="url(#${gid})" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
-      </svg>
-      <span class="sh-chart-now" style="top:${((y(lastV) / H) * 100).toFixed(1)}%; background:${tempColor(lastV)}"></span>`;
-
-    const fmt = (v) => `${v.toFixed(1)}°`;
-    this.querySelector(".sh-chart-span").textContent = this._t("chart_span");
-    this.querySelector(".sh-chart-range").textContent = `${fmt(Math.min(...vals))} – ${fmt(Math.max(...vals))}`;
-    wrap.hidden = false;
   }
 
   _renderMeta(zAttrs) {

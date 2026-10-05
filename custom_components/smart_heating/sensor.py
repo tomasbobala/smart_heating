@@ -1,8 +1,9 @@
 """Sensor platform - diagnosticky stav aktualneho rozhodnutia per zona."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -16,10 +17,11 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
     coordinator: SmartHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(
-        ZoneReasonSensor(coordinator, zone_id, zone["name"])
-        for zone_id, zone in entry.options.get(OPT_ZONES, {}).items()
-    )
+    entities = []
+    for zone_id, zone in entry.options.get(OPT_ZONES, {}).items():
+        entities.append(ZoneReasonSensor(coordinator, zone_id, zone["name"]))
+        entities.append(ZoneTemperatureSensor(coordinator, zone_id, zone["name"]))
+    async_add_entities(entities)
 
 
 class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
@@ -56,3 +58,32 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "heating_allowed": z["heating_allowed"],
             "zdroj_kurenia": z.get("heat_source"),
         }
+
+
+class ZoneTemperatureSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
+    """Teplota v zone (ta ista, z ktorej integracia rozhoduje - externy teplomer
+    alebo vstavany senzor termostatu).
+
+    Vdaka state_class=measurement z nej Home Assistant sam pocita kratkodobe
+    statistiky (priemer/min/max kazdych 5 minut). Karta z nich cita priemer za
+    24 h a min/max za 48 h - lacny dotaz namiesto stahovania celej historie."""
+
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_suggested_display_precision = 1
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
+        super().__init__(coordinator)
+        self._zone_id = zone_id
+        self._attr_unique_id = f"{DOMAIN}_{zone_id}_teplota"
+        self.entity_id = f"sensor.smart_heating_{zone_id}_teplota"
+        self._attr_name = f"{zone_name} teplota"
+
+    @property
+    def native_value(self):
+        value = self.coordinator.data["zones"][self._zone_id].get("current_temperature")
+        try:
+            return round(float(value), 2) if value is not None else None
+        except (TypeError, ValueError):
+            return None

@@ -388,33 +388,92 @@ test("status: mode Vypnute = Vypnuté", () => {
   assert.strictEqual(statusText({ climateAttrs: { rezim: "Vypnute", hvac_action: "off" } }).text, "Vypnuté");
 });
 
-test("chart is hidden without history and drawn when history arrives", async () => {
+function statsHass(rowsFn) {
+  const hass = buildHass();
+  hass.states[`sensor.smart_heating_${ZONE_ID}_teplota`] = { state: "22", attributes: {} };
+  const calls = [];
+  hass.callWS = async (msg) => { calls.push(msg); return rowsFn(msg); };
+  return { hass, calls };
+}
+
+test("stats: avg over 24 h, min/max over 48 h from 5-minute statistics", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const now = Date.now();
+  const sid = `sensor.smart_heating_${ZONE_ID}_teplota`;
+  const { hass, calls } = statsHass(() => ({
+    [sid]: [
+      // starsie ako 24 h - nepocita sa do priemeru, ale do min/max ano
+      { start: now - 40 * 3600e3, mean: 30, min: 15.0, max: 30.0 },
+      { start: now - 2 * 3600e3, mean: 21, min: 20.5, max: 21.5 },
+      { start: new Date(now - 1 * 3600e3).toISOString(), mean: 23, min: 22.5, max: 23.5 },
+    ],
+  }));
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 20));
+
+  assert.strictEqual(calls[0].type, "recorder/statistics_during_period");
+  assert.deepStrictEqual(Array.from(calls[0].statistic_ids), [sid]);
+  assert.strictEqual(calls[0].period, "5minute");
+  const val = (k) => card.querySelector(`.sh-stat-val[data-k="${k}"]`).textContent;
+  assert.strictEqual(val("avg24"), "22.0°");
+  assert.strictEqual(val("min48"), "15.0°");
+  assert.strictEqual(val("max48"), "30.0°");
+  assert.strictEqual(card.querySelector(".sh-stats").hidden, false);
+});
+
+test("stats row hidden when the integration has no temperature sensor (old version)", () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID });
   const hass = buildHass();
-  const now = Date.now() / 1000;
-  hass.callWS = async () => ({
-    [`climate.smart_heating_${ZONE_ID}`]: Array.from({ length: 20 }, (_, i) => ({
-      s: "heat", a: { current_temperature: 19 + i * 0.2 }, lu: now - 86400 + i * 4000,
-    })),
-  });
+  let called = false;
+  hass.callWS = async () => { called = true; return {}; };
   card.hass = hass;
   document.body.appendChild(card);
-  await new Promise((r) => setTimeout(r, 20));
-  const chart = card.querySelector(".sh-chart");
-  assert.strictEqual(chart.hidden, false);
-  assert.ok(chart.querySelector("svg path"));
-  assert.match(card.querySelector(".sh-chart-range").textContent, /°/);
+  assert.strictEqual(card.querySelector(".sh-stats").hidden, true);
+  assert.strictEqual(called, false);
 });
 
-test("chart stays hidden when history API is unavailable", () => {
+test("stats show a dash while there is no data yet", async () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID });
-  card.hass = buildHass(); // bez callWS
+  const { hass } = statsHass(() => ({}));
+  card.hass = hass;
   document.body.appendChild(card);
-  assert.strictEqual(card.querySelector(".sh-chart").hidden, true);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(card.querySelector('.sh-stat-val[data-k="avg24"]').textContent, "–");
+});
+
+test("stats are not re-fetched on every state update", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const { hass, calls } = statsHass(() => ({}));
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 20));
+  for (let i = 0; i < 5; i++) {
+    const h = { ...hass, states: { ...hass.states } };
+    const cid = `climate.smart_heating_${ZONE_ID}`;
+    h.states[cid] = { ...h.states[cid], attributes: { ...h.states[cid].attributes, current_temperature: 20 + i } };
+    card.hass = h;
+  }
+  await new Promise((r) => setTimeout(r, 20));
+  assert.strictEqual(calls.length, 1);
+});
+
+test("target temperature is shown as its own prominent element", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-target-temp").textContent, "23°");
+  assert.strictEqual(card.querySelector(".sh-target-label").textContent, "cieľ");
 });
 
 test("temperature colour scale: cold blue, warm red, middle never grey", () => {

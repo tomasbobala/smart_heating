@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.15.0
+- Removed the 24 h chart from the card: every card downloaded the full 24 h
+  history of its climate entity including all attributes, which was very slow
+  with several cards on one dashboard.
+- Instead the card shows average over 24 h and min/max over 48 h, read from
+  Home Assistant's 5-minute statistics (`recorder/statistics_during_period`,
+  a few hundred tiny rows, refreshed every 15 min).
+- New per-zone sensor `sensor.smart_heating_<id>_teplota` (device_class
+  temperature, state_class measurement) - the temperature the integration
+  decides on; HA computes the statistics from it automatically.
+- Card layout: larger centred zone name, more prominent target temperature,
+  status and badges without pill backgrounds, equal card heights (cards
+  stretch to the grid row and reserve space for the reason and badges).
+
 ## 0.14.0
 - **Card redesign.** Everything except the zone overview now lives behind a
   single Settings button as collapsible sections (mode, season,

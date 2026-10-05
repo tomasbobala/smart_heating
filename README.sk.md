@@ -406,8 +406,11 @@ krok. Jedna karta = jedna zóna. Obsahuje:
   zóny: Kúri / Nekúri / Chladí / Vypnuté. Stav vychádza z toho, čo reálne
   beží (ak zariadenie hlási vlastný `hvac_action`, použije sa ten), nie len
   z toho, že je kúrenie povolené
-- Graf teploty v miestnosti za posledných 24 h v tej istej farebnej škále,
-  s cieľom ako prerušovanou čiarou (vyžaduje climate entitu v recorderi)
+- Priemernú teplotu za 24 h a najnižšiu a najvyššiu za 48 h v tej istej
+  farebnej škále. Berú sa z 5-minútových štatistík, ktoré si Home Assistant
+  sám počíta pre teplotný senzor zóny (`sensor.smart_heating_<id>_teplota`),
+  takže ich načítanie je lacné. Tento senzor nevylučuj z recordera; hodnoty
+  sa objavia pár minút po inštalácii a postupne sa doplnia na 48 h
 - Teplotu podlahy a vonkajšiu teplotu, dôvod rozhodnutia, farebné odznaky
 - Všetko ostatné pod jedným tlačidlom **Nastavenia** ako zbaliteľné sekcie:
   režim, sezóna (len zóny s AC), teploty, chladenie, časy, prepínače a Boost.
