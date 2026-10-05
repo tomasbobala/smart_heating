@@ -7,6 +7,7 @@ from pathlib import Path
 from homeassistant.components.frontend import add_extra_js_url
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.start import async_at_started
 from homeassistant.loader import async_get_integration
 
@@ -16,6 +17,10 @@ from .coordinator import SmartHeatingCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = ["climate", "select", "number", "sensor", "time", "switch", "button"]
+
+# Integracia sa nastavuje len cez UI (config entry), YAML konfiguraciu nema.
+# Hassfest to vyzaduje pri kazdej integracii, ktora ma async_setup.
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 CARD_URL_PATH = "/smart_heating_static/smart-heating-card.js"
 CARD_REGISTERED = "card_registered"

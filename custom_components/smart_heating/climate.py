@@ -92,6 +92,15 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
 
     @property
     def hvac_action(self):
+        # Skutocny stav (co realne bezi), nie len "kurenie je povolene".
+        actual = self._zdata.get("actual_action")
+        if actual is not None:
+            return {
+                "heating": HVACAction.HEATING,
+                "cooling": HVACAction.COOLING,
+                "idle": HVACAction.IDLE,
+            }.get(actual, HVACAction.OFF)
+        # pred prvym aplikovanim (tesne po starte) - odhad z povoleneho rezimu
         device_mode = self._zdata.get("device_mode", "off")
         if device_mode == "cool":
             return HVACAction.COOLING

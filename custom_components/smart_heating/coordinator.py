@@ -706,9 +706,32 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     # ---------------------------------------------------------------- aplikacia na zariadenia
 
+    def _device_action(self, entity_id) -> str | None:
+        """hvac_action, ktory hlasi samotne zariadenie (Daikin, termostat podlahy).
+        None, ak ho zariadenie nehlasi - vtedy sa stav odvodi z nasho prikazu."""
+        if not entity_id:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None:
+            return None
+        action = state.attributes.get("hvac_action")
+        return str(action) if action else None
+
+    def _resolve_action(self, entities: list, we_run_it: bool, running_value: str) -> str:
+        """Skutocny stav zony: running_value ('heating'/'cooling') alebo 'idle'.
+
+        Ak niektore zo zariadeni hlasi vlastny hvac_action, ma prednost (to je
+        realita - napr. termostat uz dosiahol teplotu a rele je vypnute).
+        Inak sa vychadza z toho, co integracia prave zariadeniu prikazala."""
+        reported = [a for a in (self._device_action(e) for e in entities) if a]
+        if reported:
+            return running_value if running_value in reported else "idle"
+        return running_value if we_run_it else "idle"
+
     async def _async_apply(self) -> None:
         for zone_id, zdata in self.data["zones"].items():
             if zdata["release_control"]:
+                zdata["actual_action"] = "off"
                 continue  # Vypnute uz dlhsie - nechavame zariadenie uplne na pokoji
 
             if zdata["zone_type"] == ZONE_TYPE_FLOOR_AC and zdata.get("ac_entity"):
@@ -718,12 +741,18 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     zdata["heat_source"] = (
                         self._t("source_ac") if zdata["device_mode"] == "cool" else self._t("source_none")
                     )
+                    zdata["actual_action"] = self._resolve_action(
+                        [zdata["ac_entity"]], zdata["device_mode"] == "cool", "cooling"
+                    )
                 else:
                     await self._apply_floor_ac(zone_id, zdata)
             else:
                 await self._apply_device(zdata["climate_entity"], zdata["device_mode"], zdata["target_temperature"])
                 zdata["heat_source"] = (
                     self._t("source_floor") if zdata["heating_allowed"] else self._t("source_none")
+                )
+                zdata["actual_action"] = self._resolve_action(
+                    [zdata["climate_entity"]], zdata["heating_allowed"], "heating"
                 )
 
         # _apply_* vyssie MENI data (napr. heat_source), ktore uz boli raz oznamene
@@ -769,6 +798,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             await self._apply_device(floor_entity, "off", None)
             rt["ac_running"] = False
             zdata["heat_source"] = self._t("source_none")
+            zdata["actual_action"] = "idle"
             return
 
         zone_conf = self.zones.get(zone_id, {})
@@ -818,6 +848,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             self._t("source_ac_floor") if floor_engaged
             else (self._t("source_ac") if rt.get("ac_running", True) else self._t("source_none_waiting"))
         )
+        running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_engaged)) if on]
+        zdata["actual_action"] = self._resolve_action(running, bool(running), "heating") if running else "idle"
 
     def async_unsub(self) -> None:
         if self._unsub_tracking:
