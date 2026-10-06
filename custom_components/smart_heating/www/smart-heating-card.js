@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.16.2";
+const CARD_VERSION = "0.16.3";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -1406,14 +1406,17 @@ class SmartHeatingOverview extends HTMLElement {
         };
       }
       case "pv": {
-        const used = n((z) => z.s.pv_active);
+        // pv_active = zona ma kvoli prebytku zvyseny ciel; "vyuziva sa" je to,
+        // az ked takato zona naozaj kuri (v cieli uz prebytok nespotrebuva).
+        const boosted = n((z) => z.s.pv_active);
+        const used = n((z) => z.s.pv_active && z.c.hvac_action === "heating");
         const ent = this._zoneEntities("pv_surplus_entity")[0];
-        const surplus = ent ? this._isOn(ent) : used > 0;
+        const surplus = ent ? this._isOn(ent) : boosted > 0;
         return {
           icon: "mdi:solar-power-variant",
           label: this._t("ov_pv"),
           value: used ? this._t("ov_pv_on") : surplus ? this._t("ov_yes") : this._t("ov_no"),
-          cls: surplus || used ? "on" : "",
+          cls: used ? "on" : "",
           entity: ent,
           tap: "more-info",
         };

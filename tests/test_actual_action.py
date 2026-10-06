@@ -83,3 +83,24 @@ async def test_cooling(hass, coordinator):
     hass.states.async_set("climate.ac", "cool", {})
     zdata = _floor_zone(zone_type="floor_ac", ac_entity="climate.ac", season="Chladenie", device_mode="cool")
     assert await _apply(coordinator, zdata) == "cooling"
+
+
+async def test_floor_without_hvac_action_at_target_is_idle(hass, coordinator):
+    """Termostat nehlasi hvac_action, ale uz ma svoju teplotu (25.0 pri setpointe 25)
+    -> nekuri. Predtym sa hlasilo 'kuri' vzdy, ked bolo kurenie povolene
+    (Kupelna na screenshote: 'Kuri' pri 25,0 / ciel 25)."""
+    hass.states.async_set("climate.floor", "heat", {"current_temperature": 25.0, "temperature": 25})
+    assert await _apply(coordinator, _floor_zone(target_temperature=25)) == "idle"
+
+
+async def test_floor_without_hvac_action_below_target_is_heating(hass, coordinator):
+    hass.states.async_set("climate.floor", "heat", {"current_temperature": 23.5, "temperature": 25})
+    assert await _apply(coordinator, _floor_zone(target_temperature=25)) == "heating"
+
+
+async def test_reported_hvac_action_still_wins_over_temperature(hass, coordinator):
+    """Ak zariadenie hlasi vlastny stav, ma prednost aj pred odhadom z teploty."""
+    hass.states.async_set(
+        "climate.floor", "heat", {"current_temperature": 25.0, "temperature": 25, "hvac_action": "heating"}
+    )
+    assert await _apply(coordinator, _floor_zone(target_temperature=25)) == "heating"

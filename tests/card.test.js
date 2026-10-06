@@ -600,6 +600,24 @@ function renderOverview(config, hass) {
   return card;
 }
 
+function pvTile(card) {
+  return Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent));
+}
+
+test("overview: solar tile says 'in use' only when a solar-boosted zone actually heats", () => {
+  const card = renderOverview({});            // Alpha: pv_active + heating
+  assert.match(pvTile(card).textContent, /Využíva sa/);
+});
+
+test("overview: solar surplus active but no zone heating is not 'in use'", () => {
+  const hass = overviewHass();
+  hass.states["climate.smart_heating_aaa11111"].attributes.hvac_action = "idle"; // v cieli
+  const card = renderOverview({}, hass);
+  const text = pvTile(card).textContent;
+  assert.doesNotMatch(text, /Využíva sa/);
+  assert.match(text, /Áno/);
+});
+
 test("overview: outdoor temperature falls back to the integration attribute", () => {
   const card = renderOverview({});
   assert.strictEqual(card.querySelector(".sho-out .v").textContent, "7,5 °C");

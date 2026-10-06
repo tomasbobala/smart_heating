@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.16.3
+- Fixed: the overview's "Solar surplus" tile said "In use" whenever some zone
+  had its target raised because of the surplus (`pv_active`), even if that
+  zone was already at its target and not heating. It now says "In use" only
+  when such a zone is actually heating; available-but-unused surplus shows
+  "Yes" (and the tile is no longer highlighted).
+- Fixed: a zone was reported as heating whenever heating was allowed if its
+  thermostat doesn't report its own `hvac_action` - e.g. a floor thermostat
+  already at its setpoint showed "Heating". The state is now estimated from
+  the device's own current temperature vs. its setpoint (a reported
+  `hvac_action` still wins). This also corrects "Heating in N rooms" and the
+  `v_chode` binary sensor.
+
 ## 0.16.2
 - New per-zone `binary_sensor.smart_heating_<id>_v_chode` (device_class
   running): on while the zone is actually heating or cooling. Its history has

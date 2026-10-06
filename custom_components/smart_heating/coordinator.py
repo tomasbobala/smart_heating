@@ -726,7 +726,27 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         reported = [a for a in (self._device_action(e) for e in entities) if a]
         if reported:
             return running_value if running_value in reported else "idle"
-        return running_value if we_run_it else "idle"
+        if not we_run_it:
+            return "idle"
+        # Zariadenie stav nehlasi - odhad z jeho vlastnej teploty a setpointu.
+        # Termostat, ktory uz ma svoju teplotu, nekuri, aj ked je kurenie povolene.
+        demands = [d for d in (self._device_demand(e, running_value) for e in entities) if d is not None]
+        if demands:
+            return running_value if any(demands) else "idle"
+        return running_value
+
+    def _device_demand(self, entity_id, running_value: str) -> bool | None:
+        """True = zariadenie podla vlastnej teploty este pracuje, False = uz ma
+        svoju teplotu, None = nevieme (chyba teplota alebo setpoint)."""
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None:
+            return None
+        try:
+            cur = float(state.attributes.get("current_temperature"))
+            tgt = float(state.attributes.get("temperature"))
+        except (TypeError, ValueError):
+            return None
+        return cur > tgt if running_value == "cooling" else cur < tgt
 
     async def _async_apply(self) -> None:
         for zone_id, zdata in self.data["zones"].items():

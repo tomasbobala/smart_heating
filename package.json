@@ -1,6 +1,6 @@
 {
   "name": "smart-heating-card",
-  "version": "0.16.2",
+  "version": "0.16.3",
   "description": "Lovelace card for the Smart Heating Home Assistant integration",
   "private": true,
   "scripts": {
