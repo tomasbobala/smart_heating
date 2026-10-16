@@ -17,6 +17,7 @@ CONF_NOTIFY_HOLIDAY = "notify_holiday"
 CONF_NOTIFY_PREHEAT = "notify_preheat"
 CONF_NOTIFY_AC_BACKUP = "notify_ac_backup"
 CONF_NOTIFY_COLD_OUTDOOR = "notify_cold_outdoor"
+CONF_NOTIFY_DIAGNOSTICS = "notify_diagnostics"
 CONF_LANGUAGE = "language"
 LANGUAGE_OPTIONS = ["auto", "en", "sk"]
 OPT_NUMBER_RANGES = "number_ranges"
@@ -39,10 +40,15 @@ CONF_PRESENCE_ENTITIES = "presence_entities"
 CONF_MANUAL_PRESENCE_ENTITIES = "manual_presence_entities"
 CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
 CONF_USE_FIXED_AC_SETPOINT = "use_fixed_ac_setpoint"
+CONF_RADIATOR_ENTITY = "radiator_entity"
+CONF_USE_FLOOR_MIN = "use_floor_min"
 
 ZONE_TYPE_FLOOR = "floor"
 ZONE_TYPE_FLOOR_AC = "floor_ac"
-ZONE_TYPES = [ZONE_TYPE_FLOOR, ZONE_TYPE_FLOOR_AC]
+# Radiator (rele) drzi teplotu VZDUCHU, podlaha nezavisle drzi teplotu PODLAHY.
+# Nie kaskada ako floor_ac - dve samostatne regulacie v jednej zone (kupelna).
+ZONE_TYPE_RADIATOR_FLOOR = "radiator_floor"
+ZONE_TYPES = [ZONE_TYPE_FLOOR, ZONE_TYPE_FLOOR_AC, ZONE_TYPE_RADIATOR_FLOOR]
 
 # ---- Manualne rezimy zony ----
 MODE_AUTO = "Auto"
@@ -66,6 +72,8 @@ DEFAULT_MIN_TEMP = 16.0
 DEFAULT_MRAZ_TEMP = 10.0
 DEFAULT_FLOOR_MIN = 5.0
 DEFAULT_FLOOR_MAX = 28.0
+DEFAULT_FLOOR_HYSTERESIS = 1.5
+DEFAULT_RADIATOR_HYSTERESIS = 0.5
 DEFAULT_BOOST_HOURS = 2.0
 DEFAULT_AC_PRIORITY_DIFF = 1.0
 DEFAULT_AC_PRIORITY_MINUTES = 30.0
@@ -90,8 +98,9 @@ NUMBER_DEFS = {
     "teplota_noc": ("Teplota - noc", 12, 24, "mdi:weather-night", DEFAULT_NOC_TEMP),
     "teplota_min": ("Teplota - minimalna (baseline)", 10, 20, "mdi:thermometer-low", DEFAULT_MIN_TEMP),
     "teplota_mraz": ("Teplota - protimrazova", 5, 15, "mdi:snowflake", DEFAULT_MRAZ_TEMP),
-    "floor_min": ("Min. teplota podlahy", 5, 20, "mdi:thermometer-low", DEFAULT_FLOOR_MIN),
-    "floor_max": ("Max. teplota podlahy", 20, 32, "mdi:thermometer-high", DEFAULT_FLOOR_MAX),
+    "floor_min": ("Min. teplota podlahy", 5, 30, "mdi:thermometer-low", DEFAULT_FLOOR_MIN),
+    "floor_max": ("Max. teplota podlahy", 20, 35, "mdi:thermometer-high", DEFAULT_FLOOR_MAX),
+    "floor_hysterezia": ("Hystereza podlahy", 0.5, 5, "mdi:arrow-expand-vertical", DEFAULT_FLOOR_HYSTERESIS),
     "boost_hodiny": ("Boost - trvanie (h)", 0.5, 6, "mdi:rocket-launch", DEFAULT_BOOST_HOURS),
     "vonkajsia_hranica": (
         "Vonkajsia teplota - hranica pre vynutene kurenie (°C)",
@@ -136,7 +145,12 @@ COOLING_NUMBER_DEFS = {
 }
 
 # Vsetky number definicie spolu (pre editaciu rozsahov v Globalnych nastaveniach).
-ALL_NUMBER_DEFS = {**NUMBER_DEFS, **AC_NUMBER_DEFS, **COOLING_NUMBER_DEFS}
+# number entity navyse len pre zony typu radiator_floor
+RADIATOR_NUMBER_DEFS = {
+    "radiator_hysterezia": ("Hystereza radiatora", 0.1, 3, "mdi:radiator", DEFAULT_RADIATOR_HYSTERESIS),
+}
+
+ALL_NUMBER_DEFS = {**NUMBER_DEFS, **AC_NUMBER_DEFS, **COOLING_NUMBER_DEFS, **RADIATOR_NUMBER_DEFS}
 
 
 def resolve_number_range(options: dict, key: str, default_lo: float, default_hi: float) -> tuple[float, float]:
@@ -169,6 +183,9 @@ SWITCH_DEFS = {
     "predkurenie_povolene": ("Predkurenie povolene (len pracovne dni)", "mdi:home-clock", True),
     "reaguj_na_krb": ("Reaguj na krb", "mdi:fireplace", False),
     "vyuzi_fve_prebytok": ("Vyuzi FVE prebytok (kuri aj ked nikto nie je doma)", "mdi:solar-power", True),
+    # Podlaha nabehne pod floor_min aj ked je vzduch dost teply. Predvolene vypnute,
+    # pri zone radiator_floor zapnute (CONF_USE_FLOOR_MIN).
+    "udrzat_min_podlahy": ("Udrzat min. teplotu podlahy", "mdi:heat-wave", False),
 }
 AC_SWITCH_DEFS = {
     "pouzit_pevny_ac_setpoint": (

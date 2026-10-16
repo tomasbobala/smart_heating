@@ -66,6 +66,17 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "boost_active": z["boost_active"],
             "heating_allowed": z["heating_allowed"],
             "zdroj_kurenia": z.get("heat_source"),
+            "zone_type": z.get("zone_type"),
+            "floor_guard": z.get("floor_guard", False),
+            "floor_max": z.get("floor_max"),
+            "radiator_entity": z.get("radiator_entity"),
+            # diagnostika: zoznam aktualnych poruch (prazdny = v poriadku)
+            "problemy": z.get("problems", []),
+            # logovanie nabehov - median minut na 1 °C a pocet zaznamenanych nabehov
+            "nabeh_min_na_stupen": z.get("warmup_rate"),
+            "nabehy_pocet": z.get("warmup_count", 0),
+            # pre prehladovu kartu (nastavenia integracie cez options flow)
+            "config_entry_id": self.coordinator.entry.entry_id,
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
             "tariff_entity": self.coordinator.entry.options.get(CONF_TARIFF_ENTITY),

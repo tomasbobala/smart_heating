@@ -11,6 +11,7 @@ from homeassistant.helpers.event import (
     async_track_state_change_event,
     async_track_time_interval,
 )
+from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
@@ -31,6 +32,7 @@ from .const import (
     CONF_NOTIFY_BOOST,
     CONF_NOTIFY_COLD_OUTDOOR,
     CONF_NOTIFY_COOLING,
+    CONF_NOTIFY_DIAGNOSTICS,
     CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
     CONF_NOTIFY_FLOOR,
@@ -43,9 +45,11 @@ from .const import (
     CONF_HOLIDAY_ACTIVE,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
+    CONF_RADIATOR_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
     CONF_USE_FIXED_AC_SETPOINT,
+    CONF_USE_FLOOR_MIN,
     CONF_ZONE_NAME,
     CONF_ZONE_TYPE,
     DEFAULT_EMERGENCY_TEMP,
@@ -58,19 +62,35 @@ from .const import (
     MODE_NOC,
     MODE_VYPNUTE,
     NUMBER_DEFS,
+    RADIATOR_NUMBER_DEFS,
     OPT_ZONES,
     SEASON_AUTO,
     SEASON_CHLADENIE,
     SEASON_KURENIE,
+    AC_SWITCH_DEFS,
     SWITCH_DEFS,
     TIME_DEFS,
     ZONE_TYPE_FLOOR_AC,
+    ZONE_TYPE_RADIATOR_FLOOR,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
 RECOMPUTE_INTERVAL = timedelta(minutes=5)
 NOTIFY_STARTUP_GRACE = timedelta(minutes=3)
+
+# Diagnostika
+DIAG_UNAVAILABLE_AFTER = timedelta(minutes=15)   # entita nedostupna dlhsie -> porucha
+DIAG_SLOW_AFTER = timedelta(hours=3)             # kuri a stale je hlboko pod cielom
+DIAG_SLOW_GAP = 1.0                              # °C pod cielom, od ktorych sa to sleduje
+DIAG_AIR_RANGE = (-20.0, 50.0)                   # mimo = nezmyselna hodnota
+DIAG_FLOOR_RANGE = (-10.0, 45.0)
+
+# Logovanie nabehov (zaklad pre buduce adaptivne predkurenie)
+WARMUP_MIN_GAP = 0.5        # nabeh sa zacne logovat, ked chyba aspon tolko °C
+WARMUP_MIN_MINUTES = 5      # kratsie nabehy su sum
+WARMUP_KEEP = 30            # poslednych N nabehov na zonu
+WARMUP_STORE_VERSION = 1
 
 
 def mode_entity_id(zone_id: str) -> str:
@@ -114,6 +134,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
         self._startup_time = dt_util.now()
         self._lang = "en"
+        self._warmup_store = Store(hass, WARMUP_STORE_VERSION, f"{DOMAIN}.warmup.{entry.entry_id}")
+        self._warmup_data: dict[str, list] = {}
 
     @property
     def zones(self) -> dict:
@@ -129,6 +151,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         )
 
     async def async_setup(self) -> None:
+        try:
+            self._warmup_data = await self._warmup_store.async_load() or {}
+        except Exception:  # noqa: BLE001 - poskodeny subor nesmie zastavit kurenie
+            _LOGGER.warning("Nepodarilo sa nacitat historiu nabehov, zacina sa odznova")
+            self._warmup_data = {}
         self.data = self._compute()
         self._track_entities()
         self._unsub_interval = async_track_time_interval(
@@ -148,6 +175,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 ids.append(zone[CONF_AC_ENTITY])
             if zone.get(CONF_FLOOR_TEMP_ENTITY):
                 ids.append(zone[CONF_FLOOR_TEMP_ENTITY])
+            # externy teplomer a rele radiatora - bez sledovania by sa zmena prejavila
+            # az pri 5-minutovom ticku (zle pre hysterezu)
+            if zone.get(CONF_EXTERNAL_TEMP_ENTITY):
+                ids.append(zone[CONF_EXTERNAL_TEMP_ENTITY])
+            if zone.get(CONF_RADIATOR_ENTITY):
+                ids.append(zone[CONF_RADIATOR_ENTITY])
             ids.extend(zone.get(CONF_PRESENCE_ENTITIES, []))
             ids.extend(zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
             ids.append(mode_entity_id(zone_id))
@@ -160,6 +193,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 for key in AC_NUMBER_DEFS:
                     ids.append(number_entity_id(zone_id, key))
                 for key in COOLING_NUMBER_DEFS:
+                    ids.append(number_entity_id(zone_id, key))
+                for key in AC_SWITCH_DEFS:
+                    ids.append(switch_entity_id(zone_id, key))
+            if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR:
+                for key in RADIATOR_NUMBER_DEFS:
                     ids.append(number_entity_id(zone_id, key))
             for key in TIME_DEFS:
                 ids.append(time_entity_id(zone_id, key))
@@ -269,6 +307,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             for zone_id, zone in self.zones.items()
         }
 
+        for zone_id, zdata in zones_data.items():
+            zdata["diag_static"] = self._diag_static(zone_id, self.zones[zone_id], zdata)
+            zdata.setdefault("problems", [m for _, m in zdata["diag_static"]])
+            zdata["warmup_rate"], zdata["warmup_count"] = self._warmup_summary(zone_id)
+
         self._process_global_notifications(tariff_ok, holiday_active, zones_data)
 
         return {
@@ -303,6 +346,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         floor_temp = self._state_float(zone.get(CONF_FLOOR_TEMP_ENTITY))
         floor_min = self._state_float(number_entity_id(zone_id, "floor_min"), NUMBER_DEFS["floor_min"][4])
         floor_max = self._state_float(number_entity_id(zone_id, "floor_max"), NUMBER_DEFS["floor_max"][4])
+        floor_hyst = self._state_float(
+            number_entity_id(zone_id, "floor_hysterezia"), NUMBER_DEFS["floor_hysterezia"][4]
+        ) or 0.0
+        is_radiator = zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
 
         mode_state = self.hass.states.get(mode_entity_id(zone_id))
         mode = mode_state.state if mode_state and mode_state.state not in ("unknown", "unavailable") else MODE_AUTO
@@ -384,12 +431,27 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             tariff_blocked = True
             reason = self._t("reason_tariff_blocked")
 
-        # --- 2: BEZPECNOST PODLAHY ---
-        floor_override = False
-        if floor_temp is not None and floor_max is not None and floor_temp >= floor_max:
+        # --- 2: BEZPECNOST PODLAHY (s hysterezou) ---
+        # Vypne na floor_max a znova povoli az pod floor_max - hystereza, aby rele
+        # necvakalo dokola okolo jednej hodnoty.
+        if floor_temp is not None and floor_max is not None:
+            if floor_temp >= floor_max:
+                rt["floor_blocked"] = True
+            elif floor_temp <= floor_max - floor_hyst:
+                rt["floor_blocked"] = False
+        else:
+            rt["floor_blocked"] = False
+        floor_override = bool(rt.get("floor_blocked"))
+        # Pri radiator_floor blokuje prehriata podlaha len podlahu, radiator kuri dalej.
+        floor_blocks_zone = floor_override and not is_radiator
+        if floor_blocks_zone:
             heating_allowed = False
-            floor_override = True
-            reason = self._t("reason_floor_stop", floor_temp=floor_temp, floor_max=floor_max)
+            if floor_temp >= floor_max:
+                reason = self._t("reason_floor_stop", floor_temp=floor_temp, floor_max=floor_max)
+            else:
+                reason = self._t(
+                    "reason_floor_wait", floor_temp=floor_temp, resume=round(floor_max - floor_hyst, 1)
+                )
 
         # --- 3: KRB ---
         krb_override = False
@@ -405,7 +467,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # --- 0.5: FVE PREBYTOK (preraza TARIFU, nie floor/krb) ---
         pv_active = False
         use_fve = self._state_bool(switch_entity_id(zone_id, "vyuzi_fve_prebytok"), True)
-        if pv_surplus and use_fve and not floor_override and not krb_override:
+        if pv_surplus and use_fve and not floor_blocks_zone and not krb_override:
             heating_allowed = True
             target = comfort_target
             effective_mode = comfort_mode
@@ -416,7 +478,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         emergency_active = False
         if (
             current_temp is not None and emergency_temp is not None and current_temp < emergency_temp
-            and not floor_override and not krb_override
+            and not floor_blocks_zone and not krb_override
         ):
             heating_allowed = True
             target = max(target or 0, emergency_temp + 1)
@@ -425,12 +487,31 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
         self._maybe_notify(zone_id, zone[CONF_ZONE_NAME], mode, floor_override, floor_temp, preheat_active, cold_outdoor_active, presence)
 
+        # --- MIN. TEPLOTA PODLAHY: podlaha nabehne pod floor_min aj ked je vzduch teply ---
+        use_floor_min = self._state_bool(
+            switch_entity_id(zone_id, "udrzat_min_podlahy"), zone.get(CONF_USE_FLOOR_MIN, is_radiator)
+        )
+        if (
+            use_floor_min and heating_allowed and not floor_override and floor_temp is not None
+            and floor_min is not None and effective_mode != MODE_MRAZ and not holiday_active
+        ):
+            if floor_temp < floor_min:
+                rt["floor_guard"] = True
+            elif floor_temp >= floor_min + floor_hyst:
+                rt["floor_guard"] = False
+        else:
+            rt["floor_guard"] = False
+        floor_guard = bool(rt.get("floor_guard"))
+
         device_mode = "heat" if heating_allowed else "off"
 
         return {
             "name": zone[CONF_ZONE_NAME],
             "zone_type": zone.get(CONF_ZONE_TYPE, "floor"),
             "season": SEASON_KURENIE,
+            "floor_guard": floor_guard,
+            "floor_hysterezia": floor_hyst,
+            "radiator_entity": zone.get(CONF_RADIATOR_ENTITY),
             "mode": mode,
             "effective_mode": effective_mode,
             "current_temperature": current_temp,
@@ -766,14 +847,25 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     )
                 else:
                     await self._apply_floor_ac(zone_id, zdata)
+            elif zdata["zone_type"] == ZONE_TYPE_RADIATOR_FLOOR:
+                await self._apply_radiator_floor(zone_id, zdata)
             else:
-                await self._apply_device(zdata["climate_entity"], zdata["device_mode"], zdata["target_temperature"])
+                guard = bool(zdata.get("floor_guard")) and zdata["heating_allowed"]
+                # Min. teplota podlahy: termostat dostane max. podlahy ako setpoint, aby
+                # kuril aj ked je vzduch teply; hranice drzi nasa hystereza.
+                setpoint = zdata.get("floor_max") if guard else zdata["target_temperature"]
+                await self._apply_device(zdata["climate_entity"], zdata["device_mode"], setpoint)
                 zdata["heat_source"] = (
-                    self._t("source_floor") if zdata["heating_allowed"] else self._t("source_none")
+                    self._t("source_floor_min") if guard
+                    else self._t("source_floor") if zdata["heating_allowed"] else self._t("source_none")
                 )
                 zdata["actual_action"] = self._resolve_action(
                     [zdata["climate_entity"]], zdata["heating_allowed"], "heating"
                 )
+
+        for zone_id, zdata in self.data["zones"].items():
+            self._diag_dynamic_and_notify(zone_id, zdata)
+            self._warmup_track(zone_id, zdata)
 
         # _apply_* vyssie MENI data (napr. heat_source), ktore uz boli raz oznamene
         # entitam pri poslednom self.async_set_updated_data(). Bez tohto volania by
@@ -862,14 +954,209 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             rt["ac_deficit_since"] = None
             floor_engaged = False
 
-        await self._apply_device(floor_entity, "heat" if floor_engaged else "off", target if floor_engaged else None)
+        guard = bool(zdata.get("floor_guard"))
+        floor_on = floor_engaged or guard
+        floor_setpoint = zdata.get("floor_max") if guard else target
+        await self._apply_device(floor_entity, "heat" if floor_on else "off", floor_setpoint if floor_on else None)
         self._maybe_notify_ac_backup(zone_id, zdata["name"], floor_engaged)
         zdata["heat_source"] = (
-            self._t("source_ac_floor") if floor_engaged
+            self._t("source_ac_floor") if floor_on and rt.get("ac_running", True)
+            else self._t("source_floor_min") if guard
             else (self._t("source_ac") if rt.get("ac_running", True) else self._t("source_none_waiting"))
         )
-        running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_engaged)) if on]
+        running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_on)) if on]
         zdata["actual_action"] = self._resolve_action(running, bool(running), "heating") if running else "idle"
+
+    # ------------------------------------------------------------- radiator + podlaha
+
+    async def _apply_switch(self, entity_id, on: bool) -> None:
+        """Rele radiatora (switch / input_boolean / light) - prikaz len pri zmene."""
+        if not entity_id:
+            return
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state == ("on" if on else "off"):
+            return
+        await self.hass.services.async_call(
+            "homeassistant", "turn_on" if on else "turn_off", {"entity_id": entity_id}, blocking=False,
+        )
+
+    async def _apply_radiator_floor(self, zone_id: str, zdata: dict) -> None:
+        """Dve nezavisle regulacie v jednej zone (kupelna):
+        - radiator (rele) drzi teplotu VZDUCHU: zapne pod cielom - hystereza, vypne na cieli,
+        - podlaha drzi teplotu PODLAHY: nabehne pod floor_min (zdata['floor_guard']),
+          aj ked je vzduch dost teply. Prehriata podlaha blokuje len podlahu."""
+        rt = self._rt(zone_id)
+        radiator = zdata.get("radiator_entity")
+        floor_entity = zdata["climate_entity"]
+
+        if not zdata["heating_allowed"]:
+            rt["rad_on"] = False
+            await self._apply_switch(radiator, False)
+            await self._apply_device(floor_entity, "off", None)
+            zdata["heat_source"] = self._t("source_none")
+            zdata["actual_action"] = "idle"
+            return
+
+        hyst = self._state_float(
+            number_entity_id(zone_id, "radiator_hysterezia"), RADIATOR_NUMBER_DEFS["radiator_hysterezia"][4]
+        ) or 0.0
+        cur, tgt = zdata["current_temperature"], zdata["target_temperature"]
+        if cur is None or tgt is None:
+            rt["rad_on"] = False  # bez teploty vzduchu rele naslepo nezapiname
+        elif cur >= tgt:
+            rt["rad_on"] = False
+        elif cur <= tgt - hyst:
+            rt["rad_on"] = True
+        rad_on = bool(rt.get("rad_on"))
+        floor_on = bool(zdata.get("floor_guard")) and not zdata.get("floor_override")
+
+        await self._apply_switch(radiator, rad_on)
+        await self._apply_device(
+            floor_entity, "heat" if floor_on else "off", zdata.get("floor_max") if floor_on else None
+        )
+
+        if rad_on and floor_on:
+            zdata["heat_source"] = self._t("source_radiator_floor")
+        elif rad_on:
+            zdata["heat_source"] = self._t("source_radiator")
+        elif floor_on:
+            zdata["heat_source"] = self._t("source_floor_min")
+        else:
+            zdata["heat_source"] = self._t("source_none")
+        floor_action = self._resolve_action([floor_entity], floor_on, "heating") if floor_on else "idle"
+        zdata["actual_action"] = "heating" if rad_on or floor_action == "heating" else "idle"
+
+    # ------------------------------------------------------------------ diagnostika
+
+    def _friendly(self, entity_id: str) -> str:
+        st = self.hass.states.get(entity_id)
+        return (st.attributes.get("friendly_name") if st else None) or entity_id
+
+    def _diag_static(self, zone_id: str, zone: dict, zdata: dict) -> list[tuple[str, str]]:
+        """Nedostupne zariadenia/senzory a nezmyselne hodnoty. Vracia [(kluc, text)]."""
+        rt = self._rt(zone_id)
+        now = dt_util.now()
+        since = rt.setdefault("unavail_since", {})
+        problems: list[tuple[str, str]] = []
+        keys = (CONF_CLIMATE_ENTITY, CONF_AC_ENTITY, CONF_RADIATOR_ENTITY, CONF_EXTERNAL_TEMP_ENTITY, CONF_FLOOR_TEMP_ENTITY)
+        for entity_id in [zone.get(k) for k in keys if zone.get(k)]:
+            state = self.hass.states.get(entity_id)
+            bad = state is None or state.state in ("unknown", "unavailable")
+            if bad:
+                since.setdefault(entity_id, now)
+                if now - since[entity_id] >= DIAG_UNAVAILABLE_AFTER:
+                    problems.append((f"unavailable:{entity_id}", self._t("diag_unavailable", entity=self._friendly(entity_id))))
+            else:
+                since.pop(entity_id, None)
+
+        def out_of(value, rng):
+            try:
+                v = float(value)
+            except (TypeError, ValueError):
+                return False
+            return not (rng[0] <= v <= rng[1])
+
+        if out_of(zdata.get("current_temperature"), DIAG_AIR_RANGE):
+            problems.append(("implausible_air", self._t("diag_implausible_air", value=zdata["current_temperature"])))
+        if out_of(zdata.get("floor_temperature"), DIAG_FLOOR_RANGE):
+            problems.append(("implausible_floor", self._t("diag_implausible_floor", value=zdata["floor_temperature"])))
+        return problems
+
+    def _diag_dynamic_and_notify(self, zone_id: str, zdata: dict) -> None:
+        """Doplni 'zona sa dlho nevie dohriat' a posle notifikacie pri vzniku/zaniku poruchy."""
+        rt = self._rt(zone_id)
+        now = dt_util.now()
+        problems = list(zdata.get("diag_static", []))
+
+        cur, tgt = zdata.get("current_temperature"), zdata.get("target_temperature")
+        try:
+            slow = (
+                zdata.get("heating_allowed") and zdata.get("season") == SEASON_KURENIE
+                and cur is not None and tgt is not None and float(cur) < float(tgt) - DIAG_SLOW_GAP
+            )
+        except (TypeError, ValueError):
+            slow = False
+        if slow:
+            rt.setdefault("slow_since", now)
+            if rt["slow_since"] is None:
+                rt["slow_since"] = now
+            if now - rt["slow_since"] >= DIAG_SLOW_AFTER:
+                hours = int((now - rt["slow_since"]).total_seconds() // 3600)
+                problems.append(("slow", self._t("diag_slow", hours=hours, current=cur, target=tgt)))
+        else:
+            rt["slow_since"] = None
+
+        zdata["problems"] = [msg for _, msg in problems]
+
+        current = dict(problems)
+        notified: dict = rt.setdefault("diag_notified", {})
+        if dt_util.now() - self._startup_time < NOTIFY_STARTUP_GRACE:
+            rt["diag_notified"] = current  # po starte len ticho zaznamenat zaklad
+            return
+        enabled = self.entry.options.get(CONF_NOTIFY_DIAGNOSTICS, True)
+        name = zdata.get("name", zone_id)
+        for key, msg in current.items():
+            if key not in notified and enabled:
+                self.hass.async_create_task(self._notify(self._t("notify_diag_problem", zone=name, problem=msg)))
+        for key, msg in notified.items():
+            if key not in current and enabled:
+                self.hass.async_create_task(self._notify(self._t("notify_diag_ok", zone=name, problem=msg)))
+        rt["diag_notified"] = current
+
+    # ------------------------------------------------------- logovanie nabehov
+
+    def _warmup_track(self, zone_id: str, zdata: dict) -> None:
+        """Zaznamena nabeh: od zaciatku kurenia s aspon WARMUP_MIN_GAP °C deficitom
+        po dosiahnutie ciela. Zaklad pre buduce adaptivne predkurenie."""
+        rt = self._rt(zone_id)
+        now = dt_util.now()
+        cur, tgt = zdata.get("current_temperature"), zdata.get("target_temperature")
+        try:
+            cur = float(cur) if cur is not None else None
+            tgt = float(tgt) if tgt is not None else None
+        except (TypeError, ValueError):
+            return
+        run = rt.get("warmup")
+        if run is None:
+            if (
+                zdata.get("actual_action") == "heating" and cur is not None and tgt is not None
+                and tgt - cur >= WARMUP_MIN_GAP
+            ):
+                rt["warmup"] = {
+                    "start": now, "from": cur, "target": tgt,
+                    "outdoor": zdata.get("outdoor_temperature"), "source": zdata.get("heat_source"),
+                }
+            return
+        if tgt is None or abs(tgt - run["target"]) > 0.01 or not zdata.get("heating_allowed"):
+            rt["warmup"] = None  # zmena ciela alebo stop - nabeh sa nepocita
+            return
+        if cur is not None and cur >= run["target"]:
+            minutes = (now - run["start"]).total_seconds() / 60
+            if minutes >= WARMUP_MIN_MINUTES:
+                record = {
+                    "start": run["start"].isoformat(), "minutes": round(minutes, 1),
+                    "from": run["from"], "to": run["target"],
+                    "outdoor": run["outdoor"], "source": run["source"],
+                }
+                runs = self._warmup_data.setdefault(zone_id, [])
+                runs.append(record)
+                del runs[:-WARMUP_KEEP]
+                self._warmup_store.async_delay_save(lambda: self._warmup_data, 60)
+            rt["warmup"] = None
+
+    def _warmup_summary(self, zone_id: str):
+        """(median minut na 1 °C, pocet nabehov) z ulozenych nabehov zony."""
+        rates = []
+        for r in self._warmup_data.get(zone_id, []):
+            delta = (r.get("to") or 0) - (r.get("from") or 0)
+            if delta >= WARMUP_MIN_GAP and r.get("minutes"):
+                rates.append(r["minutes"] / delta)
+        if not rates:
+            return None, len(self._warmup_data.get(zone_id, []))
+        rates.sort()
+        mid = len(rates) // 2
+        median = rates[mid] if len(rates) % 2 else (rates[mid - 1] + rates[mid]) / 2
+        return round(median), len(self._warmup_data.get(zone_id, []))
 
     def async_unsub(self) -> None:
         if self._unsub_tracking:

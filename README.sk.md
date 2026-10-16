@@ -107,6 +107,9 @@ Pridáva sa cez **Options Flow** (Nastavenia → Zariadenia a služby → Smart 
   - `floor` — len podlahové kúrenie
   - `floor_ac` — klimatizácia (kúrenie aj chladenie) ako primárny zdroj, podlaha
     ako záložné dokurovanie (len pri kúrení — chladiť nevie)
+  - `radiator_floor` — dve nezávislé regulácie (napr. kúpeľňa): elektrický
+    radiátor cez relé drží teplotu **vzduchu**, podlaha samostatne drží
+    **minimálnu teplotu podlahy**. Vyžaduje relé radiátora a externý teplomer
 - Podlahový `climate` termostat (povinné)
 - Klimatizačný `climate` entity (len pre `floor_ac`)
 - Senzor teploty podlahy (voliteľné, pre bezpečnostný limit)
@@ -375,7 +378,10 @@ nastavení (Options Flow).
 | `select.smart_heating_<id>_rezim` | Auto / Den / Noc / Min / Mraz / Vypnute |
 | `select.smart_heating_<id>_sezona` | **len `floor_ac`**: Kurenie / Chladenie / Auto |
 | `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | teploty kúrenia |
-| `number..._floor_min` / `_floor_max` | bezpečnostné limity teploty podlahy |
+| `number..._floor_max` / `_floor_hysterezia` | max. podlahy: vypne na maxime, znova zapne pod max - hysteréza |
+| `number..._floor_min` + `switch..._udrzat_min_podlahy` | min. teplota podlahy: podlaha kúri pod ňou aj keď je vzduch teplý |
+| `number..._radiator_hysterezia` | len zóny s radiátorom: radiátor zapne pod cieľ - hysteréza, vypne na cieli |
+| atribúty `sensor..._stav`: `problemy`, `nabeh_min_na_stupen`, `nabehy_pocet` | aktuálne poruchy; záznam nábehov (medián minút na 1 °C, počet) |
 | `number..._vonkajsia_hranica` | hranica pre vynútené kúrenie pri mraze |
 | `number..._boost_hodiny` | trvanie Boostu |
 | `number..._ac_priorita_rozdiel` / `_ac_priorita_minuty` | **len `floor_ac`**: kedy nastúpi podlaha ako záloha |

@@ -12,7 +12,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import AC_NUMBER_DEFS, COOLING_NUMBER_DEFS, CONF_ZONE_TYPE, DOMAIN, NUMBER_DEFS, OPT_ZONES, ZONE_TYPE_FLOOR_AC, resolve_number_range
+from .const import (
+    AC_NUMBER_DEFS, COOLING_NUMBER_DEFS, CONF_ZONE_TYPE, DOMAIN, NUMBER_DEFS, OPT_ZONES,
+    RADIATOR_NUMBER_DEFS, ZONE_TYPE_FLOOR_AC, ZONE_TYPE_RADIATOR_FLOOR, resolve_number_range,
+)
 from .coordinator import SmartHeatingCoordinator
 
 
@@ -27,6 +30,8 @@ async def async_setup_entry(
         if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC:
             defs.update(AC_NUMBER_DEFS)
             defs.update(COOLING_NUMBER_DEFS)
+        elif zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR:
+            defs.update(RADIATOR_NUMBER_DEFS)
         for key, (label, lo, hi, icon, default) in defs.items():
             lo, hi = resolve_number_range(entry.options, key, lo, hi)
             value = zone.get(key, default)

@@ -26,6 +26,11 @@ from .const import (
     CONF_NOTIFY_AC_BACKUP,
     CONF_NOTIFY_BOOST,
     CONF_NOTIFY_COLD_OUTDOOR,
+    CONF_NOTIFY_DIAGNOSTICS,
+    CONF_RADIATOR_ENTITY,
+    CONF_USE_FLOOR_MIN,
+    RADIATOR_NUMBER_DEFS,
+    ZONE_TYPE_RADIATOR_FLOOR,
     CONF_NOTIFY_COOLING,
     CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
@@ -133,7 +138,7 @@ def _hub_schema_dict(current: dict) -> dict:
     for key in (
         CONF_NOTIFY_TARIFF, CONF_NOTIFY_FLOOR, CONF_NOTIFY_KRB, CONF_NOTIFY_EMERGENCY,
         CONF_NOTIFY_BOOST, CONF_NOTIFY_COOLING, CONF_NOTIFY_HOLIDAY, CONF_NOTIFY_PREHEAT,
-        CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR,
+        CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR, CONF_NOTIFY_DIAGNOSTICS,
     ):
         schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
     _add_optional(
@@ -231,8 +236,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
     async def async_step_add_zone(self, user_input=None):
         self._ensure_zones()
         if user_input is not None:
+            zone = self._zone_from_input(user_input)
+            errors = self._validate_zone(zone)
+            if errors:
+                return self.async_show_form(
+                    step_id="add_zone", data_schema=self._zone_schema(zone), errors=errors
+                )
             zone_id = uuid.uuid4().hex[:8]
-            self._zones[zone_id] = self._zone_from_input(user_input)
+            self._zones[zone_id] = zone
             return self._save()
 
         return self.async_show_form(step_id="add_zone", data_schema=self._zone_schema())
@@ -253,6 +264,11 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
 
         old_zone = self._zones[self._editing_zone_id]
         updated = self._zone_from_input(user_input)
+        errors = self._validate_zone(updated)
+        if errors:
+            return self.async_show_form(
+                step_id="edit_zone", data_schema=self._zone_schema(updated), errors=errors
+            )
         updated = self._merge_tunables(old_zone, updated)
         self._zones[self._editing_zone_id] = updated
         self._editing_zone_id = None
@@ -282,6 +298,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
                     options=[
                         {"value": ZONE_TYPE_FLOOR, "label": "Len podlaha"},
                         {"value": ZONE_TYPE_FLOOR_AC, "label": "Klima prioritne + podlaha ako zaloha"},
+                        {"value": ZONE_TYPE_RADIATOR_FLOOR, "label": "Radiator (vzduch) + podlaha (nezavisle)"},
                     ]
                 )
             ),
@@ -292,6 +309,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         _add_optional(
             schema_dict, CONF_AC_ENTITY, zone.get(CONF_AC_ENTITY),
             selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
+        )
+        _add_optional(
+            schema_dict, CONF_RADIATOR_ENTITY, zone.get(CONF_RADIATOR_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "input_boolean", "light"])),
         )
         _add_optional(
             schema_dict, CONF_FLOOR_TEMP_ENTITY, zone.get(CONF_FLOOR_TEMP_ENTITY),
@@ -319,7 +340,27 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         schema_dict[
             vol.Optional(CONF_USE_FIXED_AC_SETPOINT, default=zone.get(CONF_USE_FIXED_AC_SETPOINT, False))
         ] = selector.BooleanSelector()
+        schema_dict[
+            vol.Optional(
+                CONF_USE_FLOOR_MIN,
+                # nova zona: zapnute (floor_min je predvolene 5 °C, kym ho nezvysis, nic nerobi);
+                # existujuce zony bez tohto kluca: povodne spravanie (vypnute, okrem radiator_floor)
+                default=zone.get(
+                    CONF_USE_FLOOR_MIN, (not zone) or zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
+                ),
+            )
+        ] = selector.BooleanSelector()
         return vol.Schema(schema_dict)
+
+    @staticmethod
+    def _validate_zone(zone: dict) -> dict:
+        """Radiator + podlaha potrebuje rele radiatora a teplomer VZDUCHU
+        (externy teplomer) - bez nich by radiator nemal podla coho regulovat."""
+        if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR and not (
+            zone.get(CONF_RADIATOR_ENTITY) and zone.get(CONF_EXTERNAL_TEMP_ENTITY)
+        ):
+            return {"base": "radiator_requirements"}
+        return {}
 
     def _zone_from_input(self, user_input: dict) -> dict:
         floor_temp = None if user_input.get("clear_floor_temp_entity") else user_input.get(CONF_FLOOR_TEMP_ENTITY)
@@ -337,12 +378,16 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
             CONF_USE_FIXED_AC_SETPOINT: user_input.get(CONF_USE_FIXED_AC_SETPOINT, False),
+            CONF_RADIATOR_ENTITY: user_input.get(CONF_RADIATOR_ENTITY),
+            CONF_USE_FLOOR_MIN: user_input.get(
+                CONF_USE_FLOOR_MIN, user_input.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
+            ),
         }
 
     @staticmethod
     def _merge_tunables(old_zone: dict, new_zone: dict) -> dict:
         """Zachova hodnoty ladiacich cisiel/casov pri uprave strukturalnych poli zony."""
-        for key, (_, _, _, _, default) in {**NUMBER_DEFS, **AC_NUMBER_DEFS}.items():
+        for key, (_, _, _, _, default) in {**NUMBER_DEFS, **AC_NUMBER_DEFS, **RADIATOR_NUMBER_DEFS}.items():
             new_zone[key] = old_zone.get(key, default)
         for key, (_, default) in TIME_DEFS.items():
             new_zone[key] = old_zone.get(key, default)

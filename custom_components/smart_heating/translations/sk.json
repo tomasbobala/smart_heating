@@ -66,7 +66,8 @@
           "notify_preheat": "Notifikácia: predkúrenie spustené/ukončené",
           "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
           "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
-          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)"
+          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)",
+          "notify_diagnostics": "Notifikácia: poruchy (nedostupné zariadenie, nezmyselná hodnota, zóna sa nevie dohriať)"
         },
         "description": "Smart Heating verzia {version}"
       },
@@ -84,7 +85,9 @@
           "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
           "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
           "clear_external_temp_entity": "Vymazať externý teplomer zóny",
-          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')"
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
+          "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)"
         }
       },
       "edit_zone": {
@@ -102,7 +105,9 @@
           "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
           "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
           "clear_external_temp_entity": "Vymazať externý teplomer zóny",
-          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')"
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
+          "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)"
         }
       },
       "remove_zone": {
@@ -143,7 +148,11 @@
           "teplota_chladenie__min": "Chladenie - cielova teplota (°C) - min",
           "teplota_chladenie__max": "Chladenie - cielova teplota (°C) - max",
           "bateria_hranica_chladenie__min": "Chladenie - min. nabitie baterie FVE (%) - min",
-          "bateria_hranica_chladenie__max": "Chladenie - min. nabitie baterie FVE (%) - max"
+          "bateria_hranica_chladenie__max": "Chladenie - min. nabitie baterie FVE (%) - max",
+          "floor_hysterezia__min": "Hysteréza podlahy - min",
+          "floor_hysterezia__max": "Hysteréza podlahy - max",
+          "radiator_hysterezia__min": "Hysteréza radiátora - min",
+          "radiator_hysterezia__max": "Hysteréza radiátora - max"
         }
       }
     },
@@ -151,7 +160,8 @@
       "no_zones": "Zatiaľ nie je vytvorená žiadna zóna."
     },
     "error": {
-      "invalid_range": "Minimum musí byť menšie ako maximum."
+      "invalid_range": "Minimum musí byť menšie ako maximum.",
+      "radiator_requirements": "Typ 'Radiátor + podlaha' potrebuje relé radiátora a externý teplomer (vzduch)."
     }
   }
 }

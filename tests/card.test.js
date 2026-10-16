@@ -803,3 +803,142 @@ test("loading the card script twice does not throw (double-registration guard)",
   dom.window.eval(CARD_SRC);
   assert.doesNotThrow(() => dom.window.eval(CARD_SRC));
 });
+
+// ---------------------------------------------------------------- 0.17.0
+
+test("zone card: section icons are vector SVG, no emoji", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  const labels = Array.from(card.querySelectorAll(".sh-section-label"));
+  assert.ok(labels.length >= 7);
+  for (const l of labels) assert.ok(l.querySelector(".sh-icon svg path"), l.textContent);
+  assert.doesNotMatch(card.innerHTML, /[\u{1F300}-\u{1FAFF}\u{2600}-\u{27BF}\u{23F0}]/u);
+});
+
+test("zone card: floor section shows floor limits and radiator hysteresis when present", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = buildHass();
+  for (const [k, v] of [["floor_min", "24"], ["floor_max", "28"], ["floor_hysterezia", "1.5"], ["radiator_hysterezia", "0.5"]]) {
+    hass.states[`number.smart_heating_${ZONE_ID}_${k}`] = { state: v, attributes: { min: 0, max: 40 } };
+  }
+  hass.states[`switch.smart_heating_${ZONE_ID}_udrzat_min_podlahy`] = { state: "on", attributes: {} };
+  card.hass = hass;
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  const floorText = card.querySelector(".sh-floor").textContent;
+  for (const t of ["Min. teplota podlahy", "Max. teplota podlahy", "Hysteréza podlahy", "Hysteréza radiátora"]) {
+    assert.match(floorText, new RegExp(t));
+  }
+  assert.match(card.querySelector(".sh-toggles").textContent, /Udržiavať min. teplotu podlahy/);
+});
+
+test("zone card: faults and min-floor are shown as badges", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass({ stavAttrs: { problemy: ["T Kupelna je nedostupné viac ako 15 min"], floor_guard: true } });
+  document.body.appendChild(card);
+  const badges = card.querySelector(".sh-badges").textContent;
+  assert.match(badges, /Porucha: T Kupelna je nedostupné/);
+  assert.match(badges, /Podlaha – min. teplota/);
+});
+
+test("overview: tiles use vector icons", () => {
+  const card = renderOverview({});
+  const icons = Array.from(card.querySelectorAll(".sho-tile .i"));
+  assert.ok(icons.length > 0);
+  assert.ok(icons.every((i) => i.querySelector("svg path")));
+});
+
+test("overview: faults row appears only when a zone has a fault", () => {
+  let card = renderOverview({});
+  assert.doesNotMatch(card.querySelector(".sho-sum").textContent, /Poruchy/);
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_bbb22222_stav"].attributes.problemy = ["x"];
+  card = renderOverview({}, hass);
+  assert.match(card.querySelector(".sho-sum").textContent, /Poruchy\s*1/);
+});
+
+function settingsHass() {
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.config_entry_id = "ENTRY1";
+  const calls = [];
+  hass.callApi = async (method, path, data) => {
+    calls.push({ method, path, data });
+    if (method === "POST" && path === "config/config_entries/options/flow") return { type: "menu", flow_id: "F1" };
+    if (method === "POST" && data && data.next_step_id === "global") {
+      return {
+        type: "form", flow_id: "F1", step_id: "global",
+        data_schema: [
+          { name: "outdoor_sensor", selector: { entity: {} }, default: "sensor.out" },
+          { name: "holiday_active", selector: { boolean: {} }, default: false },
+          { name: "nudzova_teplota", selector: { number: { min: 3, max: 15, step: 0.5 } }, default: 8 },
+          { name: "notify_tariff", selector: { boolean: {} }, default: true },
+          { name: "notify_diagnostics", selector: { boolean: {} }, default: true },
+          { name: "language", selector: { select: {} }, default: "auto" },
+        ],
+      };
+    }
+    return { type: "create_entry" };
+  };
+  return { hass, calls };
+}
+
+const tick = () => new Promise((r) => setTimeout(r, 15));
+
+test("overview settings: opens the integration options flow and renders known fields", async () => {
+  const { hass, calls } = settingsHass();
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  assert.deepStrictEqual(
+    { ...calls[0], data: { ...calls[0].data } },
+    { method: "POST", path: "config/config_entries/options/flow", data: { handler: "ENTRY1", show_advanced_options: false } },
+  );
+  const text = card.querySelector(".sho-set").textContent;
+  for (const t of ["Dovolenka", "Núdzová teplota", "Tarifa", "Poruchy"]) assert.match(text, new RegExp(t));
+  assert.ok(card.querySelector(".sho-save").disabled, "bez zmeny sa neda ulozit");
+});
+
+test("overview settings: save submits current values plus changes", async () => {
+  const { hass, calls } = settingsHass();
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  card.querySelector('.sho-sw[data-f="holiday_active"]').click();
+  card.querySelector('[data-f="nudzova_teplota"][data-d="1"]').click();
+  card.querySelector(".sho-save").click();
+  await tick();
+  const submit = calls.find((c) => c.path === "config/config_entries/options/flow/F1" && c.data && !c.data.next_step_id);
+  assert.ok(submit);
+  assert.strictEqual(submit.data.holiday_active, true);
+  assert.strictEqual(submit.data.nudzova_teplota, 8.5);
+  assert.strictEqual(submit.data.outdoor_sensor, "sensor.out");   // nezmenene hodnoty idu s nimi
+  assert.strictEqual(submit.data.language, "auto");
+});
+
+test("overview settings: cancel aborts the flow", async () => {
+  const { hass, calls } = settingsHass();
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  card.querySelector(".sho-cancel").click();
+  await tick();
+  assert.ok(calls.some((c) => c.method === "DELETE" && c.path === "config/config_entries/options/flow/F1"));
+  assert.strictEqual(card.querySelector(".sho-set").hidden, true);
+});
+
+test("overview settings: error message when not allowed", async () => {
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.config_entry_id = "ENTRY1";
+  hass.callApi = async () => { throw new Error("401"); };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  assert.match(card.querySelector(".sho-set").textContent, /administrátora/);
+});

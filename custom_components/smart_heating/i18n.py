@@ -79,6 +79,22 @@ TEXTS: dict[str, dict[str, str]] = {
 
     # --- heat source labels ---
     "source_none": {"en": "None", "sk": "Žiadny"},
+    "source_floor_min": {"en": "Floor (min. floor temp.)", "sk": "Podlaha (min. teplota podlahy)"},
+    "source_radiator": {"en": "Radiator", "sk": "Radiátor"},
+    "source_radiator_floor": {"en": "Radiator + Floor", "sk": "Radiátor + Podlaha"},
+    "reason_floor_wait": {
+        "en": "Floor cooling down after max: {floor_temp}°C, heating resumes at {resume}°C",
+        "sk": "Podlaha chladne po maxime: {floor_temp}°C, kúrenie sa obnoví pri {resume}°C",
+    },
+    "diag_unavailable": {"en": "{entity} has been unavailable for over 15 min", "sk": "{entity} je nedostupné viac ako 15 min"},
+    "diag_implausible_air": {"en": "Implausible room temperature: {value}°C", "sk": "Nezmyselná teplota v miestnosti: {value}°C"},
+    "diag_implausible_floor": {"en": "Implausible floor temperature: {value}°C", "sk": "Nezmyselná teplota podlahy: {value}°C"},
+    "diag_slow": {
+        "en": "Not reaching target for {hours} h ({current}°C, target {target}°C)",
+        "sk": "Už {hours} h sa nevie dohriať ({current}°C, cieľ {target}°C)",
+    },
+    "notify_diag_problem": {"en": "⚠️ {zone}: {problem}", "sk": "⚠️ {zone}: {problem}"},
+    "notify_diag_ok": {"en": "✅ {zone}: resolved - {problem}", "sk": "✅ {zone}: vyriešené - {problem}"},
     "source_floor": {"en": "Floor", "sk": "Podlaha"},
     "source_ac_floor": {"en": "AC + Floor", "sk": "AC + Podlaha"},
     "source_ac": {"en": "AC", "sk": "AC"},

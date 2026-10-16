@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.17.0
+- **Floor max with hysteresis.** Heating stops at `floor_max` and resumes only
+  below `floor_max - floor_hysterezia` (new number, default 1.5 °C), so the relay
+  no longer clicks around a single value. The reason text says when it resumes.
+- **Minimum floor temperature.** `floor_min` was exposed but never used. New
+  switch `udrzat_min_podlahy`: when on, the floor heats below `floor_min` even if
+  the air is warm (until `floor_min + hysteresis`; not in Frost mode or on
+  holiday). Off for existing zones, on for new zones (harmless at the default
+  5 °C) and for the new radiator zone type.
+- **New zone type "Radiator (air) + floor (independent)"** (`radiator_floor`):
+  a radiator relay (switch / input_boolean / light) holds the AIR temperature
+  (on at target - `radiator_hysterezia`, off at target), the floor
+  independently holds the FLOOR temperature via `floor_min`. An overheated floor
+  blocks only the floor. Requires the relay and an external (air) thermometer.
+- **Diagnostics.** Device or sensor unavailable for over 15 min, implausible
+  room/floor values, or a zone heating for 3 h while still more than 1 °C below
+  target are reported as faults: `problemy` attribute, badge on the zone card,
+  "Faults" row in the overview and notifications (new toggle
+  `notify_diagnostics`, start and resolve).
+- **Warm-up logging** (groundwork for adaptive pre-heating): every warm-up
+  from heating start to reaching target is stored (last 30 per zone, persisted);
+  `nabeh_min_na_stupen` (median minutes per °C) and `nabehy_pocet` attributes.
+- **Integration settings in the overview card**: holiday, emergency
+  temperature, fireplace threshold and all notification toggles, saved through
+  the integration's own options flow (admin only); link to all settings.
+- Cards use vector MDI icons everywhere (no emoji), new Floor section in zone
+  settings.
+- Fixed: changes of the external thermometer and of the fixed AC setpoint
+  switch were not tracked, so they took effect only on the 5-minute tick.
+
 ## 0.16.3
 - Fixed: the overview's "Solar surplus" tile said "In use" whenever some zone
   had its target raised because of the surplus (`pv_active`), even if that

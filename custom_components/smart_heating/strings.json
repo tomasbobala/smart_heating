@@ -66,7 +66,8 @@
           "notify_preheat": "Notification: pre-heating started/ended",
           "notify_ac_backup": "Notification: floor engaged as AC backup",
           "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
-          "language": "Language (backend-generated texts: reasons, notifications)"
+          "language": "Language (backend-generated texts: reasons, notifications)",
+          "notify_diagnostics": "Notification: faults (device unavailable, implausible value, zone not reaching target)"
         },
         "description": "Smart Heating version {version}"
       },
@@ -84,7 +85,9 @@
           "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
           "clear_floor_temp_entity": "Clear floor temperature sensor",
           "clear_external_temp_entity": "Clear external zone thermometer",
-          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)"
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
+          "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)"
         }
       },
       "edit_zone": {
@@ -102,7 +105,9 @@
           "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
           "clear_floor_temp_entity": "Clear floor temperature sensor",
           "clear_external_temp_entity": "Clear external zone thermometer",
-          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)"
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
+          "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)"
         }
       },
       "remove_zone": {
@@ -143,7 +148,11 @@
           "teplota_chladenie__min": "Cooling target temperature (°C) - min",
           "teplota_chladenie__max": "Cooling target temperature (°C) - max",
           "bateria_hranica_chladenie__min": "Cooling - min. solar battery charge (%) - min",
-          "bateria_hranica_chladenie__max": "Cooling - min. solar battery charge (%) - max"
+          "bateria_hranica_chladenie__max": "Cooling - min. solar battery charge (%) - max",
+          "floor_hysterezia__min": "Floor hysteresis - min",
+          "floor_hysterezia__max": "Floor hysteresis - max",
+          "radiator_hysterezia__min": "Radiator hysteresis - min",
+          "radiator_hysterezia__max": "Radiator hysteresis - max"
         }
       }
     },
@@ -151,7 +160,8 @@
       "no_zones": "No zone has been created yet."
     },
     "error": {
-      "invalid_range": "Minimum must be lower than maximum."
+      "invalid_range": "Minimum must be lower than maximum.",
+      "radiator_requirements": "Type 'Radiator + floor' needs a radiator relay and an external (air) thermometer."
     }
   }
 }

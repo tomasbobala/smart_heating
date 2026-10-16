@@ -107,6 +107,10 @@ Added via **Options Flow** (Settings -> Devices & Services -> Smart Heating
   - `floor` - floor heating only
   - `floor_ac` - air conditioning (heating and cooling) as the primary source,
     floor as backup top-up (heating only - it can't cool)
+  - `radiator_floor` - two independent controls (e.g. a bathroom): an electric
+    radiator on a relay holds the **air** temperature, the floor independently
+    holds the **minimum floor temperature**. Needs the radiator relay and an
+    external thermometer
 - Floor `climate` thermostat (required)
 - AC `climate` entity (only for `floor_ac`)
 - Floor temperature sensor (optional, for the safety limit)
@@ -381,7 +385,10 @@ settings.
 | `select.smart_heating_<id>_rezim` | Auto / Day / Night / Min / Frost / Off |
 | `select.smart_heating_<id>_sezona` | **`floor_ac` only**: Heating / Cooling / Auto |
 | `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | heating temperatures |
-| `number..._floor_min` / `_floor_max` | floor temperature safety limits |
+| `number..._floor_max` / `_floor_hysterezia` | floor max: heating stops at max, resumes below max - hysteresis |
+| `number..._floor_min` + `switch..._udrzat_min_podlahy` | minimum floor temperature: floor heats below it even when the air is warm |
+| `number..._radiator_hysterezia` | radiator zones only: radiator on at target - hysteresis, off at target |
+| `sensor..._stav` attributes `problemy`, `nabeh_min_na_stupen`, `nabehy_pocet` | current faults; warm-up log (median minutes per °C, count) |
 | `number..._vonkajsia_hranica` | threshold for forced heating in cold |
 | `number..._boost_hodiny` | Boost duration |
 | `number..._ac_priorita_rozdiel` / `_ac_priorita_minuty` | **`floor_ac` only**: when the floor kicks in as backup |

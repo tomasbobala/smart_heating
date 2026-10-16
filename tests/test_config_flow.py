@@ -243,3 +243,59 @@ async def test_use_fixed_ac_setpoint_field_roundtrip(hass):
     )
     zone_id = list(entry.options["zones"].keys())[0]
     assert entry.options["zones"][zone_id]["use_fixed_ac_setpoint"] is True
+
+
+async def test_radiator_zone_requires_relay_and_air_thermometer(hass):
+    entry = await _create_entry(hass)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await hass.config_entries.options.async_configure(flow["flow_id"], user_input={"next_step_id": "add_zone"})
+    result = await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"name": "Kupelna", "zone_type": "radiator_floor", "climate_entity": "climate.kupelna"},
+    )
+    assert result["type"] == FlowResultType.FORM
+    assert result["errors"] == {"base": "radiator_requirements"}
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        user_input={
+            "name": "Kupelna", "zone_type": "radiator_floor", "climate_entity": "climate.kupelna",
+            "radiator_entity": "switch.radiator", "external_temp_entity": "sensor.air",
+        },
+    )
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+    zone = next(iter(entry.options["zones"].values()))
+    assert zone["radiator_entity"] == "switch.radiator"
+    assert zone["use_floor_min"] is True          # v kupelni predvolene zapnute
+
+
+async def test_card_style_partial_save_keeps_everything_else(hass):
+    """Prehladova karta uklada nastavenia takto: zoberie serializovanu schemu kroku
+    'global' (ako ju vrati HTTP API), posle vsetky defaulty (= sucasne hodnoty)
+    a prepise len zmenene polia. Nic ine sa nesmie zmenit ani stratit."""
+    import voluptuous_serialize
+    from homeassistant.helpers import config_validation as cv
+
+    entry = await _create_entry(hass)
+    # vychodiskovy stav s notifikaciami a zonou
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await hass.config_entries.options.async_configure(flow["flow_id"], user_input={"next_step_id": "global"})
+    await hass.config_entries.options.async_configure(
+        form["flow_id"],
+        user_input={"notify_entity": ["notify.mobile_tomas"], "notify_tariff": False, "holiday_active": False},
+    )
+    before = dict(entry.options)
+
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await hass.config_entries.options.async_configure(flow["flow_id"], user_input={"next_step_id": "global"})
+    serialized = voluptuous_serialize.convert(form["data_schema"], custom_serializer=cv.custom_serializer)
+    payload = {f["name"]: f["default"] for f in serialized if "default" in f}
+    payload["holiday_active"] = True                       # jedina zmena z karty
+    result = await hass.config_entries.options.async_configure(form["flow_id"], user_input=payload)
+    assert result["type"] == FlowResultType.CREATE_ENTRY
+
+    after = dict(entry.options)
+    assert after["holiday_active"] is True
+    for key, value in before.items():
+        if key != "holiday_active":
+            assert after.get(key) == value, key

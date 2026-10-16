@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.16.3";
+const CARD_VERSION = "0.17.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -142,6 +142,39 @@ const I18N = {
   ov_on_target: { en: "On target", sk: "V cieli" },
   ov_above: { en: "Above target", sk: "Nad cieľom" },
   ov_below: { en: "Below target", sk: "Pod cieľom" },
+  section_floor: { en: "Floor", sk: "Podlaha" },
+  temp_floor_min: { en: "Min. floor temperature", sk: "Min. teplota podlahy" },
+  temp_floor_max: { en: "Max. floor temperature", sk: "Max. teplota podlahy" },
+  temp_floor_hyst: { en: "Floor hysteresis", sk: "Hysteréza podlahy" },
+  temp_radiator_hyst: { en: "Radiator hysteresis", sk: "Hysteréza radiátora" },
+  toggle_floor_min: { en: "Keep min. floor temperature", sk: "Udržiavať min. teplotu podlahy" },
+  badge_floor_min: { en: "Floor – min. temp.", sk: "Podlaha – min. teplota" },
+  badge_problem: { en: "Fault", sk: "Porucha" },
+  ov_problems: { en: "Faults", sk: "Poruchy" },
+  ov_settings: { en: "Integration settings", sk: "Nastavenia integrácie" },
+  ov_settings_all: { en: "All settings", sk: "Všetky nastavenia" },
+  ov_save: { en: "Save", sk: "Uložiť" },
+  ov_cancel: { en: "Cancel", sk: "Zrušiť" },
+  ov_saving: { en: "Saving…", sk: "Ukladám…" },
+  ov_loading: { en: "Loading…", sk: "Načítavam…" },
+  ov_saved: { en: "Saved – the integration is reloading.", sk: "Uložené – integrácia sa načíta nanovo." },
+  ov_settings_error: { en: "Settings could not be loaded (administrator only).", sk: "Nastavenia sa nepodarilo načítať (len pre administrátora)." },
+  ov_grp_general: { en: "General", sk: "Všeobecné" },
+  ov_grp_notify: { en: "Notifications", sk: "Notifikácie" },
+  of_holiday_active: { en: "Holiday", sk: "Dovolenka" },
+  of_nudzova_teplota: { en: "Emergency temperature", sk: "Núdzová teplota" },
+  of_krb_threshold: { en: "Fireplace threshold", sk: "Hranica krbu" },
+  of_notify_tariff: { en: "Tariff", sk: "Tarifa" },
+  of_notify_floor: { en: "Floor", sk: "Podlaha" },
+  of_notify_krb: { en: "Fireplace", sk: "Krb" },
+  of_notify_emergency: { en: "Emergency protection", sk: "Núdzová ochrana" },
+  of_notify_boost: { en: "Boost", sk: "Boost" },
+  of_notify_cooling: { en: "Cooling", sk: "Chladenie" },
+  of_notify_holiday: { en: "Holiday", sk: "Dovolenka" },
+  of_notify_preheat: { en: "Pre-heating", sk: "Predkúrenie" },
+  of_notify_ac_backup: { en: "AC backup", sk: "AC záloha" },
+  of_notify_cold_outdoor: { en: "Outdoor threshold", sk: "Vonkajšia hranica" },
+  of_notify_diagnostics: { en: "Faults", sk: "Poruchy" },
   ov_heated_today: { en: "Heating today", sk: "Kúrenie dnes" },
   ov_cooled_today: { en: "Cooling today", sk: "Chladenie dnes" },
 };
@@ -150,6 +183,40 @@ const STATS_REFRESH_MS = 15 * 60 * 1000;
 const OVERVIEW_REFRESH_MS = 10 * 60 * 1000;
 const DELTA_OK = 0.5;
 const DAY_MS = 24 * 3600 * 1000;
+
+// Material Design Icons (z @mdi/js) - vektorove ikony priamo v karte, bez emoji.
+const MDI = {
+  "account-group": "M12,5.5A3.5,3.5 0 0,1 15.5,9A3.5,3.5 0 0,1 12,12.5A3.5,3.5 0 0,1 8.5,9A3.5,3.5 0 0,1 12,5.5M5,8C5.56,8 6.08,8.15 6.53,8.42C6.38,9.85 6.8,11.27 7.66,12.38C7.16,13.34 6.16,14 5,14A3,3 0 0,1 2,11A3,3 0 0,1 5,8M19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14C17.84,14 16.84,13.34 16.34,12.38C17.2,11.27 17.62,9.85 17.47,8.42C17.92,8.15 18.44,8 19,8M5.5,18.25C5.5,16.18 8.41,14.5 12,14.5C15.59,14.5 18.5,16.18 18.5,18.25V20H5.5V18.25M0,20V18.5C0,17.11 1.89,15.94 4.45,15.6C3.86,16.28 3.5,17.22 3.5,18.25V20H0M24,20H20.5V18.25C20.5,17.22 20.14,16.28 19.55,15.6C22.11,15.94 24,17.11 24,18.5V20Z",
+  "account-multiple": "M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z",
+  "airplane": "M20.56 3.91C21.15 4.5 21.15 5.45 20.56 6.03L16.67 9.92L18.79 19.11L17.38 20.53L13.5 13.1L9.6 17L9.96 19.47L8.89 20.53L7.13 17.35L3.94 15.58L5 14.5L7.5 14.87L11.37 11L3.94 7.09L5.36 5.68L14.55 7.8L18.44 3.91C19 3.33 20 3.33 20.56 3.91Z",
+  "alert": "M13 14H11V9H13M13 18H11V16H13M1 21H23L12 2L1 21Z",
+  "alert-circle-outline": "M11,15H13V17H11V15M11,7H13V13H11V7M12,2C6.47,2 2,6.5 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20Z",
+  "bell-outline": "M10 21H14C14 22.1 13.1 23 12 23S10 22.1 10 21M21 19V20H3V19L5 17V11C5 7.9 7 5.2 10 4.3V4C10 2.9 10.9 2 12 2S14 2.9 14 4V4.3C17 5.2 19 7.9 19 11V17L21 19M17 11C17 8.2 14.8 6 12 6S7 8.2 7 11V18H17V11Z",
+  "clock-outline": "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
+  "cog": "M12,15.5A3.5,3.5 0 0,1 8.5,12A3.5,3.5 0 0,1 12,8.5A3.5,3.5 0 0,1 15.5,12A3.5,3.5 0 0,1 12,15.5M19.43,12.97C19.47,12.65 19.5,12.33 19.5,12C19.5,11.67 19.47,11.34 19.43,11L21.54,9.37C21.73,9.22 21.78,8.95 21.66,8.73L19.66,5.27C19.54,5.05 19.27,4.96 19.05,5.05L16.56,6.05C16.04,5.66 15.5,5.32 14.87,5.07L14.5,2.42C14.46,2.18 14.25,2 14,2H10C9.75,2 9.54,2.18 9.5,2.42L9.13,5.07C8.5,5.32 7.96,5.66 7.44,6.05L4.95,5.05C4.73,4.96 4.46,5.05 4.34,5.27L2.34,8.73C2.21,8.95 2.27,9.22 2.46,9.37L4.57,11C4.53,11.34 4.5,11.67 4.5,12C4.5,12.33 4.53,12.65 4.57,12.97L2.46,14.63C2.27,14.78 2.21,15.05 2.34,15.27L4.34,18.73C4.46,18.95 4.73,19.03 4.95,18.95L7.44,17.94C7.96,18.34 8.5,18.68 9.13,18.93L9.5,21.58C9.54,21.82 9.75,22 10,22H14C14.25,22 14.46,21.82 14.5,21.58L14.87,18.93C15.5,18.67 16.04,18.34 16.56,17.94L19.05,18.95C19.27,19.03 19.54,18.95 19.66,18.73L21.66,15.27C21.78,15.05 21.73,14.78 21.54,14.63L19.43,12.97Z",
+  "fireplace": "M22,22H2V20H22V22M22,6H2V3H22V6M20,7V19H17V11C17,11 14.5,10 12,10C9.5,10 7,11 7,11V19H4V7H20M14.5,14.67H14.47L14.81,15.22L14.87,15.34C15.29,16.35 15,17.5 14.21,18.24C13.5,18.9 12.5,19.07 11.58,18.95C10.71,18.84 9.9,18.29 9.45,17.53C9.3,17.3 9.19,17.03 9.13,16.77L9,16.11C8.96,15.15 9.34,14.14 10.06,13.54C9.73,14.26 9.81,15.16 10.3,15.79L10.36,15.87C10.44,15.94 10.55,15.97 10.64,15.92C10.73,15.89 10.8,15.8 10.8,15.7L10.76,15.56C10.23,14.17 10.68,12.55 11.79,11.63C12.1,11.38 12.5,11.15 12.87,11.05C12.46,11.87 12.61,12.93 13.25,13.57L14.14,14.3L14.5,14.67M13.11,17.44V17.44C13.37,17.2 13.53,16.8 13.5,16.44V16.25C13.38,15.65 12.85,15.46 12.5,15L12.26,14.55C12.13,14.85 12.12,15.13 12.17,15.46C12.23,15.8 12.37,16.09 12.29,16.44C12.2,16.83 11.9,17.22 11.37,17.35C11.67,17.64 12.15,17.87 12.64,17.71L13.11,17.44Z",
+  "flash": "M7,2V13H10V22L17,10H13L17,2H7Z",
+  "floor-plan": "M10,5V10H9V5H5V13H9V12H10V17H9V14H5V19H12V17H13V19H19V17H21V21H3V3H21V15H19V10H13V15H12V9H19V5H10Z",
+  "heat-wave": "M8.5 4.5L5.4 9.5L8.5 14.7L5.2 20.5L3.4 19.6L6.1 14.7L3 9.5L6.7 3.6L8.5 4.5M14.7 4.4L11.6 9.5L14.7 14.5L11.4 20.3L9.6 19.4L12.3 14.5L9.2 9.5L12.9 3.5L14.7 4.4M21 4.4L17.9 9.5L21 14.5L17.7 20.3L15.9 19.4L18.6 14.5L15.5 9.5L19.2 3.5L21 4.4",
+  "help-circle-outline": "M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z",
+  "home-account": "M12,3L2,12H5V20H19V12H22L12,3M12,8.75A2.25,2.25 0 0,1 14.25,11A2.25,2.25 0 0,1 12,13.25A2.25,2.25 0 0,1 9.75,11A2.25,2.25 0 0,1 12,8.75M12,15C13.5,15 16.5,15.75 16.5,17.25V18H7.5V17.25C7.5,15.75 10.5,15 12,15Z",
+  "information-outline": "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
+  "open-in-new": "M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z",
+  "radiator": "M7.95,3L6.53,5.19L7.95,7.4H7.94L5.95,10.5L4.22,9.6L5.64,7.39L4.22,5.19L6.22,2.09L7.95,3M13.95,2.89L12.53,5.1L13.95,7.3L13.94,7.31L11.95,10.4L10.22,9.5L11.64,7.3L10.22,5.1L12.22,2L13.95,2.89M20,2.89L18.56,5.1L20,7.3V7.31L18,10.4L16.25,9.5L17.67,7.3L16.25,5.1L18.25,2L20,2.89M2,22V14A2,2 0 0,1 4,12H20A2,2 0 0,1 22,14V22H20V20H4V22H2M6,14A1,1 0 0,0 5,15V17A1,1 0 0,0 6,18A1,1 0 0,0 7,17V15A1,1 0 0,0 6,14M10,14A1,1 0 0,0 9,15V17A1,1 0 0,0 10,18A1,1 0 0,0 11,17V15A1,1 0 0,0 10,14M14,14A1,1 0 0,0 13,15V17A1,1 0 0,0 14,18A1,1 0 0,0 15,17V15A1,1 0 0,0 14,14M18,14A1,1 0 0,0 17,15V17A1,1 0 0,0 18,18A1,1 0 0,0 19,17V15A1,1 0 0,0 18,14Z",
+  "rocket-launch": "M13.13 22.19L11.5 18.36C13.07 17.78 14.54 17 15.9 16.09L13.13 22.19M5.64 12.5L1.81 10.87L7.91 8.1C7 9.46 6.22 10.93 5.64 12.5M21.61 2.39C21.61 2.39 16.66 .269 11 5.93C8.81 8.12 7.5 10.53 6.65 12.64C6.37 13.39 6.56 14.21 7.11 14.77L9.24 16.89C9.79 17.45 10.61 17.63 11.36 17.35C13.5 16.53 15.88 15.19 18.07 13C23.73 7.34 21.61 2.39 21.61 2.39M14.54 9.46C13.76 8.68 13.76 7.41 14.54 6.63S16.59 5.85 17.37 6.63C18.14 7.41 18.15 8.68 17.37 9.46C16.59 10.24 15.32 10.24 14.54 9.46M8.88 16.53L7.47 15.12L8.88 16.53M6.24 22L9.88 18.36C9.54 18.27 9.21 18.12 8.91 17.91L4.83 22H6.24M2 22H3.41L8.18 17.24L6.76 15.83L2 20.59V22M2 19.17L6.09 15.09C5.88 14.79 5.73 14.47 5.64 14.12L2 17.76V19.17Z",
+  "shield-alert-outline": "M21,11C21,16.55 17.16,21.74 12,23C6.84,21.74 3,16.55 3,11V5L12,1L21,5V11M12,21C15.75,20 19,15.54 19,11.22V6.3L12,3.18L5,6.3V11.22C5,15.54 8.25,20 12,21M11,7H13V13H11V7M11,15H13V17H11V15Z",
+  "snowflake": "M20.79,13.95L18.46,14.57L16.46,13.44V10.56L18.46,9.43L20.79,10.05L21.31,8.12L19.54,7.65L20,5.88L18.07,5.36L17.45,7.69L15.45,8.82L13,7.38V5.12L14.71,3.41L13.29,2L12,3.29L10.71,2L9.29,3.41L11,5.12V7.38L8.5,8.82L6.5,7.69L5.92,5.36L4,5.88L4.47,7.65L2.7,8.12L3.22,10.05L5.55,9.43L7.55,10.56V13.45L5.55,14.58L3.22,13.96L2.7,15.89L4.47,16.36L4,18.12L5.93,18.64L6.55,16.31L8.55,15.18L11,16.62V18.88L9.29,20.59L10.71,22L12,20.71L13.29,22L14.7,20.59L13,18.88V16.62L15.5,15.17L17.5,16.3L18.12,18.63L20,18.12L19.53,16.35L21.3,15.88L20.79,13.95M9.5,10.56L12,9.11L14.5,10.56V13.44L12,14.89L9.5,13.44V10.56Z",
+  "solar-power-variant": "M3.33 16H11V13H4L3.33 16M13 16H20.67L20 13H13V16M21.11 18H13V22H22L21.11 18M2 22H11V18H2.89L2 22M11 8H13V11H11V8M15.76 7.21L17.18 5.79L19.3 7.91L17.89 9.33L15.76 7.21M4.71 7.91L6.83 5.79L8.24 7.21L6.12 9.33L4.71 7.91M3 2H6V4H3V2M18 2H21V4H18V2M12 7C14.76 7 17 4.76 17 2H7C7 4.76 9.24 7 12 7Z",
+  "sync": "M12,18A6,6 0 0,1 6,12C6,11 6.25,10.03 6.7,9.2L5.24,7.74C4.46,8.97 4,10.43 4,12A8,8 0 0,0 12,20V23L16,19L12,15M12,4V1L8,5L12,9V6A6,6 0 0,1 18,12C18,13 17.75,13.97 17.3,14.8L18.76,16.26C19.54,15.03 20,13.57 20,12A8,8 0 0,0 12,4Z",
+  "thermometer": "M15 13V5A3 3 0 0 0 9 5V13A5 5 0 1 0 15 13M12 4A1 1 0 0 1 13 5V8H11V5A1 1 0 0 1 12 4Z",
+  "toggle-switch-outline": "M17 6H7C3.69 6 1 8.69 1 12S3.69 18 7 18H17C20.31 18 23 15.31 23 12S20.31 6 17 6M17 16H7C4.79 16 3 14.21 3 12S4.79 8 7 8H17C19.21 8 21 9.79 21 12S19.21 16 17 16M17 9C15.34 9 14 10.34 14 12S15.34 15 17 15 20 13.66 20 12 18.66 9 17 9Z",
+  "tune": "M3,17V19H9V17H3M3,5V7H13V5H3M13,21V19H21V17H13V15H11V21H13M7,9V11H3V13H7V15H9V9H7M21,13V11H11V13H21M15,9H17V7H21V5H17V3H15V9Z",
+};
+
+function mdiSvg(icon) {
+  const d = MDI[String(icon || "").replace(/^mdi:/, "")];
+  return d ? `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${d}"/></svg>` : null;
+}
 
 const ICONS = {
   flame: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3 4 6 6.5 6 11a6 6 0 0 1-12 0c0-2.6 1.4-4.6 3-6 .2 1.6 1 2.6 2 3 .3-3 1.2-5.6 1-8z"/></svg>`,
@@ -424,13 +491,14 @@ class SmartHeatingCard extends HTMLElement {
           <div class="sh-why"><span class="sh-badges"></span><span class="sh-why-t"></span></div>
 
           <div class="sh-settings" hidden>
-            ${section("sh-section--mode", "🧭", "section_mode", `<div class="sh-chips sh-mode-chips"></div>`)}
-            ${section("sh-section--mode sh-season-section", "🔄", "section_season", `<div class="sh-chips sh-season-chips"></div>`, 'style="display:none"')}
-            ${section("sh-section--temp", "🌡️", "section_temps", `<div class="sh-temps"></div>`)}
-            ${section("sh-section--temp sh-cooling-section", "❄️", "section_cooling", `<div class="sh-cooling"></div>`, 'style="display:none"')}
-            ${section("sh-section--time", "⏰", "section_times", `<div class="sh-times"></div>`)}
-            ${section("sh-section--toggle", "🔀", "section_toggles", `<div class="sh-toggles"></div>`)}
-            ${section("sh-section--boost", "🚀", "section_boost", `<div class="sh-boost"></div>`)}
+            ${section("sh-section--mode", mdiSvg("tune"), "section_mode", `<div class="sh-chips sh-mode-chips"></div>`)}
+            ${section("sh-section--mode sh-season-section", mdiSvg("sync"), "section_season", `<div class="sh-chips sh-season-chips"></div>`, 'style="display:none"')}
+            ${section("sh-section--temp", mdiSvg("thermometer"), "section_temps", `<div class="sh-temps"></div>`)}
+            ${section("sh-section--floor", mdiSvg("heat-wave"), "section_floor", `<div class="sh-floor"></div>`)}
+            ${section("sh-section--temp sh-cooling-section", mdiSvg("snowflake"), "section_cooling", `<div class="sh-cooling"></div>`, 'style="display:none"')}
+            ${section("sh-section--time", mdiSvg("clock-outline"), "section_times", `<div class="sh-times"></div>`)}
+            ${section("sh-section--toggle", mdiSvg("toggle-switch-outline"), "section_toggles", `<div class="sh-toggles"></div>`)}
+            ${section("sh-section--boost", mdiSvg("rocket-launch"), "section_boost", `<div class="sh-boost"></div>`)}
           </div>
         </div>
       </ha-card>
@@ -571,7 +639,8 @@ class SmartHeatingCard extends HTMLElement {
       .sh-section { border-radius: 10px; }
       .sh-section-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500;
         color: var(--primary-text-color); padding: 9px 12px; border-radius: 9px; background: var(--sh-fill); }
-      .sh-icon { font-size: 0.95rem; line-height: 1; }
+      .sh-icon { font-size: 0.95rem; line-height: 1; display: inline-flex; color: var(--sh-sub, var(--secondary-text-color)); }
+      .sh-icon svg { width: 17px; height: 17px; display: block; }
       .sh-sum-val { margin-left: auto; font-size: 0.78rem; font-weight: 400; color: var(--secondary-text-color); }
       details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; user-select: none; }
       details.sh-section > summary.sh-section-label::-webkit-details-marker { display: none; }
@@ -783,10 +852,13 @@ class SmartHeatingCard extends HTMLElement {
     if (zAttrs.pv_active) badges.push(["ok", this._t("badge_pv")]);
     if (zAttrs.cold_outdoor_active) badges.push(["info", this._t("badge_cold")]);
     if (zAttrs.boost_active) badges.push(["info", this._t("badge_boost")]);
+    if (zAttrs.floor_guard) badges.push(["info", this._t("badge_floor_min")]);
+    const problems = Array.isArray(zAttrs.problemy) ? zAttrs.problemy : [];
     const reason = String((this._hass.states[eid(this._zoneId, "sensor", "stav")] || {}).state || "").toLowerCase();
     this.querySelector(".sh-badges").innerHTML = badges
       .filter(([, label]) => !reason.includes(label.toLowerCase()))
-      .map(([cls, label]) => `<span class="sh-badge ${cls}">${esc(label)}</span>`).join("");
+      .map(([cls, label]) => `<span class="sh-badge ${cls}">${esc(label)}</span>`).join("") +
+      problems.map((p) => `<span class="sh-badge err sh-problem" title="${esc(p)}">${esc(this._t("badge_problem"))}: ${esc(p)}</span>`).join("");
   }
 
   _renderSummaries(attrs, zAttrs, hasAc) {
@@ -818,6 +890,7 @@ class SmartHeatingCard extends HTMLElement {
       this._renderCooling();
     }
     this._renderTemps();
+    this._renderFloor();
     this._renderTimes();
     this._renderToggles();
     this._renderBoost(zAttrs);
@@ -985,6 +1058,19 @@ class SmartHeatingCard extends HTMLElement {
     this._wireNumberRows(wrap);
   }
 
+  _renderFloor() {
+    const wrap = this.querySelector(".sh-floor");
+    if (!wrap) return;
+    const has = (key) => !!this._hass.states[eid(this._zoneId, "number", key)];
+    const row = (label, key) => (has(key) ? this._numberRow(this._t(label), key, 0.5, "°C") : "");
+    wrap.innerHTML =
+      row("temp_floor_min", "floor_min") +
+      row("temp_floor_max", "floor_max") +
+      row("temp_floor_hyst", "floor_hysterezia") +
+      (has("radiator_hysterezia") ? this._numberRow(this._t("temp_radiator_hyst"), "radiator_hysterezia", 0.1, "°C") : "");
+    this._wireNumberRows(wrap);
+  }
+
   _renderCooling() {
     const wrap = this.querySelector(".sh-cooling");
     wrap.innerHTML =
@@ -1044,6 +1130,8 @@ class SmartHeatingCard extends HTMLElement {
       this._switchRow(this._t("toggle_preheat"), "predkurenie_povolene") +
       this._switchRow(this._t("toggle_krb"), "reaguj_na_krb") +
       this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok") +
+      (this._hass.states[eid(this._zoneId, "switch", "udrzat_min_podlahy")]
+        ? this._switchRow(this._t("toggle_floor_min"), "udrzat_min_podlahy") : "") +
       (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "");
     wrap.querySelectorAll(".sh-switch").forEach((el) => {
       const toggle = () => {
@@ -1270,6 +1358,33 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-out .l { font-size: 12.5px; color: var(--sh-sub); margin-top: 2px; }
       .sho-out .tr { font-size: 12.5px; color: var(--sh-sub); margin-top: 8px; font-variant-numeric: tabular-nums; }
       .sho-out .tr:empty { display: none; }
+      .sho-blk .i svg, .sho-tile .i svg { width: 20px; height: 20px; display: block; }
+      .sho-gear { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 0; border: 0; background: none;
+        color: var(--sh-sub); font: inherit; font-size: 12.5px; cursor: pointer; }
+      .sho-gear svg { width: 15px; height: 15px; }
+      .sho-gear:hover { color: var(--sh-txt); }
+      .sho-set { grid-column: 1 / -1; }
+      .sho-set[hidden] { display: none; }
+      .sho-set-h { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 12px; }
+      .sho-set-h svg { width: 18px; height: 18px; color: var(--sh-sub); }
+      .sho-grps { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 8px 28px; }
+      .sho-grp .h { font-size: 12px; color: var(--sh-sub); margin: 4px 0 6px; }
+      .sho-f { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13.5px; }
+      .sho-sw { position: relative; width: 36px; height: 20px; border-radius: 999px; border: 0; padding: 0; cursor: pointer;
+        background: var(--divider-color, #444); flex-shrink: 0; }
+      .sho-sw i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
+      .sho-sw.on { background: var(--sh-ok, #4caf7d); }
+      .sho-sw.on i { left: 18px; }
+      .sho-num { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+      .sho-num button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--divider-color, #444); background: none; color: var(--sh-txt); cursor: pointer; font: inherit; }
+      .sho-set-f { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider-color, #333); }
+      .sho-set-f .sp { flex: 1; }
+      .sho-all { display: inline-flex; align-items: center; gap: 6px; color: var(--sh-sub); font-size: 12.5px; text-decoration: none; }
+      .sho-all svg { width: 14px; height: 14px; }
+      .sho-btn { font: inherit; font-size: 13px; padding: 6px 14px; border-radius: 8px; border: 1px solid var(--divider-color, #444);
+        background: none; color: var(--sh-txt); cursor: pointer; }
+      .sho-btn.pri { background: var(--primary-color, #03a9f4); border-color: transparent; color: var(--text-primary-color, #fff); }
+      .sho-btn:disabled { opacity: .45; cursor: default; }
       .sho-tiles { display: grid; grid-template-columns: repeat(var(--sho-cols, 3), minmax(0, 1fr)); gap: 10px; padding: 12px; }
       .sho-tile { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 12px; background: var(--sh-fill); min-width: 0; }
       .sho-tile.click { cursor: pointer; }
@@ -1318,7 +1433,12 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-out"><div class="v"></div><div class="l">${this._t("ov_outside")}</div><div class="tr"></div></div>
         <div class="sho-blk sho-tiles"></div>
         <div class="sho-blk sho-sum"></div>
+        <div class="sho-blk sho-set" hidden></div>
       </div></ha-card>`;
+      this.querySelector(".sho-sum").addEventListener("click", (e) => {
+        if (e.target.closest(".sho-gear")) this._toggleSettings();
+      });
+      this.querySelector(".sho-set").addEventListener("click", (e) => this._onSettingsClick(e));
       this.querySelector(".sho-out").addEventListener("click", () => {
         const outdoor = this._outdoorEntity();
         if (outdoor) fireMoreInfo(this, outdoor);
@@ -1531,7 +1651,7 @@ class SmartHeatingOverview extends HTMLElement {
 
     const html = tiles.map((t) => `
       <div class="sho-tile ${t.cls}${t.entity && t.tap !== "none" ? " click" : ""}"${t.entity && t.tap !== "none" ? ` data-entity="${esc(t.entity)}" data-tap="${esc(t.tap || "more-info")}" role="button" tabindex="0"` : ""}>
-        <div class="i"><ha-icon icon="${esc(t.icon)}"></ha-icon></div>
+        <div class="i">${mdiSvg(t.icon) || `<ha-icon icon="${esc(t.icon)}"></ha-icon>`}</div>
         <div class="tx"><div class="k">${esc(t.label)}</div><div class="s">${esc(t.value)}</div></div>
       </div>`).join("");
     const wrap = this.querySelector(".sho-tiles");
@@ -1565,11 +1685,156 @@ class SmartHeatingOverview extends HTMLElement {
     const runtime = rt == null ? "–" : fmtDuration(cooling ? rt.cool : rt.heat, this._lang);
     const row = (color, label, val) =>
       `<div class="r"><span>${color ? `<span class="dot" style="background:${color}"></span>` : ""}${esc(label)}</span><b>${esc(val)}</b></div>`;
+    const faulty = zones.filter((z) => Array.isArray(z.s.problemy) && z.s.problemy.length).length;
     wrap.innerHTML =
       row("var(--sh-ok)", this._t("ov_on_target"), ok) +
       row("var(--sh-warn)", this._t("ov_above"), up) +
       row("var(--sh-cool)", this._t("ov_below"), dn) +
-      row("", this._t(cooling ? "ov_cooled_today" : "ov_heated_today"), runtime);
+      (faulty ? row("var(--sh-err, #e5484d)", this._t("ov_problems"), faulty) : "") +
+      row("", this._t(cooling ? "ov_cooled_today" : "ov_heated_today"), runtime) +
+      `<button type="button" class="sho-gear" aria-expanded="${this._setOpen ? "true" : "false"}">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></button>`;
+  }
+
+  // -------------------------------------------------- nastavenia integracie (options flow)
+
+  _entryId() {
+    const z = this._zoneData().find((x) => x.s.config_entry_id);
+    return z ? z.s.config_entry_id : null;
+  }
+
+  async _toggleSettings() {
+    const panel = this.querySelector(".sho-set");
+    if (this._setOpen) return this._closeSettings(true);
+    this._setOpen = true;
+    panel.hidden = false;
+    this._renderSummary(this._zoneData());
+    panel.innerHTML = `<div class="sho-msg">${esc(this._t("ov_loading"))}</div>`;
+    try {
+      const entryId = this._entryId();
+      if (!entryId) throw new Error("no entry");
+      let step = await this._hass.callApi("POST", "config/config_entries/options/flow", { handler: entryId, show_advanced_options: false });
+      if (step.type === "menu") {
+        step = await this._hass.callApi("POST", `config/config_entries/options/flow/${step.flow_id}`, { next_step_id: "global" });
+      }
+      if (step.type !== "form") throw new Error("unexpected step");
+      this._flow = step;
+      this._changes = {};
+      this._renderSettingsPanel();
+    } catch (err) {
+      this._flow = null;
+      panel.innerHTML = `<div class="sho-msg">${esc(this._t("ov_settings_error"))}</div>${this._settingsFooter(false)}`;
+    }
+  }
+
+  _settingsFields() {
+    const fields = (this._flow && this._flow.data_schema) || [];
+    const out = [];
+    for (const f of fields) {
+      const label = I18N[`of_${f.name}`];
+      if (!label) continue;                       // len polia, ktorym karta rozumie
+      const sel = f.selector || {};
+      if (sel.boolean || f.type === "boolean") out.push({ ...f, kind: "bool" });
+      else if (sel.number || f.type === "float" || f.type === "integer") {
+        const n = sel.number || {};
+        out.push({ ...f, kind: "num", step: n.step && n.step !== "any" ? Number(n.step) : 0.5, min: n.min, max: n.max });
+      }
+    }
+    return out;
+  }
+
+  _fieldValue(f) {
+    return Object.prototype.hasOwnProperty.call(this._changes, f.name) ? this._changes[f.name] : f.default;
+  }
+
+  _renderSettingsPanel() {
+    const panel = this.querySelector(".sho-set");
+    const fields = this._settingsFields();
+    const general = fields.filter((f) => !f.name.startsWith("notify_"));
+    const notify = fields.filter((f) => f.name.startsWith("notify_"));
+    const fieldHtml = (f) => {
+      const label = esc(this._t(`of_${f.name}`));
+      if (f.kind === "bool") {
+        const on = !!this._fieldValue(f);
+        return `<label class="sho-f"><span>${label}</span><button type="button" class="sho-sw ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-f="${esc(f.name)}"><i></i></button></label>`;
+      }
+      const v = this._fieldValue(f);
+      return `<div class="sho-f"><span>${label}</span><span class="sho-num">
+        <button type="button" data-f="${esc(f.name)}" data-d="-1">−</button><b>${v == null ? "–" : esc(Number(v).toFixed(1))}°</b>
+        <button type="button" data-f="${esc(f.name)}" data-d="1">+</button></span></div>`;
+    };
+    const group = (title, list) => (list.length ? `<div class="sho-grp"><div class="h">${esc(this._t(title))}</div>${list.map(fieldHtml).join("")}</div>` : "");
+    panel.innerHTML = `<div class="sho-set-h">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></div>
+      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_notify", notify)}</div>
+      ${this._settingsFooter(true)}`;
+  }
+
+  _settingsFooter(canSave) {
+    const dirty = this._changes && Object.keys(this._changes).length > 0;
+    return `<div class="sho-set-f">
+      <a href="#" class="sho-all">${mdiSvg("open-in-new")}${esc(this._t("ov_settings_all"))}</a>
+      <span class="sp"></span>
+      <button type="button" class="sho-btn sho-cancel">${esc(this._t("ov_cancel"))}</button>
+      ${canSave ? `<button type="button" class="sho-btn pri sho-save" ${dirty ? "" : "disabled"}>${esc(this._t("ov_save"))}</button>` : ""}
+    </div>`;
+  }
+
+  _onSettingsClick(e) {
+    const t = e.target;
+    if (t.closest(".sho-all")) {
+      e.preventDefault();
+      this._closeSettings(true);
+      history.pushState(null, "", "/config/integrations/integration/smart_heating");
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+      return;
+    }
+    if (t.closest(".sho-cancel")) return this._closeSettings(true);
+    if (t.closest(".sho-save")) return this._saveSettings();
+    const ctl = t.closest("[data-f]");
+    if (!ctl || !this._flow) return;
+    const f = this._settingsFields().find((x) => x.name === ctl.dataset.f);
+    if (!f) return;
+    if (f.kind === "bool") this._changes[f.name] = !this._fieldValue(f);
+    else {
+      let v = Number(this._fieldValue(f) || 0) + Number(ctl.dataset.d) * f.step;
+      if (f.min != null) v = Math.max(Number(f.min), v);
+      if (f.max != null) v = Math.min(Number(f.max), v);
+      this._changes[f.name] = Math.round(v * 100) / 100;
+    }
+    this._renderSettingsPanel();
+  }
+
+  async _saveSettings() {
+    if (!this._flow) return;
+    const payload = {};
+    // vsetky polia s aktualnou hodnotou (default = sucasne nastavenie) + zmeny
+    for (const f of this._flow.data_schema || []) {
+      if (Object.prototype.hasOwnProperty.call(f, "default")) payload[f.name] = f.default;
+    }
+    Object.assign(payload, this._changes);
+    const panel = this.querySelector(".sho-set");
+    const btn = panel.querySelector(".sho-save");
+    if (btn) { btn.disabled = true; btn.textContent = this._t("ov_saving"); }
+    try {
+      await this._hass.callApi("POST", `config/config_entries/options/flow/${this._flow.flow_id}`, payload);
+      this._flow = null;
+      panel.innerHTML = `<div class="sho-msg">${esc(this._t("ov_saved"))}</div>`;
+      setTimeout(() => this._closeSettings(false), 2500);
+    } catch (err) {
+      panel.innerHTML = `<div class="sho-msg">${esc(this._t("ov_settings_error"))}</div>${this._settingsFooter(false)}`;
+    }
+  }
+
+  _closeSettings(abort) {
+    const flow = this._flow;
+    this._flow = null;
+    this._changes = {};
+    this._setOpen = false;
+    const panel = this.querySelector(".sho-set");
+    if (panel) { panel.hidden = true; panel.innerHTML = ""; }
+    if (abort && flow && this._hass) {
+      Promise.resolve(this._hass.callApi("DELETE", `config/config_entries/options/flow/${flow.flow_id}`)).catch(() => {});
+    }
+    this._renderSummary(this._zoneData());
   }
 
   // ------------------------------------------------------------------ historia

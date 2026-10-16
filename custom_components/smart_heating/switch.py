@@ -10,7 +10,10 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import AC_SWITCH_DEFS, CONF_ZONE_TYPE, DOMAIN, OPT_ZONES, SWITCH_DEFS, ZONE_TYPE_FLOOR_AC
+from .const import (
+    AC_SWITCH_DEFS, CONF_USE_FLOOR_MIN, CONF_ZONE_TYPE, DOMAIN, OPT_ZONES, SWITCH_DEFS,
+    ZONE_TYPE_FLOOR_AC, ZONE_TYPE_RADIATOR_FLOOR,
+)
 from .coordinator import SmartHeatingCoordinator
 
 
@@ -24,6 +27,9 @@ async def async_setup_entry(
         if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC:
             defs.update(AC_SWITCH_DEFS)
         for key, (label, icon, default) in defs.items():
+            if key == "udrzat_min_podlahy":
+                # v kupelni (radiator + podlaha) je to hlavna uloha podlahy -> predvolene zapnute
+                default = zone.get(CONF_USE_FLOOR_MIN, zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR)
             entities.append(ZoneSwitch(coordinator, zone_id, zone["name"], key, label, icon, default))
     async_add_entities(entities)
 
