@@ -36,6 +36,8 @@ from .const import (
     CONF_BATTERY_CHARGE_POSITIVE,
     PV_ENGINE_NUMBERS,
     CONF_USE_FLOOR_MIN,
+    CONF_POWER_ENTITIES,
+    CONF_ENERGY_ENTITIES,
     RADIATOR_NUMBER_DEFS,
     ZONE_TYPE_RADIATOR_FLOOR,
     CONF_NOTIFY_COOLING,
@@ -365,6 +367,12 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             vol.Optional(CONF_USE_FIXED_AC_SETPOINT, default=zone.get(CONF_USE_FIXED_AC_SETPOINT, False))
         ] = selector.BooleanSelector()
         schema_dict[
+            vol.Optional(CONF_POWER_ENTITIES, default=zone.get(CONF_POWER_ENTITIES, []))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="power", multiple=True))
+        schema_dict[
+            vol.Optional(CONF_ENERGY_ENTITIES, default=zone.get(CONF_ENERGY_ENTITIES, []))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="energy", multiple=True))
+        schema_dict[
             vol.Optional(
                 CONF_USE_FLOOR_MIN,
                 # nova zona: zapnute (floor_min je predvolene 5 °C, kym ho nezvysis, nic nerobi);
@@ -403,6 +411,8 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
             CONF_USE_FIXED_AC_SETPOINT: user_input.get(CONF_USE_FIXED_AC_SETPOINT, False),
             CONF_RADIATOR_ENTITY: user_input.get(CONF_RADIATOR_ENTITY),
+            CONF_POWER_ENTITIES: user_input.get(CONF_POWER_ENTITIES, []),
+            CONF_ENERGY_ENTITIES: user_input.get(CONF_ENERGY_ENTITIES, []),
             CONF_USE_FLOOR_MIN: user_input.get(
                 CONF_USE_FLOOR_MIN, user_input.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
             ),

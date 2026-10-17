@@ -30,6 +30,8 @@ zone has its own rules but shares common global settings.
 <p align="center">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - overview card and zone cards">
   <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/overview-settings.png" width="100%" alt="Integration settings right in the overview card">
+  <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Smart Heating zone card - settings open">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="32%" alt="Global settings form">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="32%" alt="Edit zone form">
@@ -44,6 +46,9 @@ zone has its own rules but shares common global settings.
 - [Decision logic - Heating](#decision-logic---heating)
 - [Decision logic - Cooling](#decision-logic---cooling)
 - [External thermometer and precise AC control](#external-thermometer-and-precise-ac-control)
+- [Solar surplus cascade](#solar-surplus-cascade)
+- [Energy consumption](#energy-consumption)
+- [Diagnostics](#diagnostics)
 - [Notifications](#notifications)
 - [Language (i18n)](#language-i18n)
 - [Tests and CI](#tests-and-ci)
@@ -63,17 +68,21 @@ zone has its own rules but shares common global settings.
 |   |   |
 |---|---|
 | 🏠 **Multi-zone** | Each room has its own mode, temperatures and schedule, sharing common global settings. |
-| 🔥 **Floor heating** | Electric floor heating with a floor-temperature safety limit. |
+| 🔥 **Floor heating** | Electric floor heating with a max floor temperature (with hysteresis, so the relay doesn't chatter) and an optional minimum floor temperature that keeps the floor warm even when the air is. |
+| ♨️ **Radiator + floor zone** | Two independent controls in one room (e.g. a bathroom): an electric radiator on a relay holds the air, the floor holds its own minimum. |
 | ❄️ **AC heating & cooling** | Air conditioning as the primary heat source, plus a deliberately simpler cooling logic driven by solar battery charge. |
 | 🪵 **Fireplace aware** | Turns off heating in a room once it's warm enough near the fireplace. |
 | 💶 **Tariff aware** | A global block on heating during high-tariff periods. |
-| ☀️ **Solar surplus** | Uses PV surplus for heating and battery charge for cooling. |
+| ☀️ **Solar surplus cascade** | Rooms heat from the surplus by priority (1 → 2 → 3). Controlled by real power: a priority is added while there's surplus and removed, lowest first, when the battery discharges or the grid is used - with adjustable thresholds and delays. |
+| ⚡ **Energy consumption** | Current heating power and today's consumption per room and for the whole house. |
+| 🩺 **Diagnostics** | Notifies about unavailable devices, implausible readings and rooms that can't reach their target. |
 | 🥶 **Frost protection** | Emergency protection prevents actual freezing, even during a tariff block. |
 | 🧊 **Forced heating in cold** | A per-zone configurable outdoor threshold triggers comfort heating in Auto mode. |
 | ⏰ **Pre-heating** | A fixed time window before arrival, independent of actual presence. |
 | 🌡️ **External thermometer** | More accurate control when the AC's/floor's built-in sensor is off. |
 | 🚀 **Boost** | Instant, temporary comfort heating on demand. |
-| 🎛️ **Custom Lovelace cards** | One card per zone with a 24 h chart and full control without YAML, plus a whole-house overview card. |
+| 🎛️ **Custom Lovelace cards** | One card per zone with a 24 h chart and full control without YAML, plus a whole-house overview card where the integration settings can be changed directly. |
+| 📈 **Warm-up logging** | Every warm-up is recorded (minutes per °C) - groundwork for adaptive pre-heating. |
 | 🌍 **English & Slovak** | Both the card and the backend-generated text (reasons, notifications) support both languages. |
 
 ---
@@ -113,11 +122,14 @@ Added via **Options Flow** (Settings -> Devices & Services -> Smart Heating
     external thermometer
 - Floor `climate` thermostat (required)
 - AC `climate` entity (only for `floor_ac`)
-- Floor temperature sensor (optional, for the safety limit)
+- Radiator relay - switch / input_boolean / light (only for `radiator_floor`)
+- Floor temperature sensor (optional, for the max/min floor temperature)
 - **External zone thermometer** (optional) - replaces the built-in sensor in all calculations
 - People tracked via GPS (`person.x`)
 - Manual presence override (e.g. `input_boolean.guest` for a visitor)
 - React to fireplace (yes/no)
+- Keep minimum floor temperature (yes/no)
+- **Power sensors** and **energy sensors** (optional, several are summed) - for the consumption shown on the cards
 
 ---
 
@@ -228,6 +240,57 @@ If a zone has **no** external thermometer configured, everything works exactly
 as before (the AC is controlled by its own sensor and control loop).
 
 ---
+
+## Solar surplus cascade
+
+Every zone with *Use solar surplus* on has a **solar priority** (1 / 2 / 3).
+Priority 1 rooms heat from the surplus first, the others only when there is
+still surplus left.
+
+**Controlled by power** (Global settings → *Control solar surplus by power*,
+recommended). Inputs: PV production, grid power, battery power and battery
+SOC, with selectable sign conventions. Evaluated every 30 s.
+
+- **Adding:** available surplus = grid export + battery charging (charging only
+  counts above *battery charge is surplus from SOC*, so the battery is charged
+  first). When it stays above *add at surplus* for *lasting*, the next priority
+  joins - then the next one after the same time again.
+- **Removing (hysteresis):** battery discharge or grid import above *remove at*,
+  or production below *insufficient production*, for *lasting* → the lowest
+  active priority is removed; if it continues, the next one after the same time.
+  Below *switch everything off below battery SOC* everything stops at once.
+- Between the two thresholds nothing changes, so a passing cloud doesn't switch
+  rooms on and off.
+
+`sensor.smart_heating_fve_kaskada` shows the active priority (0 = none) and the
+measured powers, so other automations can use it. All values can be tuned in
+the Global settings and in the overview card.
+
+**Without power sensors** a plain on/off surplus entity can be used; the
+cascade then adds lower priorities once all higher-priority rooms have been at
+their target for 10 minutes and releases them as soon as a higher one cools
+down.
+
+## Energy consumption
+
+Each zone has two optional lists: **power sensors** (W) and **energy sensors**
+(kWh). Several sensors are summed (e.g. floor thermostat + AC in one room).
+
+- The zone card shows the current power and today's consumption.
+- The overview card shows the total for the whole house.
+- Today's consumption comes from Home Assistant's 5-minute statistics, so any
+  energy sensor with long-term statistics works (cumulative meters as well as
+  daily utility meters). It refreshes every 5 minutes; power updates live
+  without redrawing the whole card.
+
+## Diagnostics
+
+Reported as faults (badge on the zone card, *Faults* row in the overview and a
+notification when a fault appears and when it's resolved):
+
+- a thermostat, AC, radiator relay or sensor unavailable for over 15 min,
+- an implausible room or floor temperature,
+- a room heating for 3 h while still more than 1 °C below target.
 
 ## Notifications
 

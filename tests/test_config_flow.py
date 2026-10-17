@@ -299,3 +299,16 @@ async def test_card_style_partial_save_keeps_everything_else(hass):
     for key, value in before.items():
         if key != "holiday_active":
             assert after.get(key) == value, key
+
+
+async def test_zone_consumption_entities_roundtrip(hass):
+    entry = await _create_entry(hass)
+    flow = await hass.config_entries.options.async_init(entry.entry_id)
+    form = await hass.config_entries.options.async_configure(flow["flow_id"], user_input={"next_step_id": "add_zone"})
+    await hass.config_entries.options.async_configure(form["flow_id"], user_input={
+        "name": "Kupelna", "zone_type": "floor", "climate_entity": "climate.kupelna",
+        "power_entities": ["sensor.kupelna_power"], "energy_entities": ["sensor.kupelna_kwh"],
+    })
+    zone = next(iter(entry.options["zones"].values()))
+    assert zone["power_entities"] == ["sensor.kupelna_power"]
+    assert zone["energy_entities"] == ["sensor.kupelna_kwh"]

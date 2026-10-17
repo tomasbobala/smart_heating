@@ -30,6 +30,8 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 <p align="center">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - prehľadová karta a karty zón">
   <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/overview-settings.png" width="100%" alt="Nastavenia integrácie priamo v prehľadovej karte">
+  <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Karta zóny - otvorené nastavenia">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="32%" alt="Formulár Globálne nastavenia">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="32%" alt="Formulár Upraviť zónu">
@@ -44,6 +46,9 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 - [Rozhodovacia logika — Kúrenie](#rozhodovacia-logika--kúrenie)
 - [Rozhodovacia logika — Chladenie](#rozhodovacia-logika--chladenie)
 - [Externý teplomer a presné riadenie AC](#externý-teplomer-a-presné-riadenie-ac)
+- [Kaskáda FVE prebytku](#kaskáda-fve-prebytku)
+- [Spotreba energie](#spotreba-energie)
+- [Diagnostika](#diagnostika)
 - [Notifikácie](#notifikácie)
 - [Jazyk (i18n)](#jazyk-i18n)
 - [Testy a CI](#testy-a-ci)
@@ -63,17 +68,21 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 |   |   |
 |---|---|
 | 🏠 **Viacero zón** | Každá miestnosť má vlastný režim, teploty a časy, so spoločnými globálnymi nastaveniami. |
-| 🔥 **Podlahové kúrenie** | Elektrické podlahové kúrenie s bezpečnostným limitom teploty podlahy. |
+| 🔥 **Podlahové kúrenie** | Elektrické podlahové kúrenie s max. teplotou podlahy (s hysteréziou, aby relé necvakalo) a voliteľnou min. teplotou podlahy, ktorá drží podlahu teplú aj pri teplom vzduchu. |
+| ♨️ **Zóna radiátor + podlaha** | Dve nezávislé regulácie v jednej miestnosti (napr. kúpeľňa): elektrický radiátor cez relé drží vzduch, podlaha vlastné minimum. |
 | ❄️ **Kúrenie aj chladenie klímou** | Klimatizácia ako primárny zdroj tepla, plus zámerne jednoduchšia logika chladenia riadená batériou FVE. |
 | 🪵 **Reaguje na krb** | Vypne kúrenie v miestnosti, keď je pri krbe dostatočne teplo. |
 | 💶 **Sleduje tarifu** | Globálne zablokovanie kúrenia pri vysokej tarife. |
-| ☀️ **FVE prebytok** | Využíva prebytok FVE (kúrenie) aj nabitie batérie (chladenie). |
+| ☀️ **Kaskáda FVE prebytku** | Izby kúria z prebytku podľa priority (1 → 2 → 3). Riadené skutočným výkonom: priorita sa pridá, kým je prebytok, a odoberá sa od najnižšej, keď batéria vybíja alebo sa berie zo siete, s nastaviteľnými hranicami a časmi. |
+| ⚡ **Spotreba energie** | Aktuálny príkon kúrenia a spotreba za dnes pre každú izbu aj celý dom. |
+| 🩺 **Diagnostika** | Upozorní na nedostupné zariadenia, nezmyselné hodnoty a izby, ktoré sa nevedia dohriať. |
 | 🥶 **Protimrazová ochrana** | Núdzová ochrana zabráni zamrznutiu, aj počas zablokovania tarifou. |
 | 🧊 **Vynútené kúrenie pri mraze** | Per zóna nastaviteľná vonkajšia hranica spustí komfortné kúrenie v Auto režime. |
 | ⏰ **Predkúrenie** | Pevné časové okno pred príchodom, nezávisle od reálnej prítomnosti. |
 | 🌡️ **Externý teplomer** | Presnejšie riadenie, keď vstavaný senzor AC/podlahovky nestačí. |
 | 🚀 **Boost** | Okamžité, dočasné komfortné kúrenie na požiadanie. |
-| 🎛️ **Vlastné Lovelace karty** | Jedna karta na zónu s grafom za 24 h a plným ovládaním bez YAML, plus prehľadová karta celého domu. |
+| 🎛️ **Vlastné Lovelace karty** | Jedna karta na zónu s grafom za 24 h a plným ovládaním bez YAML, plus prehľadová karta celého domu, v ktorej sa dajú meniť aj nastavenia integrácie. |
+| 📈 **Záznam nábehov** | Každý nábeh sa zaznamená (minúty na 1 °C) – základ pre adaptívne predkúrenie. |
 | 🌍 **Slovenčina a angličtina** | Karta aj texty generované backendom (dôvody, notifikácie) podporujú oba jazyky. |
 
 ---
@@ -112,11 +121,14 @@ Pridáva sa cez **Options Flow** (Nastavenia → Zariadenia a služby → Smart 
     **minimálnu teplotu podlahy**. Vyžaduje relé radiátora a externý teplomer
 - Podlahový `climate` termostat (povinné)
 - Klimatizačný `climate` entity (len pre `floor_ac`)
-- Senzor teploty podlahy (voliteľné, pre bezpečnostný limit)
+- Relé radiátora – switch / input_boolean / light (len pre `radiator_floor`)
+- Senzor teploty podlahy (voliteľné, pre max./min. teplotu podlahy)
 - **Externý teplomer zóny** (voliteľné) — nahradí vstavaný senzor vo výpočtoch
 - Osoby sledované cez GPS (`person.x`)
 - Manuálny presence override (napr. `input_boolean.navsteva` pre návštevu)
 - Reaguj na krb (áno/nie)
+- Udržiavať min. teplotu podlahy (áno/nie)
+- **Senzory príkonu** a **senzory energie** (voliteľné, viac sa sčíta) – pre spotrebu na kartách
 
 ---
 
@@ -224,6 +236,56 @@ Ak zóna **nemá** externý teplomer nastavený, všetko funguje presne ako pred
 (AC sa riadi vlastným senzorom a regulačným okruhom).
 
 ---
+
+## Kaskáda FVE prebytku
+
+Každá zóna so zapnutým *Využi FVE prebytok* má **prioritu FVE** (1 / 2 / 3).
+Izby s prioritou 1 kúria z prebytku prvé, ostatné len keď prebytok ešte zostáva.
+
+**Riadenie podľa výkonu** (Globálne nastavenia → *Riadiť FVE prebytok podľa
+výkonu*, odporúčané). Vstupy: výroba FVE, výkon siete, výkon batérie a SOC
+batérie, s voliteľnými znamienkami. Vyhodnocuje sa každých 30 s.
+
+- **Pridávanie:** dostupný prebytok = export do siete + nabíjanie batérie
+  (nabíjanie sa ráta až od *nabíjanie batérie je prebytok od SOC*, takže sa
+  batéria nabije prvá). Keď vydrží nad *pridať prioritu pri prebytku* počas
+  *trvajúcom*, pridá sa ďalšia priorita, a po rovnakom čase prípadne ďalšia.
+- **Odoberanie (hysteréza):** vybíjanie batérie alebo odber zo siete nad
+  *odobrať pri*, alebo výroba pod *nedostatočná výroba*, počas *trvajúcom* →
+  odpojí sa najnižšia aktívna priorita; ak to trvá ďalej, po rovnakom čase
+  ďalšia. Pod *vypnúť všetko pri batérii pod* sa vypne všetko hneď.
+- Medzi oboma hranicami sa nič nemení, takže prechodný mrak izby nezapína a
+  nevypína.
+
+`sensor.smart_heating_fve_kaskada` ukazuje aktívnu prioritu (0 = nič) a
+namerané výkony, takže ho môžu použiť aj iné automatizácie. Všetky hodnoty sa
+dajú meniť v Globálnych nastaveniach aj v prehľadovej karte.
+
+**Bez senzorov výkonu** stačí obyčajná entita prebytku áno/nie. Kaskáda potom
+pridá nižšie priority, keď sú všetky vyššie izby 10 minút na cieli, a odpojí
+ich hneď, keď niektorá vyššia vychladne.
+
+## Spotreba energie
+
+Každá zóna má dva voliteľné zoznamy: **senzory príkonu** (W) a **senzory
+energie** (kWh). Viac senzorov sa sčíta (napr. termostat podlahy + klíma v
+jednej izbe).
+
+- Karta zóny ukazuje aktuálny príkon a spotrebu za dnes.
+- Prehľadová karta ukazuje súčet za celý dom.
+- Spotreba za dnes sa berie z 5-minútových štatistík Home Assistanta, takže
+  funguje akýkoľvek senzor energie s dlhodobými štatistikami (kumulatívne
+  merače aj denné utility metre). Obnovuje sa každých 5 minút, príkon sa
+  mení živo bez prekresľovania celej karty.
+
+## Diagnostika
+
+Ako porucha sa hlási (riadok na karte zóny, riadok *Poruchy* v prehľade a
+notifikácia pri vzniku aj vyriešení):
+
+- termostat, klíma, relé radiátora alebo senzor nedostupné viac ako 15 min,
+- nezmyselná teplota v miestnosti alebo podlahy,
+- izba, ktorá 3 h kúri a stále je viac ako 1 °C pod cieľom.
 
 ## Notifikácie
 

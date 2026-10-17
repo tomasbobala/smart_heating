@@ -100,7 +100,9 @@
           "clear_external_temp_entity": "Clear external zone thermometer",
           "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
           "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
-          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)"
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
+          "power_entities": "Power sensors (W) - summed, e.g. floor + AC",
+          "energy_entities": "Energy sensors (kWh) - summed, today's consumption from statistics"
         }
       },
       "edit_zone": {
@@ -120,7 +122,9 @@
           "clear_external_temp_entity": "Clear external zone thermometer",
           "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
           "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
-          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)"
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
+          "power_entities": "Power sensors (W) - summed, e.g. floor + AC",
+          "energy_entities": "Energy sensors (kWh) - summed, today's consumption from statistics"
         }
       },
       "remove_zone": {

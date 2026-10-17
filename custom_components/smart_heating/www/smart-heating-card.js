@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.19.0";
+const CARD_VERSION = "0.20.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -143,6 +143,10 @@ const I18N = {
   ov_above: { en: "Above target", sk: "Nad cieľom" },
   ov_below: { en: "Below target", sk: "Pod cieľom" },
   section_floor: { en: "Floor", sk: "Podlaha" },
+  cons_today: { en: "today", sk: "dnes" },
+  cons_power: { en: "Power", sk: "Príkon" },
+  ov_power_now: { en: "Heating power", sk: "Príkon kúrenia" },
+  ov_energy_today: { en: "Consumption today", sk: "Spotreba dnes" },
   pv_priority: { en: "Solar priority", sk: "Priorita FVE" },
   pv_priority_hint: { en: "1 = first; 2 and 3 join once higher priorities are warm", sk: "1 = prvá; 2 a 3 sa pridajú, keď sú vyššie nahriate" },
   badge_pv_waiting: { en: "Solar – waiting for priority rooms", sk: "FVE – čaká na prioritné izby" },
@@ -232,6 +236,66 @@ function mdiSvg(icon) {
   const d = MDI[String(icon || "").replace(/^mdi:/, "")];
   return d ? `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="${d}"/></svg>` : null;
 }
+
+// ---- spotreba: prikon zo stavov, energia za dnes zo statistik HA
+function powerW(state) {
+  if (!state) return null;
+  const v = parseFloat(state.state);
+  if (isNaN(v)) return null;
+  const u = String((state.attributes && state.attributes.unit_of_measurement) || "W").toLowerCase();
+  if (u === "kw") return v * 1000;
+  if (u === "mw") return v / 1000;
+  return v;
+}
+
+function sumPowerW(hass, ids) {
+  let total = null;
+  for (const id of ids || []) {
+    const w = powerW(hass.states[id]);
+    if (w != null) total = (total || 0) + w;
+  }
+  return total;
+}
+
+function fmtPower(w, lang) {
+  if (w == null) return "–";
+  if (Math.abs(w) < 1000) return `${Math.round(w)} W`;
+  // Math.round namiesto toFixed: toFixed(1) by 1.45 zaokruhlilo na 1.4 (binarna presnost)
+  return `${(Math.round(w / 100) / 10).toFixed(1).replace(".", lang === "sk" ? "," : ".")} kW`;
+}
+
+function fmtKwh(v, lang) {
+  if (v == null) return "–";
+  const dec = v < 10 ? 2 : 1;
+  const f = 10 ** dec;
+  return `${(Math.round(v * f) / f).toFixed(dec).replace(".", lang === "sk" ? "," : ".")} kWh`;
+}
+
+async function fetchEnergyToday(hass, ids) {
+  // 5-minutove statistiky od polnoci, typ "change" = spotreba v kazdom useku;
+  // funguje pre kumulativne merace aj denne utility_meter (reset o polnoci).
+  const midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const res = await hass.callWS({
+    type: "recorder/statistics_during_period",
+    start_time: midnight.toISOString(),
+    end_time: new Date().toISOString(),
+    statistic_ids: ids,
+    period: "5minute",
+    types: ["change"],
+    units: { energy: "kWh" },
+  });
+  let total = 0;
+  let any = false;
+  for (const id of ids) {
+    for (const r of (res && res[id]) || []) {
+      if (r.change != null && !isNaN(Number(r.change))) { total += Number(r.change); any = true; }
+    }
+  }
+  return any ? total : null;
+}
+
+const ENERGY_REFRESH_MS = 5 * 60 * 1000;
 
 const ICONS = {
   flame: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3 4 6 6.5 6 11a6 6 0 0 1-12 0c0-2.6 1.4-4.6 3-6 .2 1.6 1 2.6 2 3 .3-3 1.2-5.6 1-8z"/></svg>`,
@@ -401,9 +465,49 @@ class SmartHeatingCard extends HTMLElement {
     }
     if (prevHass && prevHass.language === hass.language) {
       const relevantChanged = this._entityIds().some((id) => hass.states[id] !== prevHass.states[id]);
-      if (!relevantChanged) return;
+      if (!relevantChanged) {
+        // prikon sa meni casto - prekresli len riadok spotreby, nie celu kartu
+        if (this._consIds("power_entities").some((id) => hass.states[id] !== prevHass.states[id])) {
+          this._renderConsumption();
+        }
+        this._maybeFetchEnergy();
+        return;
+      }
     }
     this._updateContent();
+    this._renderConsumption();
+    this._maybeFetchEnergy();
+  }
+
+  _consIds(key) {
+    const st = this._hass && this._zoneId ? this._hass.states[eid(this._zoneId, "sensor", "stav")] : null;
+    const ids = st && st.attributes ? st.attributes[key] : null;
+    return Array.isArray(ids) ? ids : [];
+  }
+
+  _renderConsumption() {
+    const wrap = this.querySelector(".sh-cons");
+    if (!wrap) return;
+    const pIds = this._consIds("power_entities");
+    const eIds = this._consIds("energy_entities");
+    if (!pIds.length && !eIds.length) { wrap.hidden = true; return; }
+    wrap.hidden = false;
+    wrap.querySelector(".sh-cons-p").textContent = pIds.length ? fmtPower(sumPowerW(this._hass, pIds), this._lang) : "";
+    wrap.querySelector(".sh-cons-e").textContent = eIds.length && this._energyToday != null
+      ? `${this._t("cons_today")} ${fmtKwh(this._energyToday, this._lang)}` : "";
+  }
+
+  _maybeFetchEnergy() {
+    const ids = this._consIds("energy_entities");
+    const hass = this._hass;
+    if (!ids.length || !hass || typeof hass.callWS !== "function" || this._energyLoading) return;
+    const day = new Date().toDateString();
+    if (this._energyDay === day && Date.now() - (this._energyAt || 0) < ENERGY_REFRESH_MS) return;
+    this._energyLoading = true;
+    fetchEnergyToday(hass, ids)
+      .then((v) => { this._energyToday = v; this._energyDay = day; this._energyAt = Date.now(); this._renderConsumption(); })
+      .catch(() => { this._energyAt = Date.now(); this._energyDay = day; })
+      .finally(() => { this._energyLoading = false; });
   }
 
   _entityIds() {
@@ -505,10 +609,18 @@ class SmartHeatingCard extends HTMLElement {
             </div>
           </div>
 
+          <div class="sh-cons" hidden>
+            <span class="sh-cons-i">${mdiSvg("flash")}</span>
+            <span class="sh-cons-lbl">${this._t("cons_power")}</span>
+            <span class="sh-cons-p"></span>
+            <span class="sh-cons-e"></span>
+          </div>
+
           <div class="sh-ft">
             <div class="sh-seg" role="group" aria-label="${this._t("section_mode")}"></div>
             <button class="sh-gear" type="button" aria-expanded="false" aria-label="${this._t("settings")}" title="${this._t("settings")}">${ICONS.gear}</button>
           </div>
+          <div class="sh-prob"></div>
           <div class="sh-why"><span class="sh-badges"></span><span class="sh-why-t"></span></div>
 
           <div class="sh-settings" hidden>
@@ -590,6 +702,18 @@ class SmartHeatingCard extends HTMLElement {
       .sh-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
       .sh-delta { font-size: 12px; font-weight: 650; padding: 4px 9px; border-radius: 8px; white-space: nowrap; }
       .sh-delta:empty, .sh-chip-floor:empty { display: none; }
+      .sh-cons { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sh-sub, var(--secondary-text-color)); margin: 2px 0 6px; }
+      /* porucha na vlastnom riadku a zalomena, nie orezana */
+      .sh-prob { margin-top: 8px; font-size: 11.5px; font-weight: 650; line-height: 1.4; color: var(--sh-err, #e5484d); }
+      .sh-prob:empty { display: none; }
+      .sh-prob div::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
+        margin-right: 5px; vertical-align: 1px; }
+      .sh-cons[hidden] { display: none; }
+      .sh-cons-i { display: inline-flex; color: var(--sh-warn, #e8a838); }
+      .sh-cons-i svg { width: 15px; height: 15px; display: block; }
+      .sh-cons-p { font-weight: 650; color: var(--sh-txt, var(--primary-text-color)); font-variant-numeric: tabular-nums; }
+      .sh-cons-e { font-variant-numeric: tabular-nums; }
+      .sh-cons-e:not(:empty)::before { content: "·"; margin: 0 6px 0 2px; opacity: .6; }
       .sh-delta.up { color: var(--sh-warn); background: rgba(232,168,56,0.13); }
       .sh-delta.ok { color: var(--sh-ok); background: rgba(76,175,125,0.13); }
       .sh-delta.dn { color: var(--sh-cool); background: rgba(79,163,255,0.13); }
@@ -881,8 +1005,10 @@ class SmartHeatingCard extends HTMLElement {
     const reason = String((this._hass.states[eid(this._zoneId, "sensor", "stav")] || {}).state || "").toLowerCase();
     this.querySelector(".sh-badges").innerHTML = badges
       .filter(([, label]) => !reason.includes(label.toLowerCase()))
-      .map(([cls, label]) => `<span class="sh-badge ${cls}">${esc(label)}</span>`).join("") +
-      problems.map((p) => `<span class="sh-badge err sh-problem" title="${esc(p)}">${esc(this._t("badge_problem"))}: ${esc(p)}</span>`).join("");
+      .map(([cls, label]) => `<span class="sh-badge ${cls}">${esc(label)}</span>`).join("");
+    // poruchy na vlastnom riadku (riadok dovodu je orezany na 2 riadky)
+    const prob = this.querySelector(".sh-prob");
+    if (prob) prob.innerHTML = problems.map((p) => `<div>${esc(this._t("badge_problem"))}: ${esc(p)}</div>`).join("");
   }
 
   _renderSummaries(attrs, zAttrs, hasAc) {
@@ -1313,9 +1439,43 @@ class SmartHeatingOverview extends HTMLElement {
     this._hass = hass;
     if (prev && prev.language === hass.language) {
       const changed = this._watched().some((id) => hass.states[id] !== prev.states[id]);
-      if (!changed) return;
+      if (!changed) {
+        // prikon sa meni casto - prekresli len suhrn
+        if (this._allCons("power_entities").some((id) => hass.states[id] !== prev.states[id]) && this.querySelector(".sho-sum")) {
+          this._renderSummary(this._zoneData());
+        }
+        this._maybeFetchEnergyAll();
+        return;
+      }
     }
     this._render();
+    this._maybeFetchEnergyAll();
+  }
+
+  _allCons(key) {
+    const out = [];
+    for (const z of this._zones()) {
+      const st = this._hass.states[eid(z, "sensor", "stav")];
+      const ids = st && st.attributes ? st.attributes[key] : null;
+      if (Array.isArray(ids)) out.push(...ids);
+    }
+    return out;
+  }
+
+  _maybeFetchEnergyAll() {
+    const ids = this._allCons("energy_entities");
+    const hass = this._hass;
+    if (!ids.length || !hass || typeof hass.callWS !== "function" || this._energyLoading) return;
+    const day = new Date().toDateString();
+    if (this._energyDay === day && Date.now() - (this._energyAt || 0) < ENERGY_REFRESH_MS) return;
+    this._energyLoading = true;
+    fetchEnergyToday(hass, ids)
+      .then((v) => {
+        this._energyToday = v; this._energyDay = day; this._energyAt = Date.now();
+        if (this.querySelector(".sho-sum")) this._renderSummary(this._zoneData());
+      })
+      .catch(() => { this._energyAt = Date.now(); this._energyDay = day; })
+      .finally(() => { this._energyLoading = false; });
   }
 
   getCardSize() {
@@ -1417,7 +1577,8 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-sw i { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: left .15s; }
       .sho-sw.on { background: var(--sh-ok, #4caf7d); }
       .sho-sw.on i { left: 18px; }
-      .sho-num { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+      .sho-num { display: inline-flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+      .sho-num b { white-space: nowrap; min-width: 52px; text-align: center; }
       .sho-num button { width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--divider-color, #444); background: none; color: var(--sh-txt); cursor: pointer; font: inherit; }
       .sho-set-f { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--divider-color, #333); }
       .sho-set-f .sp { flex: 1; }
@@ -1749,6 +1910,10 @@ class SmartHeatingOverview extends HTMLElement {
       row("var(--sh-cool)", this._t("ov_below"), dn) +
       (faulty ? row("var(--sh-err, #e5484d)", this._t("ov_problems"), faulty) : "") +
       row("", this._t(cooling ? "ov_cooled_today" : "ov_heated_today"), runtime) +
+      (this._allCons("power_entities").length
+        ? row("", this._t("ov_power_now"), fmtPower(sumPowerW(this._hass, this._allCons("power_entities")), this._lang)) : "") +
+      (this._allCons("energy_entities").length
+        ? row("", this._t("ov_energy_today"), fmtKwh(this._energyToday, this._lang)) : "") +
       `<button type="button" class="sho-gear" aria-expanded="${this._setOpen ? "true" : "false"}">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></button>`;
   }
 
@@ -1806,7 +1971,7 @@ class SmartHeatingOverview extends HTMLElement {
 
   _fmtNum(v, f) {
     const dec = f.step && f.step < 1 ? 1 : 0;
-    const txt = Number(v).toFixed(dec);
+    const txt = Number(v).toFixed(dec).replace(".", this._lang === "sk" ? "," : ".");
     const unit = f.unit || "°";
     if (unit === "°" || unit === "°C") return `${txt}°`;
     return `${txt} ${unit}`;

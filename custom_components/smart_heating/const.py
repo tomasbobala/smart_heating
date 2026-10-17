@@ -42,6 +42,9 @@ CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
 CONF_USE_FIXED_AC_SETPOINT = "use_fixed_ac_setpoint"
 CONF_RADIATOR_ENTITY = "radiator_entity"
 CONF_USE_FLOOR_MIN = "use_floor_min"
+# Spotreba zony: zoznamy entit (scitavaju sa, napr. podlaha + klima v jednej zone)
+CONF_POWER_ENTITIES = "power_entities"     # prikon (W/kW)
+CONF_ENERGY_ENTITIES = "energy_entities"   # energia (kWh/Wh) so statistikami
 
 ZONE_TYPE_FLOOR = "floor"
 ZONE_TYPE_FLOOR_AC = "floor_ac"

@@ -81,6 +81,9 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "nabehy_pocet": z.get("warmup_count", 0),
             # pre prehladovu kartu (nastavenia integracie cez options flow)
             "config_entry_id": self.coordinator.entry.entry_id,
+            # spotreba zony: karty z nich citaju prikon a statistiky energie
+            "power_entities": list(self.coordinator.zones.get(self._zone_id, {}).get("power_entities") or []),
+            "energy_entities": list(self.coordinator.zones.get(self._zone_id, {}).get("energy_entities") or []),
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
             "tariff_entity": self.coordinator.entry.options.get(CONF_TARIFF_ENTITY),

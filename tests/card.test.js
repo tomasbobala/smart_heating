@@ -843,9 +843,8 @@ test("zone card: faults and min-floor are shown as badges", () => {
   card.setConfig({ zone_id: ZONE_ID, language: "sk" });
   card.hass = buildHass({ stavAttrs: { problemy: ["T Kupelna je nedostupné viac ako 15 min"], floor_guard: true } });
   document.body.appendChild(card);
-  const badges = card.querySelector(".sh-badges").textContent;
-  assert.match(badges, /Porucha: T Kupelna je nedostupné/);
-  assert.match(badges, /Podlaha – min. teplota/);
+  assert.match(card.querySelector(".sh-prob").textContent, /Porucha: T Kupelna je nedostupné viac ako 15 min/);
+  assert.match(card.querySelector(".sh-badges").textContent, /Podlaha – min. teplota/);
 });
 
 test("overview: tiles use vector icons", () => {
@@ -1047,7 +1046,92 @@ test("overview settings: solar group with units W / min / %", async () => {
   assert.match(text, /1000 W/);
   assert.match(text, /10 min/);
   assert.match(text, /40 %/);
-  assert.match(text, /8\.0°/);                      // povodne teplotne pole stale so stupnom
+  assert.match(text, /8,0°/);                       // teplotne pole so stupnom a slovenskou ciarkou
   card.querySelector('[data-f="pv_add_power"][data-d="1"]').click();
   assert.match(card.querySelector(".sho-set").textContent, /1100 W/);
+});
+
+// ---------------------------------------------------------------- spotreba
+
+function consHass(extraStates = {}) {
+  const hass = buildHass({ stavAttrs: {
+    power_entities: ["sensor.podlaha_power", "sensor.daikin_power"],
+    energy_entities: ["sensor.podlaha_kwh", "sensor.daikin_kwh"],
+  } });
+  hass.states["sensor.podlaha_power"] = { state: "850", attributes: { unit_of_measurement: "W" } };
+  hass.states["sensor.daikin_power"] = { state: "0.6", attributes: { unit_of_measurement: "kW" } };
+  Object.assign(hass.states, extraStates);
+  const calls = [];
+  hass.callWS = async (msg) => {
+    calls.push(msg);
+    return {
+      "sensor.podlaha_kwh": [{ change: 1.2 }, { change: 0.8 }],
+      "sensor.daikin_kwh": [{ change: 1.5 }, { change: null }],
+    };
+  };
+  return { hass, calls };
+}
+
+test("zone card: current power (W + kW summed) and energy today from statistics", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const { hass, calls } = consHass();
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 15));
+  const wrap = card.querySelector(".sh-cons");
+  assert.strictEqual(wrap.hidden, false);
+  assert.strictEqual(wrap.querySelector(".sh-cons-p").textContent, "1,5 kW");
+  assert.strictEqual(wrap.querySelector(".sh-cons-e").textContent, "dnes 3,50 kWh");
+  const q = calls.find((c) => c.type === "recorder/statistics_during_period" && c.types && c.types[0] === "change");
+  assert.ok(q);
+  assert.deepStrictEqual(Array.from(q.statistic_ids), ["sensor.podlaha_kwh", "sensor.daikin_kwh"]);
+  assert.strictEqual(q.period, "5minute");
+  assert.strictEqual(q.units.energy, "kWh");
+});
+
+test("zone card: consumption row hidden without consumption sensors", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-cons").hidden, true);
+});
+
+test("zone card: a power change updates only the consumption row, not the whole card", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const { hass, calls } = consHass();
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 15));
+  let full = 0;
+  const orig = card._updateContent.bind(card);
+  card._updateContent = () => { full += 1; orig(); };
+  const h2 = { ...hass, states: { ...hass.states, "sensor.podlaha_power": { state: "120", attributes: { unit_of_measurement: "W" } } } };
+  card.hass = h2;
+  assert.strictEqual(full, 0);
+  assert.strictEqual(card.querySelector(".sh-cons-p").textContent, "720 W");
+  const energyCalls = calls.filter((c) => c.types && c.types[0] === "change").length;
+  assert.strictEqual(energyCalls, 1);                 // statistiky sa nestahuju pri kazdej zmene
+});
+
+test("overview: heating power and consumption today summed over zones", async () => {
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.power_entities = ["sensor.p1"];
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.energy_entities = ["sensor.e1"];
+  hass.states["sensor.smart_heating_bbb22222_stav"].attributes.power_entities = ["sensor.p2"];
+  hass.states["sensor.smart_heating_bbb22222_stav"].attributes.energy_entities = ["sensor.e2"];
+  hass.states["sensor.p1"] = { state: "1200", attributes: { unit_of_measurement: "W" } };
+  hass.states["sensor.p2"] = { state: "800", attributes: { unit_of_measurement: "W" } };
+  hass.callWS = async (msg) => (msg.types && msg.types[0] === "change"
+    ? { "sensor.e1": [{ change: 4 }], "sensor.e2": [{ change: 8.25 }] } : {});
+  const card = renderOverview({}, hass);
+  await new Promise((r) => setTimeout(r, 15));
+  const text = card.querySelector(".sho-sum").textContent.replace(/\s+/g, " ");
+  assert.match(text, /Príkon kúrenia\s*2,0 kW/);
+  assert.match(text, /Spotreba dnes\s*12,3 kWh/);
 });

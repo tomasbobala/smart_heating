@@ -2,6 +2,22 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.20.0
+- **Energy consumption on the cards.** New optional zone fields: power sensors
+  (W) and energy sensors (kWh), each a list that is summed (e.g. floor
+  thermostat + AC). The zone card shows current power and today's consumption,
+  the overview card the totals for the whole house ("Heating power",
+  "Consumption today"). Today's consumption is read from the 5-minute
+  statistics (`recorder/statistics_during_period`, type `change`, from local
+  midnight, every 5 minutes); power changes redraw only the consumption line,
+  not the whole card.
+- Faults are shown on their own line on the zone card (the reason line is
+  limited to two lines and cut them off).
+- Overview settings panel: values no longer wrap, decimal comma in Slovak.
+- Power is rounded correctly (1450 W showed as 1.4 kW).
+- README and screenshots updated for 0.17–0.20 (dashboard, zone card settings,
+  integration settings in the overview card).
+
 ## 0.19.0
 - **Solar surplus controlled by power** (Global settings → "Control solar
   surplus by power"; replaces the surplus on/off switch and the automation

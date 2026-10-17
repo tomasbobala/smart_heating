@@ -100,7 +100,9 @@
           "clear_external_temp_entity": "Vymazať externý teplomer zóny",
           "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
           "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
-          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)"
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
+          "power_entities": "Senzory príkonu (W) - sčítajú sa, napr. podlaha + klíma",
+          "energy_entities": "Senzory energie (kWh) - sčítajú sa, spotreba za dnes zo štatistík"
         }
       },
       "edit_zone": {
@@ -120,7 +122,9 @@
           "clear_external_temp_entity": "Vymazať externý teplomer zóny",
           "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
           "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
-          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)"
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
+          "power_entities": "Senzory príkonu (W) - sčítajú sa, napr. podlaha + klíma",
+          "energy_entities": "Senzory energie (kWh) - sčítajú sa, spotreba za dnes zo štatistík"
         }
       },
       "remove_zone": {
