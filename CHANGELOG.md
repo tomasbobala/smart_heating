@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.21.0
+- **Meters per heat source.** New zone fields for floor, AC and radiator power
+  and energy meters (lists, e.g. two floor circuits). The zone card shows the
+  power per source ("Floor 0.8 kW · AC 1.2 kW"); the old lists stay as "other".
+- **Actual state from the meter.** A source with a power meter counts as
+  running above 20 W - more reliable than the device's `hvac_action` or an
+  estimate (fixes over-counted "heated today" for the AC). Evaluated every
+  30 s; the zone is recomputed only when a meter switches on/off.
+- **Meter check.** A source reporting heating while its meter shows 0 W, or
+  drawing over 50 W while it should be off (stuck relay), for 10 minutes is a
+  fault (zone card, overview, notification). Attribute `meter_problems`.
+- **Statistics panel** in the overview card (button "Statistics"): today /
+  7 / 30 days - consumption, share from solar surplus and from the grid,
+  kWh per heating degree-day (base 18 °C) compared with the previous period,
+  consumption by day/hour (solar vs grid), rooms ranked with a per-source
+  split and the meter check. Read from HA statistics in one query.
+- New `sensor.smart_heating_energia_z_fve` (kWh, total increasing): heating
+  energy used while zones heated from the solar surplus, integrated from the
+  power meters every 30 s; source of the solar share.
+
 ## 0.20.0
 - **Energy consumption on the cards.** New optional zone fields: power sensors
   (W) and energy sensors (kWh), each a list that is summed (e.g. floor

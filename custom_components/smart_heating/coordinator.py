@@ -52,6 +52,10 @@ from .const import (
     CONF_GRID_EXPORT_NEGATIVE,
     CONF_BATTERY_CHARGE_POSITIVE,
     PV_ENGINE_NUMBERS,
+    SOURCE_METERS,
+    METER_ON_W,
+    METER_STUCK_W,
+    CONF_POWER_ENTITIES,
     CONF_RADIATOR_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
@@ -103,7 +107,8 @@ WARMUP_STORE_VERSION = 1
 PV_CASCADE_DELAY = timedelta(minutes=10)   # vyssie priority nahriate tak dlho -> pridaj dalsiu
 PV_SATISFIED_MARGIN = 0.2                  # °C pod FVE cielom = este "nahriata"
 PV_RELEASE_GAP = 0.5                       # °C pod cielom vo vyssej priorite -> nizsie hned odpoj
-PV_ENGINE_INTERVAL = timedelta(seconds=30)  # vyhodnotenie vykonov (nie pri kazdej zmene senzora)
+PV_ENGINE_INTERVAL = timedelta(seconds=30)
+METER_CHECK_AFTER = timedelta(minutes=10)   # merac v rozpore s ocakavanim tak dlho -> porucha  # vyhodnotenie vykonov (nie pri kazdej zmene senzora)
 
 
 def mode_entity_id(zone_id: str) -> str:
@@ -147,6 +152,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_interval = None
         self._unsub_debounce = None
         self._unsub_pv_engine = None
+        self._meter_cache: dict[str, bool] = {}
+        self._pv_energy_kwh = 0.0          # energia kurenia v case FVE kaskady (sensor energia_z_fve)
+        self._pv_energy_at = None
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
         self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
@@ -180,7 +188,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             self.hass, self._periodic_tick, RECOMPUTE_INTERVAL
         )
         self._unsub_pv_engine = async_track_time_interval(
-            self.hass, self._pv_engine_tick, PV_ENGINE_INTERVAL
+            self.hass, self._fast_tick, PV_ENGINE_INTERVAL
         )
 
     def _tracked_entity_ids(self) -> list[str]:
@@ -842,6 +850,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         Ak niektore zo zariadeni hlasi vlastny hvac_action, ma prednost (to je
         realita - napr. termostat uz dosiahol teplotu a rele je vypnute).
         Inak sa vychadza z toho, co integracia prave zariadeniu prikazala."""
+        # 1) merac prikonu zdroja = najspolahlivejsi udaj (rele naozaj zopnute)
+        measured = [m for m in (self._meter_on(self._device_meter(e)) for e in entities) if m is not None]
+        if measured:
+            return running_value if any(measured) else "idle"
         reported = [a for a in (self._device_action(e) for e in entities) if a]
         if reported:
             return running_value if running_value in reported else "idle"
@@ -871,6 +883,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         for zone_id, zdata in self.data["zones"].items():
             if zdata["release_control"]:
                 zdata["actual_action"] = "off"
+                zdata["src_cmd"] = {}      # zariadenie riadi pouzivatel - merace nekontrolujeme
                 continue  # Vypnute uz dlhsie - nechavame zariadenie uplne na pokoji
 
             if zdata["zone_type"] == ZONE_TYPE_FLOOR_AC and zdata.get("ac_entity"):
@@ -883,6 +896,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     zdata["actual_action"] = self._resolve_action(
                         [zdata["ac_entity"]], zdata["device_mode"] == "cool", "cooling"
                     )
+                    zdata["src_cmd"] = {"ac": zdata["device_mode"] == "cool", "floor": False}
                 else:
                     await self._apply_floor_ac(zone_id, zdata)
             elif zdata["zone_type"] == ZONE_TYPE_RADIATOR_FLOOR:
@@ -900,6 +914,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 zdata["actual_action"] = self._resolve_action(
                     [zdata["climate_entity"]], zdata["heating_allowed"], "heating"
                 )
+                zdata["src_cmd"] = {"floor": bool(zdata["heating_allowed"])}
 
         for zone_id, zdata in self.data["zones"].items():
             self._diag_dynamic_and_notify(zone_id, zdata)
@@ -949,6 +964,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             rt["ac_running"] = False
             zdata["heat_source"] = self._t("source_none")
             zdata["actual_action"] = "idle"
+            zdata["src_cmd"] = {"ac": False, "floor": False}
             return
 
         zone_conf = self.zones.get(zone_id, {})
@@ -1003,6 +1019,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             else (self._t("source_ac") if rt.get("ac_running", True) else self._t("source_none_waiting"))
         )
         running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_on)) if on]
+        zdata["src_cmd"] = {"ac": bool(rt.get("ac_running", True)), "floor": bool(floor_on)}
         zdata["actual_action"] = self._resolve_action(running, bool(running), "heating") if running else "idle"
 
     # ------------------------------------------------------------- kaskada FVE
@@ -1234,6 +1251,119 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         grt["pv_tier"] = active
         return {z: t <= active for z, t in tiers.items()}
 
+    # ------------------------------------------------------------- merace spotreby
+
+    def _zone_sources(self, zone: dict) -> list[dict]:
+        """Zdroje zony s meracmi: [{key, device, power[], energy[]}] + 'other' zo vseobecnych zoznamov."""
+        devices = {"floor": zone.get(CONF_CLIMATE_ENTITY), "ac": zone.get(CONF_AC_ENTITY), "radiator": zone.get(CONF_RADIATOR_ENTITY)}
+        out = []
+        for key, (pk, ek) in SOURCE_METERS.items():
+            power, energy = list(zone.get(pk) or []), list(zone.get(ek) or [])
+            if power or energy:
+                out.append({"key": key, "device": devices[key], "power": power, "energy": energy})
+        if zone.get(CONF_POWER_ENTITIES) or zone.get("energy_entities"):
+            out.append({"key": "other", "device": None,
+                        "power": list(zone.get(CONF_POWER_ENTITIES) or []), "energy": list(zone.get("energy_entities") or [])})
+        return out
+
+    def _power_w(self, entity_id):
+        state = self.hass.states.get(entity_id) if entity_id else None
+        if state is None or state.state in ("unknown", "unavailable"):
+            return None
+        try:
+            value = float(state.state)
+        except (TypeError, ValueError):
+            return None
+        unit = str(state.attributes.get("unit_of_measurement") or "W").lower()
+        return value * 1000 if unit == "kw" else value
+
+    def _device_meter(self, device_entity):
+        """Meracie entity prikonu pre zariadenie (termostat, klima, rele radiatora)."""
+        if not device_entity:
+            return None
+        for zone in self.zones.values():
+            for src in self._zone_sources(zone):
+                if src["device"] == device_entity and src["power"]:
+                    return src["power"]
+        return None
+
+    def _meter_on(self, power_entities):
+        """True/False podla prikonu (> METER_ON_W), None ked merac nie je alebo nic nehlasi."""
+        if not power_entities:
+            return None
+        values = [w for w in (self._power_w(e) for e in power_entities) if w is not None]
+        return any(w > METER_ON_W for w in values) if values else None
+
+    def _meter_check(self, zone_id: str, zdata: dict) -> list[tuple[str, str]]:
+        """Rozpor medzi zariadenim a meracom dlhsie ako 10 min: hlasi kurenie, ale taha 0 W
+        (vypadnuty ohrev) / ma byt vypnute, ale taha (zaseknute rele)."""
+        rt = self._rt(zone_id)
+        since = rt.setdefault("meter_since", {})
+        now = dt_util.now()
+        cmd = zdata.get("src_cmd") or {}
+        found: list[tuple[str, str]] = []
+        active = set()
+        for src in self._zone_sources(self.zones.get(zone_id, {})):
+            key = src["key"]
+            if key == "other" or not src["power"] or key not in cmd:
+                continue
+            values = [w for w in (self._power_w(e) for e in src["power"]) if w is not None]
+            if not values:
+                continue
+            power = sum(values)
+            reported = self._device_action(src["device"])
+            expect_on = cmd[key] if key == "radiator" else (reported in ("heating", "cooling") if reported else None)
+            issue = None
+            if expect_on and power <= METER_ON_W:
+                issue = ("nopower", self._t("diag_meter_no_power", source=self._t(f"src_{key}")))
+            elif cmd[key] is False and power > METER_STUCK_W:
+                issue = ("stuck", self._t("diag_meter_stuck", source=self._t(f"src_{key}"), power=round(power)))
+            if issue:
+                pkey = f"meter:{key}:{issue[0]}"
+                active.add(pkey)
+                since.setdefault(pkey, now)
+                if now - since[pkey] >= METER_CHECK_AFTER:
+                    found.append((pkey, issue[1]))
+        for pkey in list(since):
+            if pkey not in active:
+                since.pop(pkey)
+        return found
+
+    async def _fast_tick(self, _now=None) -> None:
+        """Kazdych 30 s: kaskada FVE, energia z FVE a prepocet len pri zmene stavu meracov."""
+        await self._pv_engine_tick()
+        self._accumulate_pv_energy()
+        meters = {}
+        for zone in self.zones.values():
+            for src in self._zone_sources(zone):
+                for entity_id in src["power"]:
+                    on = self._meter_on([entity_id])
+                    if on is not None:
+                        meters[entity_id] = on
+        if meters != self._meter_cache:
+            self._meter_cache = meters
+            await self.async_recompute_and_apply()
+        elif isinstance(self.data, dict):
+            self.async_update_listeners()
+
+    def _accumulate_pv_energy(self) -> None:
+        """Energia kurenia v case, ked zony kurili z FVE prebytku (pv_active), z prikonu.
+        Zaklad pre 'podiel z FVE' v statistikach."""
+        now = dt_util.now()
+        last, self._pv_energy_at = self._pv_energy_at, now
+        if last is None or not isinstance(self.data, dict):
+            return
+        hours = (now - last).total_seconds() / 3600
+        if hours <= 0 or hours > 0.25:     # po vypadku neodhadujeme dlhe useky
+            return
+        watts = 0.0
+        for zone_id, zdata in self.data.get("zones", {}).items():
+            if not zdata.get("pv_active"):
+                continue
+            for src in self._zone_sources(self.zones.get(zone_id, {})):
+                watts += sum(w for w in (self._power_w(e) for e in src["power"]) if w is not None)
+        self._pv_energy_kwh += watts * hours / 1000
+
     # ------------------------------------------------------------- radiator + podlaha
 
     async def _apply_switch(self, entity_id, on: bool) -> None:
@@ -1262,6 +1392,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             await self._apply_device(floor_entity, "off", None)
             zdata["heat_source"] = self._t("source_none")
             zdata["actual_action"] = "idle"
+            zdata["src_cmd"] = {"radiator": False, "floor": False}
             return
 
         hyst = self._state_float(
@@ -1290,8 +1421,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             zdata["heat_source"] = self._t("source_floor_min")
         else:
             zdata["heat_source"] = self._t("source_none")
+        zdata["src_cmd"] = {"radiator": rad_on, "floor": floor_on}
         floor_action = self._resolve_action([floor_entity], floor_on, "heating") if floor_on else "idle"
-        zdata["actual_action"] = "heating" if rad_on or floor_action == "heating" else "idle"
+        rad_meter = self._meter_on(self._device_meter(radiator))
+        rad_running = rad_on if rad_meter is None else rad_meter
+        zdata["actual_action"] = "heating" if rad_running or floor_action == "heating" else "idle"
 
     # ------------------------------------------------------------------ diagnostika
 
@@ -1353,6 +1487,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         else:
             rt["slow_since"] = None
 
+        meter_problems = self._meter_check(zone_id, zdata)
+        problems.extend(meter_problems)
+        zdata["meter_problems"] = [msg for _, msg in meter_problems]
         zdata["problems"] = [msg for _, msg in problems]
 
         current = dict(problems)

@@ -93,6 +93,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "Not reaching target for {hours} h ({current}°C, target {target}°C)",
         "sk": "Už {hours} h sa nevie dohriať ({current}°C, cieľ {target}°C)",
     },
+    "src_floor": {"en": "Floor", "sk": "Podlaha"},
+    "src_ac": {"en": "AC", "sk": "Klíma"},
+    "src_radiator": {"en": "Radiator", "sk": "Radiátor"},
+    "diag_meter_no_power": {
+        "en": "{source} reports heating but its meter has shown 0 W for over 10 min",
+        "sk": "{source} hlási kúrenie, ale merač ukazuje 0 W viac ako 10 min",
+    },
+    "diag_meter_stuck": {
+        "en": "{source} should be off but draws {power} W for over 10 min",
+        "sk": "{source} má byť vypnutá, ale ťahá {power} W viac ako 10 min",
+    },
     "notify_diag_problem": {"en": "⚠️ {zone}: {problem}", "sk": "⚠️ {zone}: {problem}"},
     "notify_diag_ok": {"en": "✅ {zone}: resolved - {problem}", "sk": "✅ {zone}: vyriešené - {problem}"},
     "source_floor": {"en": "Floor", "sk": "Podlaha"},

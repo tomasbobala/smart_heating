@@ -30,6 +30,8 @@ zone has its own rules but shares common global settings.
 <p align="center">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - overview card and zone cards">
   <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/statistics.png" width="100%" alt="Statistics panel in the overview card">
+  <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/overview-settings.png" width="100%" alt="Integration settings right in the overview card">
   <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Smart Heating zone card - settings open">
@@ -74,7 +76,7 @@ zone has its own rules but shares common global settings.
 | 🪵 **Fireplace aware** | Turns off heating in a room once it's warm enough near the fireplace. |
 | 💶 **Tariff aware** | A global block on heating during high-tariff periods. |
 | ☀️ **Solar surplus cascade** | Rooms heat from the surplus by priority (1 → 2 → 3). Controlled by real power: a priority is added while there's surplus and removed, lowest first, when the battery discharges or the grid is used - with adjustable thresholds and delays. |
-| ⚡ **Energy consumption** | Current heating power and today's consumption per room and for the whole house. |
+| ⚡ **Energy consumption** | Meters per heat source (floor, AC, radiator): current power and today's consumption per room and for the house, a meter check, and a statistics panel (solar vs grid, kWh per degree-day, room ranking). |
 | 🩺 **Diagnostics** | Notifies about unavailable devices, implausible readings and rooms that can't reach their target. |
 | 🥶 **Frost protection** | Emergency protection prevents actual freezing, even during a tariff block. |
 | 🧊 **Forced heating in cold** | A per-zone configurable outdoor threshold triggers comfort heating in Auto mode. |
@@ -273,8 +275,14 @@ down.
 
 ## Energy consumption
 
-Each zone has two optional lists: **power sensors** (W) and **energy sensors**
-(kWh). Several sensors are summed (e.g. floor thermostat + AC in one room).
+Each zone can have **power** (W) and **energy** (kWh) meters **per heat
+source**: floor, AC and radiator (each a list, e.g. two floor circuits), plus
+"other" sensors. The zone card then shows the power per source.
+
+- A source with a power meter counts as **running above 20 W** - this drives the
+  zone's state, `v_chode` and "heated today" more reliably than `hvac_action`.
+- **Meter check:** heating reported but 0 W for 10 min (heating element failed),
+  or over 50 W while it should be off (stuck relay) → a fault with notification.
 
 - The zone card shows the current power and today's consumption.
 - The overview card shows the total for the whole house.
@@ -282,6 +290,17 @@ Each zone has two optional lists: **power sensors** (W) and **energy sensors**
   energy sensor with long-term statistics works (cumulative meters as well as
   daily utility meters). It refreshes every 5 minutes; power updates live
   without redrawing the whole card.
+
+### Statistics
+
+The **Statistics** button in the overview card opens a panel for today, 7 or
+30 days: total consumption, the share from the solar surplus and from the grid,
+**kWh per heating degree-day** (base 18 °C, from the outdoor sensor's
+statistics) compared with the previous period, consumption by day or hour,
+rooms ranked with a split by source, and the meter check. The solar share comes
+from `sensor.smart_heating_energia_z_fve`, which integrates the zones' power
+while they heat from the surplus - an estimate, since it's not a dedicated
+meter on the heating supply.
 
 ## Diagnostics
 

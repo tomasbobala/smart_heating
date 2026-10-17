@@ -101,8 +101,14 @@
           "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
           "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
           "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
-          "power_entities": "Senzory príkonu (W) - sčítajú sa, napr. podlaha + klíma",
-          "energy_entities": "Senzory energie (kWh) - sčítajú sa, spotreba za dnes zo štatistík"
+          "power_entities": "Ostatné senzory príkonu (W) – sčítajú sa",
+          "energy_entities": "Ostatné senzory energie (kWh) – sčítajú sa",
+          "floor_power_entities": "Podlaha – merač príkonu (W)",
+          "floor_energy_entities": "Podlaha – merač energie (kWh)",
+          "ac_power_entities": "Klíma – merač príkonu (W)",
+          "ac_energy_entities": "Klíma – merač energie (kWh)",
+          "radiator_power_entities": "Radiátor – merač príkonu (W)",
+          "radiator_energy_entities": "Radiátor – merač energie (kWh)"
         }
       },
       "edit_zone": {
@@ -123,8 +129,14 @@
           "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
           "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
           "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
-          "power_entities": "Senzory príkonu (W) - sčítajú sa, napr. podlaha + klíma",
-          "energy_entities": "Senzory energie (kWh) - sčítajú sa, spotreba za dnes zo štatistík"
+          "power_entities": "Ostatné senzory príkonu (W) – sčítajú sa",
+          "energy_entities": "Ostatné senzory energie (kWh) – sčítajú sa",
+          "floor_power_entities": "Podlaha – merač príkonu (W)",
+          "floor_energy_entities": "Podlaha – merač energie (kWh)",
+          "ac_power_entities": "Klíma – merač príkonu (W)",
+          "ac_energy_entities": "Klíma – merač energie (kWh)",
+          "radiator_power_entities": "Radiátor – merač príkonu (W)",
+          "radiator_energy_entities": "Radiátor – merač energie (kWh)"
         }
       },
       "remove_zone": {

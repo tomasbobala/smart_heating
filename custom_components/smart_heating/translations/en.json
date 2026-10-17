@@ -101,8 +101,14 @@
           "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
           "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
           "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
-          "power_entities": "Power sensors (W) - summed, e.g. floor + AC",
-          "energy_entities": "Energy sensors (kWh) - summed, today's consumption from statistics"
+          "power_entities": "Other power sensors (W) - summed",
+          "energy_entities": "Other energy sensors (kWh) - summed",
+          "floor_power_entities": "Floor - power meter (W)",
+          "floor_energy_entities": "Floor - energy meter (kWh)",
+          "ac_power_entities": "AC - power meter (W)",
+          "ac_energy_entities": "AC - energy meter (kWh)",
+          "radiator_power_entities": "Radiator - power meter (W)",
+          "radiator_energy_entities": "Radiator - energy meter (kWh)"
         }
       },
       "edit_zone": {
@@ -123,8 +129,14 @@
           "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
           "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
           "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
-          "power_entities": "Power sensors (W) - summed, e.g. floor + AC",
-          "energy_entities": "Energy sensors (kWh) - summed, today's consumption from statistics"
+          "power_entities": "Other power sensors (W) - summed",
+          "energy_entities": "Other energy sensors (kWh) - summed",
+          "floor_power_entities": "Floor - power meter (W)",
+          "floor_energy_entities": "Floor - energy meter (kWh)",
+          "ac_power_entities": "AC - power meter (W)",
+          "ac_energy_entities": "AC - energy meter (kWh)",
+          "radiator_power_entities": "Radiator - power meter (W)",
+          "radiator_energy_entities": "Radiator - energy meter (kWh)"
         }
       },
       "remove_zone": {

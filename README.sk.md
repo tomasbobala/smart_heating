@@ -30,6 +30,8 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 <p align="center">
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - prehľadová karta a karty zón">
   <br>
+  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/statistics.png" width="100%" alt="Panel Štatistiky v prehľadovej karte">
+  <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/overview-settings.png" width="100%" alt="Nastavenia integrácie priamo v prehľadovej karte">
   <br>
   <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Karta zóny - otvorené nastavenia">
@@ -74,7 +76,7 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 | 🪵 **Reaguje na krb** | Vypne kúrenie v miestnosti, keď je pri krbe dostatočne teplo. |
 | 💶 **Sleduje tarifu** | Globálne zablokovanie kúrenia pri vysokej tarife. |
 | ☀️ **Kaskáda FVE prebytku** | Izby kúria z prebytku podľa priority (1 → 2 → 3). Riadené skutočným výkonom: priorita sa pridá, kým je prebytok, a odoberá sa od najnižšej, keď batéria vybíja alebo sa berie zo siete, s nastaviteľnými hranicami a časmi. |
-| ⚡ **Spotreba energie** | Aktuálny príkon kúrenia a spotreba za dnes pre každú izbu aj celý dom. |
+| ⚡ **Spotreba energie** | Merače po zdrojoch (podlaha, klíma, radiátor): príkon a spotreba za dnes po izbách aj za dom, kontrola meračov a panel štatistík (FVE verzus sieť, kWh na stupeňodeň, poradie izieb). |
 | 🩺 **Diagnostika** | Upozorní na nedostupné zariadenia, nezmyselné hodnoty a izby, ktoré sa nevedia dohriať. |
 | 🥶 **Protimrazová ochrana** | Núdzová ochrana zabráni zamrznutiu, aj počas zablokovania tarifou. |
 | 🧊 **Vynútené kúrenie pri mraze** | Per zóna nastaviteľná vonkajšia hranica spustí komfortné kúrenie v Auto režime. |
@@ -267,9 +269,15 @@ ich hneď, keď niektorá vyššia vychladne.
 
 ## Spotreba energie
 
-Každá zóna má dva voliteľné zoznamy: **senzory príkonu** (W) a **senzory
-energie** (kWh). Viac senzorov sa sčíta (napr. termostat podlahy + klíma v
-jednej izbe).
+Každá zóna môže mať merače **príkonu** (W) a **energie** (kWh) **po
+zdrojoch**: podlaha, klíma a radiátor (každý ako zoznam, napr. dva okruhy
+podlahy), plus "ostatné" senzory. Karta zóny potom ukazuje príkon po zdrojoch.
+
+- Zdroj s meračom príkonu sa ráta ako **v chode nad 20 W**. Podľa toho sa určuje
+  stav zóny, `v_chode` aj "Kúrenie dnes", spoľahlivejšie než podľa `hvac_action`.
+- **Kontrola meračov:** hlási kúrenie, ale 10 min ťahá 0 W (vypadnutý ohrev),
+  alebo ťahá viac ako 50 W, hoci má byť vypnutý (zaseknuté relé) → porucha s
+  notifikáciou.
 
 - Karta zóny ukazuje aktuálny príkon a spotrebu za dnes.
 - Prehľadová karta ukazuje súčet za celý dom.
@@ -277,6 +285,16 @@ jednej izbe).
   funguje akýkoľvek senzor energie s dlhodobými štatistikami (kumulatívne
   merače aj denné utility metre). Obnovuje sa každých 5 minút, príkon sa
   mení živo bez prekresľovania celej karty.
+
+### Štatistiky
+
+Tlačidlo **Štatistiky** v prehľadovej karte otvorí panel za dnes, 7 alebo 30
+dní: celková spotreba, podiel z FVE prebytku a zo siete, **kWh na stupeňodeň**
+(základ 18 °C, zo štatistík vonkajšieho senzora) v porovnaní s predchádzajúcim
+obdobím, spotreba po dňoch alebo hodinách, poradie izieb s rozpadom po zdrojoch
+a kontrola meračov. Podiel z FVE pochádza zo `sensor.smart_heating_energia_z_fve`,
+ktorý integruje príkon zón v čase, keď kúria z prebytku – je to odhad, nie
+samostatný merač na prívode kúrenia.
 
 ## Diagnostika
 

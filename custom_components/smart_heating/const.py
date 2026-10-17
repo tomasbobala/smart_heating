@@ -45,6 +45,15 @@ CONF_USE_FLOOR_MIN = "use_floor_min"
 # Spotreba zony: zoznamy entit (scitavaju sa, napr. podlaha + klima v jednej zone)
 CONF_POWER_ENTITIES = "power_entities"     # prikon (W/kW)
 CONF_ENERGY_ENTITIES = "energy_entities"   # energia (kWh/Wh) so statistikami
+# Merace po zdrojoch (zoznamy - jeden zdroj moze mat aj viac okruhov)
+SOURCE_METERS = {
+    "floor": ("floor_power_entities", "floor_energy_entities"),
+    "ac": ("ac_power_entities", "ac_energy_entities"),
+    "radiator": ("radiator_power_entities", "radiator_energy_entities"),
+}
+METER_ON_W = 20          # zdroj kuri, ked taha viac
+METER_STUCK_W = 50       # vypnuty zdroj, ktory taha viac = zaseknute rele
+HDD_BASE_TEMP = 18.0     # zaklad stupnodni (°C)
 
 ZONE_TYPE_FLOOR = "floor"
 ZONE_TYPE_FLOOR_AC = "floor_ac"

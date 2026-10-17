@@ -38,6 +38,7 @@ from .const import (
     CONF_USE_FLOOR_MIN,
     CONF_POWER_ENTITIES,
     CONF_ENERGY_ENTITIES,
+    SOURCE_METERS,
     RADIATOR_NUMBER_DEFS,
     ZONE_TYPE_RADIATOR_FLOOR,
     CONF_NOTIFY_COOLING,
@@ -366,6 +367,13 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         schema_dict[
             vol.Optional(CONF_USE_FIXED_AC_SETPOINT, default=zone.get(CONF_USE_FIXED_AC_SETPOINT, False))
         ] = selector.BooleanSelector()
+        for power_key, energy_key in SOURCE_METERS.values():
+            schema_dict[vol.Optional(power_key, default=zone.get(power_key, []))] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="power", multiple=True)
+            )
+            schema_dict[vol.Optional(energy_key, default=zone.get(energy_key, []))] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="energy", multiple=True)
+            )
         schema_dict[
             vol.Optional(CONF_POWER_ENTITIES, default=zone.get(CONF_POWER_ENTITIES, []))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="power", multiple=True))
@@ -413,6 +421,7 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_RADIATOR_ENTITY: user_input.get(CONF_RADIATOR_ENTITY),
             CONF_POWER_ENTITIES: user_input.get(CONF_POWER_ENTITIES, []),
             CONF_ENERGY_ENTITIES: user_input.get(CONF_ENERGY_ENTITIES, []),
+            **{k: user_input.get(k, []) for pair in SOURCE_METERS.values() for k in pair},
             CONF_USE_FLOOR_MIN: user_input.get(
                 CONF_USE_FLOOR_MIN, user_input.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
             ),

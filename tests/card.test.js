@@ -1135,3 +1135,119 @@ test("overview: heating power and consumption today summed over zones", async ()
   assert.match(text, /Príkon kúrenia\s*2,0 kW/);
   assert.match(text, /Spotreba dnes\s*12,3 kWh/);
 });
+
+// ---------------------------------------------------------------- statistiky + zdroje
+
+function statsRes(start, prevStart, { withFve = true } = {}) {
+  const DAY = 86400000;
+  const res = { "sensor.a_floor": [], "sensor.a_ac": [], "sensor.b_floor": [], "sensor.out": [] };
+  if (withFve) res["sensor.smart_heating_energia_z_fve"] = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = start + i * DAY + 3600000, prev = prevStart + i * DAY + 3600000;
+    res["sensor.a_floor"].push({ start: cur, change: 2 }, { start: prev, change: 3 });
+    res["sensor.a_ac"].push({ start: cur, change: 1 }, { start: prev, change: 1 });
+    res["sensor.b_floor"].push({ start: cur, change: 1 }, { start: prev, change: 1 });
+    res["sensor.out"].push({ start: cur, mean: 8 }, { start: prev, mean: 8 });   // 10 stupnodni/den
+    if (withFve) res["sensor.smart_heating_energia_z_fve"].push({ start: cur, change: 1 });
+  }
+  return res;
+}
+
+function statsZones() {
+  return [
+    { id: "a", name: "Obývačka", problems: [], srcs: [{ key: "floor", energy: ["sensor.a_floor"] }, { key: "ac", energy: ["sensor.a_ac"] }] },
+    { id: "b", name: "Spálňa", problems: ["Podlaha hlási kúrenie, ale merač ukazuje 0 W viac ako 10 min"], srcs: [{ key: "floor", energy: ["sensor.b_floor"] }] },
+  ];
+}
+
+test("computeStats: totals, solar share, kWh per degree-day vs previous period, ranking", () => {
+  const { window } = loadCard();
+  const DAY = 86400000;
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const start = midnight.getTime() - 6 * DAY, prevStart = start - 7 * DAY;
+  const st = window.computeStats(statsRes(start, prevStart), {
+    zones: statsZones(), energyIds: ["sensor.a_floor", "sensor.a_ac", "sensor.b_floor"],
+    fveId: "sensor.smart_heating_energia_z_fve", outdoorId: "sensor.out", start, prevStart, hourly: false, days: 7, lang: "sk",
+  });
+  assert.strictEqual(st.total, 28);                 // (2+1+1) * 7
+  assert.strictEqual(st.prevTotal, 35);             // (3+1+1) * 7
+  assert.strictEqual(st.fve, 7);
+  assert.strictEqual(st.eff, 28 / 70);              // 70 stupnodni
+  assert.ok(Math.abs(st.effDelta - (-0.2)) < 1e-9); // o 20 % lepsie
+  assert.strictEqual(st.buckets.length, 7);
+  assert.deepStrictEqual(st.ranking.map((r) => [r.name, r.total]), [["Obývačka", 21], ["Spálňa", 7]]);
+  assert.deepStrictEqual(st.ranking[0].parts.map((p) => [p.key, p.kwh]), [["floor", 14], ["ac", 7]]);
+});
+
+function statsOverview(resFn) {
+  const hass = overviewHass();
+  const a = hass.states["sensor.smart_heating_aaa11111_stav"].attributes;
+  a.sources = [{ key: "floor", power: [], energy: ["sensor.a_floor"] }, { key: "ac", power: [], energy: ["sensor.a_ac"] }];
+  a.energy_entities = ["sensor.a_floor", "sensor.a_ac"];
+  a.meter_problems = ["Podlaha hlási kúrenie, ale merač ukazuje 0 W viac ako 10 min"];
+  hass.states["sensor.smart_heating_energia_z_fve"] = { state: "3", attributes: {} };
+  const calls = [];
+  hass.callWS = async (msg) => {
+    calls.push(msg);
+    if (msg.type === "recorder/statistics_during_period" && msg.types && msg.types.includes("mean")) return resFn(msg);
+    return {};
+  };
+  return { hass, calls };
+}
+
+test("overview: Statistics button opens the panel with KPIs, ranking and meter check", async () => {
+  const { hass, calls } = statsOverview((msg) => {
+    const start = Date.parse(msg.start_time) + 7 * 86400000;
+    return statsRes(start, Date.parse(msg.start_time));
+  });
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 20));
+  const q = calls.find((c) => c.types && c.types.includes("mean"));
+  assert.strictEqual(q.period, "day");
+  assert.ok(Array.from(q.statistic_ids).includes("sensor.smart_heating_energia_z_fve"));
+  const text = card.querySelector(".sho-stats").textContent.replace(/\s+/g, " ");
+  assert.match(text, /Štatistiky kúrenia/);
+  assert.match(text, /Spotreba\s*21,0 kWh/);
+  assert.match(text, /Z FVE prebytku\s*33 %/);
+  assert.match(text, /Alpha\s*21,0 kWh/);
+  assert.match(text, /merač ukazuje 0 W/);
+  assert.match(text, /Na 1 stupeňodeň\s*–/);
+  assert.ok(card.querySelectorAll(".sho-chart rect").length >= 7);
+});
+
+test("overview: period switch to Today asks for hourly statistics", async () => {
+  const { hass, calls } = statsOverview(() => ({}));
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  card.querySelector('.sho-per[data-days="1"]').click();
+  await new Promise((r) => setTimeout(r, 10));
+  const last = calls.filter((c) => c.types && c.types.includes("mean")).at(-1);
+  assert.strictEqual(last.period, "hour");
+});
+
+test("overview: statistics panel without energy meters explains what to set", async () => {
+  const hass = overviewHass();
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.match(card.querySelector(".sho-stats").textContent, /nie sú nastavené merače energie/);
+});
+
+test("zone card: power broken down by source when two sources have meters", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = buildHass({ stavAttrs: {
+    power_entities: ["sensor.fw", "sensor.aw"], energy_entities: [],
+    sources: [{ key: "floor", power: ["sensor.fw"], energy: [] }, { key: "ac", power: ["sensor.aw"], energy: [] }],
+  } });
+  hass.states["sensor.fw"] = { state: "800", attributes: { unit_of_measurement: "W" } };
+  hass.states["sensor.aw"] = { state: "1.2", attributes: { unit_of_measurement: "kW" } };
+  card.hass = hass;
+  document.body.appendChild(card);
+  const t = card.querySelector(".sh-cons").textContent.replace(/\s+/g, " ");
+  assert.match(t, /Podlaha 800 W/);
+  assert.match(t, /Klíma 1,2 kW/);
+});

@@ -1,7 +1,7 @@
 """Sensor platform - diagnosticky stav aktualneho rozhodnutia per zona."""
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
+from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
@@ -30,6 +30,7 @@ async def async_setup_entry(
         entities.append(ZoneReasonSensor(coordinator, zone_id, zone["name"]))
         entities.append(ZoneTemperatureSensor(coordinator, zone_id, zone["name"]))
     entities.append(PvCascadeSensor(coordinator))
+    entities.append(PvEnergySensor(coordinator))
     async_add_entities(entities)
 
 
@@ -43,6 +44,14 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
         self._attr_unique_id = f"{DOMAIN}_{zone_id}_stav"
         self.entity_id = f"sensor.smart_heating_{zone_id}_stav"
         self._attr_name = f"{zone_name} stav kurenia"
+
+    def _all_meters(self, kind: str) -> list[str]:
+        out: list[str] = []
+        for src in self.coordinator._zone_sources(self.coordinator.zones.get(self._zone_id, {})):
+            for entity_id in src[kind]:
+                if entity_id not in out:
+                    out.append(entity_id)
+        return out
 
     @property
     def native_value(self):
@@ -82,8 +91,14 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             # pre prehladovu kartu (nastavenia integracie cez options flow)
             "config_entry_id": self.coordinator.entry.entry_id,
             # spotreba zony: karty z nich citaju prikon a statistiky energie
-            "power_entities": list(self.coordinator.zones.get(self._zone_id, {}).get("power_entities") or []),
-            "energy_entities": list(self.coordinator.zones.get(self._zone_id, {}).get("energy_entities") or []),
+            # vsetky merace zony (zdroje + ostatne, bez duplicit) a rozpad po zdrojoch
+            "power_entities": self._all_meters("power"),
+            "energy_entities": self._all_meters("energy"),
+            "sources": [
+                {"key": src["key"], "power": src["power"], "energy": src["energy"]}
+                for src in self.coordinator._zone_sources(self.coordinator.zones.get(self._zone_id, {}))
+            ],
+            "meter_problems": z.get("meter_problems", []),
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
             "tariff_entity": self.coordinator.entry.options.get(CONF_TARIFF_ENTITY),
@@ -158,3 +173,34 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
             "soc": snap.get("soc"),
             "prebytok_w": snap.get("available"),
         }
+
+
+class PvEnergySensor(CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
+    """Energia kurenia odobrata v case, ked zony kurili z FVE prebytku (z meracov
+    prikonu, kazdych 30 s). Kumulativna - HA z nej pocita denne statistiky pre
+    'podiel z FVE' v prehladovej karte."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_suggested_display_precision = 2
+    _attr_icon = "mdi:solar-power-variant"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.entry.entry_id}_energia_z_fve"
+        self.entity_id = "sensor.smart_heating_energia_z_fve"
+        self._attr_name = "Smart Heating energia z FVE"
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last is not None and last.native_value is not None:
+            try:
+                self.coordinator._pv_energy_kwh = max(self.coordinator._pv_energy_kwh, float(last.native_value))
+            except (TypeError, ValueError):
+                pass
+
+    @property
+    def native_value(self):
+        return round(self.coordinator._pv_energy_kwh, 3)

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.20.0";
+const CARD_VERSION = "0.21.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -144,6 +144,32 @@ const I18N = {
   ov_below: { en: "Below target", sk: "Pod cieľom" },
   section_floor: { en: "Floor", sk: "Podlaha" },
   cons_today: { en: "today", sk: "dnes" },
+  src_floor: { en: "Floor", sk: "Podlaha" },
+  src_ac: { en: "AC", sk: "Klíma" },
+  src_radiator: { en: "Radiator", sk: "Radiátor" },
+  src_other: { en: "Other", sk: "Ostatné" },
+  st_btn: { en: "Statistics", sk: "Štatistiky" },
+  st_title: { en: "Heating statistics", sk: "Štatistiky kúrenia" },
+  st_today: { en: "Today", sk: "Dnes" },
+  st_7: { en: "7 days", sk: "7 dní" },
+  st_30: { en: "30 days", sk: "30 dní" },
+  st_total: { en: "Consumption", sk: "Spotreba" },
+  st_fve: { en: "From solar surplus", sk: "Z FVE prebytku" },
+  st_fve_none: { en: "no data yet", sk: "zatiaľ bez dát" },
+  st_grid: { en: "From the grid", sk: "Zo siete" },
+  st_eff: { en: "Per degree-day", sk: "Na 1 stupeňodeň" },
+  st_better: { en: "{p} % better than the previous period", sk: "o {p} % lepšie ako predchádzajúce obdobie" },
+  st_worse: { en: "{p} % worse than the previous period", sk: "o {p} % horšie ako predchádzajúce obdobie" },
+  st_by_day: { en: "Consumption by day", sk: "Spotreba po dňoch" },
+  st_by_hour: { en: "Consumption by hour", sk: "Spotreba po hodinách" },
+  st_leg_fve: { en: "from solar", sk: "z FVE" },
+  st_leg_grid: { en: "from grid", sk: "zo siete" },
+  st_rank: { en: "Rooms", sk: "Poradie izieb" },
+  st_meters: { en: "Meter check", sk: "Kontrola meračov" },
+  st_meters_ok: { en: "All meters are fine", sk: "Všetky merače sú v poriadku" },
+  st_no_meters: { en: "No energy meters are set for the zones (Edit zone).", sk: "Pri zónach nie sú nastavené merače energie (Upraviť zónu)." },
+  st_error: { en: "Statistics could not be loaded.", sk: "Štatistiky sa nepodarilo načítať." },
+  st_fve_note: { en: "Solar share is estimated from the time rooms heated in the solar cascade.", sk: "Podiel z FVE je odhad z času, keď izby kúrila kaskáda FVE." },
   cons_power: { en: "Power", sk: "Príkon" },
   ov_power_now: { en: "Heating power", sk: "Príkon kúrenia" },
   ov_energy_today: { en: "Consumption today", sk: "Spotreba dnes" },
@@ -205,6 +231,8 @@ const DAY_MS = 24 * 3600 * 1000;
 
 // Material Design Icons (z @mdi/js) - vektorove ikony priamo v karte, bez emoji.
 const MDI = {
+  "chart-bar": "M22,21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
+  "check": "M21,7L9,19L3.5,13.5L4.91,12.09L9,16.17L19.59,5.59L21,7Z",
   "account-group": "M12,5.5A3.5,3.5 0 0,1 15.5,9A3.5,3.5 0 0,1 12,12.5A3.5,3.5 0 0,1 8.5,9A3.5,3.5 0 0,1 12,5.5M5,8C5.56,8 6.08,8.15 6.53,8.42C6.38,9.85 6.8,11.27 7.66,12.38C7.16,13.34 6.16,14 5,14A3,3 0 0,1 2,11A3,3 0 0,1 5,8M19,8A3,3 0 0,1 22,11A3,3 0 0,1 19,14C17.84,14 16.84,13.34 16.34,12.38C17.2,11.27 17.62,9.85 17.47,8.42C17.92,8.15 18.44,8 19,8M5.5,18.25C5.5,16.18 8.41,14.5 12,14.5C15.59,14.5 18.5,16.18 18.5,18.25V20H5.5V18.25M0,20V18.5C0,17.11 1.89,15.94 4.45,15.6C3.86,16.28 3.5,17.22 3.5,18.25V20H0M24,20H20.5V18.25C20.5,17.22 20.14,16.28 19.55,15.6C22.11,15.94 24,17.11 24,18.5V20Z",
   "account-multiple": "M16 17V19H2V17S2 13 9 13 16 17 16 17M12.5 7.5A3.5 3.5 0 1 0 9 11A3.5 3.5 0 0 0 12.5 7.5M15.94 13A5.32 5.32 0 0 1 18 17V19H22V17S22 13.37 15.94 13M15 4A3.39 3.39 0 0 0 13.07 4.59A5 5 0 0 1 13.07 10.41A3.39 3.39 0 0 0 15 11A3.5 3.5 0 0 0 15 4Z",
   "airplane": "M20.56 3.91C21.15 4.5 21.15 5.45 20.56 6.03L16.67 9.92L18.79 19.11L17.38 20.53L13.5 13.1L9.6 17L9.96 19.47L8.89 20.53L7.13 17.35L3.94 15.58L5 14.5L7.5 14.87L11.37 11L3.94 7.09L5.36 5.68L14.55 7.8L18.44 3.91C19 3.33 20 3.33 20.56 3.91Z",
@@ -296,6 +324,72 @@ async function fetchEnergyToday(hass, ids) {
 }
 
 const ENERGY_REFRESH_MS = 5 * 60 * 1000;
+
+/** Agregacia statistik pre panel Statistiky (cista funkcia - testovatelna). */
+function computeStats(res, o) {
+  const keyOf = (ms) => {
+    const d = new Date(ms);
+    return o.hourly ? `${d.toDateString()} ${d.getHours()}` : d.toDateString();
+  };
+  const ts = (v) => (typeof v === "number" ? v : Date.parse(v));
+  const sumBy = {};      // id -> bucket -> kWh
+  const tempBy = {};     // bucket -> [mean]
+  for (const id of Object.keys(res)) {
+    for (const r of res[id] || []) {
+      const k = keyOf(ts(r.start));
+      if (id === o.outdoorId) {
+        if (r.mean != null) (tempBy[k] = tempBy[k] || []).push(Number(r.mean));
+      } else if (r.change != null && !isNaN(Number(r.change))) {
+        sumBy[id] = sumBy[id] || {};
+        sumBy[id][k] = (sumBy[id][k] || 0) + Number(r.change);
+      }
+    }
+  }
+  const step = o.hourly ? 3600000 : 86400000;
+  const keysFrom = (from, count) => {
+    const out = [];
+    for (let i = 0; i < count; i++) out.push(keyOf(from + i * step + (o.hourly ? 0 : 43200000)));
+    return out;
+  };
+  const curKeys = o.hourly ? keysFrom(o.start, 24) : keysFrom(o.start, o.days);
+  const prevKeys = o.hourly ? keysFrom(o.prevStart, 24) : keysFrom(o.prevStart, o.days);
+  const total = (keys, ids) => ids.reduce((a, id) => a + keys.reduce((b, k) => b + ((sumBy[id] || {})[k] || 0), 0), 0);
+  const days = (keys) => {     // denne priemery pre stupnodni (pri hodinach po dnoch)
+    const byDay = {};
+    for (const k of keys) {
+      const day = o.hourly ? k.slice(0, k.lastIndexOf(" ")) : k;
+      for (const t of tempBy[k] || []) (byDay[day] = byDay[day] || []).push(t);
+    }
+    return Object.values(byDay).map((ts2) => ts2.reduce((a, b) => a + b, 0) / ts2.length);
+  };
+  const hdd = (keys) => days(keys).reduce((a, t) => a + Math.max(0, HDD_BASE - t), 0) * (o.hourly ? 1 : 1);
+  const cur = total(curKeys, o.energyIds);
+  const prev = total(prevKeys, o.energyIds);
+  const hddCur = hdd(curKeys), hddPrev = hdd(prevKeys);
+  const eff = hddCur >= 1 ? cur / hddCur : null;
+  const effPrev = hddPrev >= 1 ? prev / hddPrev : null;
+  const fve = o.fveId ? total(curKeys, [o.fveId]) : null;
+  const wd = { sk: ["Ne", "Po", "Ut", "St", "Št", "Pi", "So"], en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] };
+  const buckets = curKeys.map((k, i) => {
+    const t = o.start + i * step;
+    const d = new Date(t);
+    const label = o.hourly ? String(d.getHours()) : (o.days <= 7 ? ((wd[o.lang] || wd.en)[d.getDay()]) : `${d.getDate()}.`);
+    return { label, total: total([k], o.energyIds), fve: o.fveId ? total([k], [o.fveId]) : 0 };
+  });
+  const ranking = o.zones.map((z) => {
+    const parts = z.srcs.map((s) => ({ key: s.key, kwh: total(curKeys, s.energy) }));
+    return { name: z.name, total: parts.reduce((a, p) => a + p.kwh, 0), parts };
+  }).filter((r) => r.parts.length).sort((a, b) => b.total - a.total);
+  return {
+    total: cur, prevTotal: prev, fve, eff, effPrev,
+    effDelta: eff != null && effPrev ? (eff - effPrev) / effPrev : null,
+    buckets, ranking, zones: o.zones, hourly: o.hourly,
+  };
+}
+
+const HDD_BASE = 18;
+
+
 
 const ICONS = {
   flame: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3 4 6 6.5 6 11a6 6 0 0 1-12 0c0-2.6 1.4-4.6 3-6 .2 1.6 1 2.6 2 3 .3-3 1.2-5.6 1-8z"/></svg>`,
@@ -492,7 +586,19 @@ class SmartHeatingCard extends HTMLElement {
     const eIds = this._consIds("energy_entities");
     if (!pIds.length && !eIds.length) { wrap.hidden = true; return; }
     wrap.hidden = false;
-    wrap.querySelector(".sh-cons-p").textContent = pIds.length ? fmtPower(sumPowerW(this._hass, pIds), this._lang) : "";
+    const st = this._hass.states[eid(this._zoneId, "sensor", "stav")];
+    const srcs = ((st && st.attributes && st.attributes.sources) || []).filter((x) => (x.power || []).length);
+    const pEl = wrap.querySelector(".sh-cons-p");
+    const lbl = wrap.querySelector(".sh-cons-lbl");
+    if (srcs.length >= 2) {
+      // viac zdrojov: rozpad, napr. Podlaha 0,8 kW · Klima 1,2 kW
+      lbl.hidden = true;
+      pEl.innerHTML = srcs.map((x) =>
+        `<span class="sh-src"><i class="seg ${esc(x.key)}"></i>${esc(this._t("src_" + x.key))} <b>${esc(fmtPower(sumPowerW(this._hass, x.power), this._lang))}</b></span>`).join("");
+    } else {
+      lbl.hidden = false;
+      pEl.textContent = pIds.length ? fmtPower(sumPowerW(this._hass, pIds), this._lang) : "";
+    }
     wrap.querySelector(".sh-cons-e").textContent = eIds.length && this._energyToday != null
       ? `${this._t("cons_today")} ${fmtKwh(this._energyToday, this._lang)}` : "";
   }
@@ -713,6 +819,12 @@ class SmartHeatingCard extends HTMLElement {
       .sh-cons-i svg { width: 15px; height: 15px; display: block; }
       .sh-cons-p { font-weight: 650; color: var(--sh-txt, var(--primary-text-color)); font-variant-numeric: tabular-nums; }
       .sh-cons-e { font-variant-numeric: tabular-nums; }
+      .sh-cons { flex-wrap: wrap; }
+      .sh-src { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; font-weight: 400; color: var(--sh-sub, var(--secondary-text-color)); }
+      .sh-src b { color: var(--sh-txt, var(--primary-text-color)); font-weight: 650; }
+      .sh-src i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+      .sh-src .seg.floor { background: #f0883e; } .sh-src .seg.ac { background: #4fa3ff; }
+      .sh-src .seg.radiator { background: #2fa98a; } .sh-src .seg.other { background: #9a9aa2; }
       .sh-cons-e:not(:empty)::before { content: "·"; margin: 0 6px 0 2px; opacity: .6; }
       .sh-delta.up { color: var(--sh-warn); background: rgba(232,168,56,0.13); }
       .sh-delta.ok { color: var(--sh-ok); background: rgba(76,175,125,0.13); }
@@ -1566,6 +1678,48 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-gear svg { width: 15px; height: 15px; }
       .sho-gear:hover { color: var(--sh-txt); }
       .sho-set { grid-column: 1 / -1; }
+      .sho-statsbtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; min-height: 40px;
+        border-radius: 10px; border: 1px solid var(--divider-color, #333); background: none; color: var(--sh-txt); font: inherit; font-size: 13.5px;
+        font-weight: 600; cursor: pointer; width: 100%; }
+      .sho-statsbtn svg { width: 17px; height: 17px; }
+      .sho-statsbtn[aria-expanded="true"] { background: rgba(124,108,240,.22); border-color: var(--primary-color, #7c6cf0); }
+      .sho-stats { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 18px; }
+      .sho-stats[hidden] { display: none; }
+      .sho-st-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+      .sho-st-h h2 { margin: 0; font-size: 18px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
+      .sho-st-h h2 svg { width: 20px; height: 20px; color: var(--sh-sub); }
+      .sho-pers { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(127,127,127,.12); }
+      .sho-per { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: none; color: var(--sh-sub); font: inherit; font-size: 13.5px; cursor: pointer; }
+      .sho-per.on { background: var(--primary-color, #7c6cf0); color: var(--text-primary-color, #fff); font-weight: 600; }
+      .sho-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+      .sho-kpi { background: rgba(127,127,127,.08); border-radius: 12px; padding: 14px 16px; }
+      .sho-kpi .l { font-size: 12.5px; color: var(--sh-sub); }
+      .sho-kpi .v { font-size: 26px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
+      .sho-kpi .v span { font-size: 14px; font-weight: 500; color: var(--sh-sub); }
+      .sho-kpi .v.fve { color: #f2b84b; }
+      .sho-kpi .s { font-size: 12.5px; color: var(--sh-sub); margin-top: 2px; }
+      .sho-kpi .good { color: var(--sh-ok, #4caf7d); } .sho-kpi .bad { color: var(--sh-warn, #e8a838); }
+      .sho-leg { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 16px; font-size: 12.5px; color: var(--sh-sub); margin-bottom: 8px; }
+      .sho-leg b { color: var(--sh-txt); font-size: 13px; }
+      .sho-leg span { display: inline-flex; align-items: center; gap: 6px; }
+      .sho-leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+      .sho-leg i.f, .sho-chart .f { background: #f2b84b; fill: #f2b84b; }
+      .sho-leg i.g, .sho-chart .g { background: #5f5f68; fill: #5f5f68; }
+      .sho-chart { width: 100%; height: 200px; display: block; }
+      .sho-chart .ax { stroke: var(--divider-color, #3a3a3f); }
+      .sho-chart .lb { fill: var(--sh-sub); font-size: 11px; text-anchor: middle; }
+      .sho-chart .vl { fill: var(--sh-txt); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
+      .sho-st-low { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
+      @container (max-width: 700px) { .sho-st-low { grid-template-columns: 1fr; } }
+      .sho-rk { display: grid; grid-template-columns: 96px 1fr 76px; align-items: center; gap: 12px; font-size: 13.5px; padding: 5px 0; }
+      .sho-rk .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: rgba(127,127,127,.12); }
+      .sho-rk b { text-align: right; font-variant-numeric: tabular-nums; }
+      .seg.floor { background: #f0883e; } .seg.ac { background: #4fa3ff; } .seg.radiator { background: #2fa98a; } .seg.other { background: #9a9aa2; }
+      .sho-mt { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; padding: 9px 12px; border-radius: 10px; }
+      .sho-mt svg { width: 18px; height: 18px; flex-shrink: 0; }
+      .sho-mt.warn { background: rgba(242,184,75,.12); color: var(--sh-txt); } .sho-mt.warn svg { color: #f2b84b; }
+      .sho-mt.ok { color: var(--sh-sub); } .sho-mt.ok svg { color: var(--sh-ok, #4caf7d); }
+      .sho-note { font-size: 11.5px; color: var(--sh-sub); margin-top: 12px; }
       .sho-set[hidden] { display: none; }
       .sho-set-h { display: flex; align-items: center; gap: 8px; font-weight: 600; margin-bottom: 12px; }
       .sho-set-h svg { width: 18px; height: 18px; color: var(--sh-sub); }
@@ -1637,11 +1791,17 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-tiles"></div>
         <div class="sho-blk sho-sum"></div>
         <div class="sho-blk sho-set" hidden></div>
+        <div class="sho-blk sho-stats" hidden></div>
       </div></ha-card>`;
       this.querySelector(".sho-sum").addEventListener("click", (e) => {
-        if (e.target.closest(".sho-gear")) this._toggleSettings();
+        if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); this._toggleSettings(); }
+        if (e.target.closest(".sho-statsbtn")) this._toggleStats();
       });
       this.querySelector(".sho-set").addEventListener("click", (e) => this._onSettingsClick(e));
+      this.querySelector(".sho-stats").addEventListener("click", (e) => {
+        const b = e.target.closest("[data-days]");
+        if (b) this._loadStats(Number(b.dataset.days));
+      });
       this.querySelector(".sho-out").addEventListener("click", () => {
         const outdoor = this._outdoorEntity();
         if (outdoor) fireMoreInfo(this, outdoor);
@@ -1914,10 +2074,154 @@ class SmartHeatingOverview extends HTMLElement {
         ? row("", this._t("ov_power_now"), fmtPower(sumPowerW(this._hass, this._allCons("power_entities")), this._lang)) : "") +
       (this._allCons("energy_entities").length
         ? row("", this._t("ov_energy_today"), fmtKwh(this._energyToday, this._lang)) : "") +
+      `<button type="button" class="sho-statsbtn" aria-expanded="${this._statsOpen ? "true" : "false"}">${mdiSvg("chart-bar")}<span>${esc(this._t("st_btn"))}</span></button>` +
       `<button type="button" class="sho-gear" aria-expanded="${this._setOpen ? "true" : "false"}">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></button>`;
   }
 
   // -------------------------------------------------- nastavenia integracie (options flow)
+
+
+  // -------------------------------------------------- statistiky (spotreba, FVE, stupnodni, poradie)
+
+  _toggleStats() {
+    const panel = this.querySelector(".sho-stats");
+    if (!panel) return;
+    if (this._statsOpen) {
+      this._statsOpen = false;
+      panel.hidden = true;
+      panel.innerHTML = "";
+      this._renderSummary(this._zoneData());
+      return;
+    }
+    if (this._setOpen) this._closeSettings(true);
+    this._statsOpen = true;
+    panel.hidden = false;
+    this._renderSummary(this._zoneData());
+    this._loadStats(this._statsDays || 7);
+  }
+
+  async _loadStats(days) {
+    this._statsDays = days;
+    const panel = this.querySelector(".sho-stats");
+    const zones = this._zoneData();
+    const zoneIds = zones.map((z) => {
+      const srcs = Array.isArray(z.s.sources) && z.s.sources.length
+        ? z.s.sources
+        : [{ key: "other", energy: z.s.energy_entities || [] }];
+      return { id: z.id, name: z.name, problems: z.s.meter_problems || [], srcs: srcs.filter((x) => (x.energy || []).length) };
+    });
+    const energyIds = [...new Set(zoneIds.flatMap((z) => z.srcs.flatMap((x) => x.energy)))];
+    if (!energyIds.length) {
+      panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("st_no_meters"))}</div>`;
+      return;
+    }
+    panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("ov_loading"))}</div>`;
+    const fveId = this._hass.states["sensor.smart_heating_energia_z_fve"] ? "sensor.smart_heating_energia_z_fve" : null;
+    const outdoorId = this._outdoorEntity();
+    const hourly = days === 1;
+    const DAY = 86400000;
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const start = midnight.getTime() - (days - 1) * DAY;
+    const prevStart = start - days * DAY;
+    try {
+      const res = await this._hass.callWS({
+        type: "recorder/statistics_during_period",
+        start_time: new Date(prevStart).toISOString(),
+        end_time: new Date().toISOString(),
+        statistic_ids: [...energyIds, ...(fveId ? [fveId] : []), ...(outdoorId ? [outdoorId] : [])],
+        period: hourly ? "hour" : "day",
+        types: ["change", "mean"],
+        units: { energy: "kWh", temperature: "°C" },
+      });
+      if (this._statsDays !== days || !this._statsOpen) return;   // medzicasom prepnute
+      this._stats = computeStats(res || {}, { zones: zoneIds, energyIds, fveId, outdoorId, start, prevStart, hourly, days, lang: this._lang });
+      this._renderStats();
+    } catch (err) {
+      panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("st_error"))}</div>`;
+    }
+  }
+
+  _statsHead() {
+    const d = this._statsDays || 7;
+    const btn = (n, key) => `<button type="button" class="sho-per${d === n ? " on" : ""}" data-days="${n}" aria-pressed="${d === n}">${esc(this._t(key))}</button>`;
+    return `<div class="sho-st-h"><h2>${mdiSvg("chart-bar") || ""}${esc(this._t("st_title"))}</h2>
+      <div class="sho-pers" role="group">${btn(1, "st_today")}${btn(7, "st_7")}${btn(30, "st_30")}</div></div>`;
+  }
+
+  _renderStats() {
+    const st = this._stats;
+    const panel = this.querySelector(".sho-stats");
+    if (!st || !panel) return;
+    const L = this._lang;
+    const num = (v, dec = 1) => (v == null ? "–" : (Math.round(v * 10 ** dec) / 10 ** dec).toFixed(dec).replace(".", L === "sk" ? "," : "."));
+    const kpi = (label, val, unit, sub, cls = "") =>
+      `<div class="sho-kpi"><div class="l">${esc(label)}</div><div class="v ${cls}">${val}${unit ? ` <span>${esc(unit)}</span>` : ""}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
+    let effSub = "";
+    if (st.effDelta != null) {
+      const p = Math.round(Math.abs(st.effDelta) * 100);
+      effSub = st.effDelta <= 0
+        ? `<span class="good">${esc(this._t("st_better", { p }))}</span>`
+        : `<span class="bad">${esc(this._t("st_worse", { p }))}</span>`;
+    }
+    const share = st.total > 0 && st.fve != null ? Math.min(1, st.fve / st.total) : null;
+    const kpis = kpi(this._t("st_total"), num(st.total), "kWh", "") +
+      kpi(this._t("st_fve"), share == null ? "–" : `${Math.round(share * 100)} %`, "", st.fve == null ? esc(this._t("st_fve_none")) : `${num(st.fve)} kWh`, "fve") +
+      kpi(this._t("st_grid"), num(st.fve == null ? null : Math.max(0, st.total - st.fve)), st.fve == null ? "" : "kWh", "") +
+      kpi(this._t("st_eff"), num(st.eff, 2), st.eff == null ? "" : "kWh", effSub);
+
+    // graf po dnoch / hodinach
+    const b = st.buckets;
+    const W = 1000, H = 200, base = 170, left = 34;
+    const slot = (W - left - 10) / Math.max(1, b.length);
+    const bw = Math.max(4, Math.min(64, slot * 0.62));
+    const max = Math.max(0.1, ...b.map((x) => x.total));
+    const sc = (v) => (v / max) * (base - 22);
+    let bars = "";
+    b.forEach((x, i) => {
+      const xx = left + i * slot + (slot - bw) / 2;
+      const fve = Math.min(x.fve || 0, x.total);
+      const grid = x.total - fve;
+      const hg = sc(grid), hf = sc(fve);
+      bars += `<rect x="${xx.toFixed(1)}" y="${(base - hg).toFixed(1)}" width="${bw.toFixed(1)}" height="${hg.toFixed(1)}" rx="3" class="g"></rect>`;
+      if (hf > 0.5) bars += `<rect x="${xx.toFixed(1)}" y="${(base - hg - hf).toFixed(1)}" width="${bw.toFixed(1)}" height="${hf.toFixed(1)}" rx="3" class="f"></rect>`;
+      const every = b.length > 12 ? Math.ceil(b.length / 10) : 1;
+      if (i % every === 0 || i === b.length - 1) {
+        bars += `<text x="${(xx + bw / 2).toFixed(1)}" y="${base + 16}" class="lb">${esc(x.label)}</text>`;
+      }
+      if (b.length <= 10 && x.total > 0) {
+        bars += `<text x="${(xx + bw / 2).toFixed(1)}" y="${(base - hg - hf - 6).toFixed(1)}" class="vl">${num(x.total)}</text>`;
+      }
+    });
+    const chart = `<div class="sho-leg"><b>${esc(this._t(st.hourly ? "st_by_hour" : "st_by_day"))}</b>
+        <span><i class="f"></i>${esc(this._t("st_leg_fve"))}</span><span><i class="g"></i>${esc(this._t("st_leg_grid"))}</span></div>
+      <svg class="sho-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(this._t("st_by_day"))}">
+        <line x1="${left}" y1="${base}" x2="${W - 10}" y2="${base}" class="ax"></line>${bars}</svg>`;
+
+    // poradie izieb
+    const maxZone = Math.max(0.01, ...st.ranking.map((r) => r.total));
+    const rank = st.ranking.map((r) => {
+      const segs = r.parts.filter((p) => p.kwh > 0).map((p) =>
+        `<span class="seg ${p.key}" style="width:${((p.kwh / maxZone) * 100).toFixed(1)}%" title="${esc(this._t("src_" + p.key))} ${num(p.kwh)} kWh"></span>`).join("");
+      return `<div class="sho-rk"><span>${esc(r.name)}</span><span class="bar">${segs}</span><b>${num(r.total)} kWh</b></div>`;
+    }).join("");
+    const usedKeys = [...new Set(st.ranking.flatMap((r) => r.parts.filter((p) => p.kwh > 0).map((p) => p.key)))];
+    const rankLeg = usedKeys.map((k) => `<span><i class="seg ${k}"></i>${esc(this._t("src_" + k))}</span>`).join("");
+
+    // kontrola meracov
+    const issues = st.zones.flatMap((z) => z.problems.map((p) => ({ zone: z.name, p })));
+    const meters = issues.length
+      ? issues.map((x) => `<div class="sho-mt warn">${mdiSvg("alert") || ""}<span><b>${esc(x.zone)}</b><br>${esc(x.p)}</span></div>`).join("")
+      : `<div class="sho-mt ok">${mdiSvg("check") || "✓"}<span>${esc(this._t("st_meters_ok"))}</span></div>`;
+
+    panel.innerHTML = this._statsHead() +
+      `<div class="sho-kpis">${kpis}</div>
+       <div class="sho-st-chart">${chart}</div>
+       <div class="sho-st-low">
+         <div><div class="sho-leg"><b>${esc(this._t("st_rank"))}</b>${rankLeg}</div>${rank}</div>
+         <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}
+           ${st.fve != null ? `<div class="sho-note">${esc(this._t("st_fve_note"))}</div>` : ""}</div>
+       </div>`;
+  }
 
   _entryId() {
     const z = this._zoneData().find((x) => x.s.config_entry_id);
