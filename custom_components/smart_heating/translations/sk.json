@@ -67,7 +67,20 @@
           "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
           "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
           "language": "Jazyk (texty generované backendom: dôvody, notifikácie)",
-          "notify_diagnostics": "Notifikácia: poruchy (nedostupné zariadenie, nezmyselná hodnota, zóna sa nevie dohriať)"
+          "notify_diagnostics": "Notifikácia: poruchy (nedostupné zariadenie, nezmyselná hodnota, zóna sa nevie dohriať)",
+          "pv_auto": "Riadiť FVE prebytok podľa výkonu (nahrádza prepínač prebytku)",
+          "pv_power_entity": "Výkon výroby FVE",
+          "grid_power_entity": "Výkon siete",
+          "battery_power_entity": "Výkon batérie",
+          "grid_export_negative": "Export do siete je záporné číslo",
+          "battery_charge_positive": "Nabíjanie batérie je kladné číslo",
+          "pv_add_power": "Pridať prioritu pri prebytku aspoň (W)",
+          "pv_add_minutes": "...trvajúcom (min)",
+          "pv_shed_power": "Odobrať prioritu pri vybíjaní batérie / odbere zo siete nad (W)",
+          "pv_shed_minutes": "...trvajúcom (min), ďalšiu po rovnakom čase",
+          "pv_min_power": "Nedostatočná výroba pod (W)",
+          "pv_start_soc": "Nabíjanie batérie sa ráta ako prebytok od SOC (%)",
+          "pv_stop_soc": "Vypnúť všetko pri batérii pod (%)"
         },
         "description": "Smart Heating verzia {version}"
       },

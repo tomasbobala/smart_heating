@@ -387,6 +387,8 @@ settings.
 | `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | heating temperatures |
 | `number..._floor_max` / `_floor_hysterezia` | floor max: heating stops at max, resumes below max - hysteresis |
 | `number..._floor_min` + `switch..._udrzat_min_podlahy` | minimum floor temperature: floor heats below it even when the air is warm |
+| `sensor.smart_heating_fve_kaskada` | solar by power: active priority (0 = none), powers, available surplus, when the next priority is added / removed |
+| `select..._fve_priorita` | solar surplus cascade: 1 heats first; 2 and 3 join once higher priorities have been warm for 10 min and are released as soon as a higher one drops > 0.5 °C below target |
 | `number..._radiator_hysterezia` | radiator zones only: radiator on at target - hysteresis, off at target |
 | `sensor..._stav` attributes `problemy`, `nabeh_min_na_stupen`, `nabehy_pocet` | current faults; warm-up log (median minutes per °C, count) |
 | `number..._vonkajsia_hranica` | threshold for forced heating in cold |

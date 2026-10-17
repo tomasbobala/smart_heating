@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.17.0";
+const CARD_VERSION = "0.19.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -143,6 +143,9 @@ const I18N = {
   ov_above: { en: "Above target", sk: "Nad cieľom" },
   ov_below: { en: "Below target", sk: "Pod cieľom" },
   section_floor: { en: "Floor", sk: "Podlaha" },
+  pv_priority: { en: "Solar priority", sk: "Priorita FVE" },
+  pv_priority_hint: { en: "1 = first; 2 and 3 join once higher priorities are warm", sk: "1 = prvá; 2 a 3 sa pridajú, keď sú vyššie nahriate" },
+  badge_pv_waiting: { en: "Solar – waiting for priority rooms", sk: "FVE – čaká na prioritné izby" },
   temp_floor_min: { en: "Min. floor temperature", sk: "Min. teplota podlahy" },
   temp_floor_max: { en: "Max. floor temperature", sk: "Max. teplota podlahy" },
   temp_floor_hyst: { en: "Floor hysteresis", sk: "Hysteréza podlahy" },
@@ -162,6 +165,18 @@ const I18N = {
   ov_grp_general: { en: "General", sk: "Všeobecné" },
   ov_grp_notify: { en: "Notifications", sk: "Notifikácie" },
   of_holiday_active: { en: "Holiday", sk: "Dovolenka" },
+  ov_grp_pv: { en: "Solar surplus", sk: "FVE prebytok" },
+  ov_pv_prio: { en: "P1–{tier}", sk: "P1–{tier}" },
+  of_pv_auto: { en: "Control by power", sk: "Riadiť podľa výkonu" },
+  of_grid_export_negative: { en: "Grid export is negative", sk: "Export do siete je záporný" },
+  of_battery_charge_positive: { en: "Battery charging is positive", sk: "Nabíjanie batérie je kladné" },
+  of_pv_add_power: { en: "Add priority at surplus", sk: "Pridať prioritu pri prebytku" },
+  of_pv_add_minutes: { en: "…lasting", sk: "…trvajúcom" },
+  of_pv_shed_power: { en: "Remove at discharge / import over", sk: "Odobrať pri vybíjaní / odbere nad" },
+  of_pv_shed_minutes: { en: "…lasting (each next step)", sk: "…trvajúcom (aj každý ďalší krok)" },
+  of_pv_min_power: { en: "Insufficient production below", sk: "Nedostatočná výroba pod" },
+  of_pv_start_soc: { en: "Battery charge is surplus from", sk: "Nabíjanie batérie je prebytok od" },
+  of_pv_stop_soc: { en: "Everything off below battery", sk: "Všetko vypnúť pri batérii pod" },
   of_nudzova_teplota: { en: "Emergency temperature", sk: "Núdzová teplota" },
   of_krb_threshold: { en: "Fireplace threshold", sk: "Hranica krbu" },
   of_notify_tariff: { en: "Tariff", sk: "Tarifa" },
@@ -423,6 +438,12 @@ class SmartHeatingCard extends HTMLElement {
       eid(z, "switch", "reaguj_na_krb"),
       eid(z, "switch", "vyuzi_fve_prebytok"),
       eid(z, "switch", "pouzit_pevny_ac_setpoint"),
+      eid(z, "switch", "udrzat_min_podlahy"),
+      eid(z, "select", "fve_priorita"),
+      eid(z, "number", "floor_min"),
+      eid(z, "number", "floor_max"),
+      eid(z, "number", "floor_hysterezia"),
+      eid(z, "number", "radiator_hysterezia"),
     ];
     return this._cachedEntityIds;
   }
@@ -641,6 +662,8 @@ class SmartHeatingCard extends HTMLElement {
         color: var(--primary-text-color); padding: 9px 12px; border-radius: 9px; background: var(--sh-fill); }
       .sh-icon { font-size: 0.95rem; line-height: 1; display: inline-flex; color: var(--sh-sub, var(--secondary-text-color)); }
       .sh-icon svg { width: 17px; height: 17px; display: block; }
+      .sh-row-hint { font-size: 11.5px; color: var(--sh-sub, var(--secondary-text-color)); margin-top: 2px; }
+      .sh-pv-prio .sh-chip { min-width: 34px; padding: 4px 10px; }
       .sh-sum-val { margin-left: auto; font-size: 0.78rem; font-weight: 400; color: var(--secondary-text-color); }
       details.sh-section > summary.sh-section-label { cursor: pointer; list-style: none; user-select: none; }
       details.sh-section > summary.sh-section-label::-webkit-details-marker { display: none; }
@@ -853,6 +876,7 @@ class SmartHeatingCard extends HTMLElement {
     if (zAttrs.cold_outdoor_active) badges.push(["info", this._t("badge_cold")]);
     if (zAttrs.boost_active) badges.push(["info", this._t("badge_boost")]);
     if (zAttrs.floor_guard) badges.push(["info", this._t("badge_floor_min")]);
+    if (zAttrs.fve_caka) badges.push(["info", this._t("badge_pv_waiting")]);
     const problems = Array.isArray(zAttrs.problemy) ? zAttrs.problemy : [];
     const reason = String((this._hass.states[eid(this._zoneId, "sensor", "stav")] || {}).state || "").toLowerCase();
     this.querySelector(".sh-badges").innerHTML = badges
@@ -1130,6 +1154,7 @@ class SmartHeatingCard extends HTMLElement {
       this._switchRow(this._t("toggle_preheat"), "predkurenie_povolene") +
       this._switchRow(this._t("toggle_krb"), "reaguj_na_krb") +
       this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok") +
+      this._pvPriorityRow() +
       (this._hass.states[eid(this._zoneId, "switch", "udrzat_min_podlahy")]
         ? this._switchRow(this._t("toggle_floor_min"), "udrzat_min_podlahy") : "") +
       (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "");
@@ -1143,6 +1168,22 @@ class SmartHeatingCard extends HTMLElement {
       el.onclick = toggle;
       el.onkeydown = (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(); } };
     });
+    wrap.querySelectorAll("[data-pv-prio]").forEach((el) => {
+      el.onclick = () => this._hass.callService("select", "select_option", {
+        entity_id: eid(this._zoneId, "select", "fve_priorita"), option: el.dataset.pvPrio,
+      });
+    });
+  }
+
+  _pvPriorityRow() {
+    const sel = this._hass.states[eid(this._zoneId, "select", "fve_priorita")];
+    const sw = this._hass.states[eid(this._zoneId, "switch", "vyuzi_fve_prebytok")];
+    if (!sel || (sw && sw.state !== "on")) return "";   // len ked zona FVE vyuziva
+    const opts = (sel.attributes && sel.attributes.options) || ["1", "2", "3"];
+    return `<div class="sh-row sh-pv-prio"><div class="sh-row-label">${esc(this._t("pv_priority"))}
+        <div class="sh-row-hint">${esc(this._t("pv_priority_hint"))}</div></div>
+      <div class="sh-chips">${opts.map((o) =>
+        `<button type="button" class="sh-chip ${sel.state === o ? "active" : ""}" data-pv-prio="${esc(o)}">${esc(o)}</button>`).join("")}</div></div>`;
   }
 
   _renderBoost(zAttrs) {
@@ -1316,6 +1357,7 @@ class SmartHeatingOverview extends HTMLElement {
     for (const z of this._zones()) ids.push(eid(z, "climate"), eid(z, "sensor", "stav"));
     const outdoor = this._outdoorEntity();
     if (outdoor) ids.push(outdoor);
+    ids.push("sensor.smart_heating_fve_kaskada");
     ids.push(
       ...this._zoneEntities("presence_entities"),
       ...this._zoneEntities("manual_presence_entities"),
@@ -1530,6 +1572,21 @@ class SmartHeatingOverview extends HTMLElement {
         // az ked takato zona naozaj kuri (v cieli uz prebytok nespotrebuva).
         const boosted = n((z) => z.s.pv_active);
         const used = n((z) => z.s.pv_active && z.c.hvac_action === "heating");
+        const casc = this._hass.states["sensor.smart_heating_fve_kaskada"];
+        if (casc && casc.attributes && casc.attributes.rezim === "vykon") {
+          // FVE riadena podla vykonu: aktivne priority + dostupny prebytok
+          const tier = Number(casc.state) || 0;
+          const kw = Number(casc.attributes.prebytok_w || 0) / 1000;
+          const kwTxt = `${kw.toFixed(1).replace(".", this._lang === "sk" ? "," : ".")} kW`;
+          return {
+            icon: "mdi:solar-power-variant",
+            label: this._t("ov_pv"),
+            value: tier ? `${tier === 1 ? "P1" : this._t("ov_pv_prio", { tier })} · ${kwTxt}` : `${this._t("ov_no")} · ${kwTxt}`,
+            cls: used ? "on" : "",
+            entity: "sensor.smart_heating_fve_kaskada",
+            tap: "more-info",
+          };
+        }
         const ent = this._zoneEntities("pv_surplus_entity")[0];
         const surplus = ent ? this._isOn(ent) : boosted > 0;
         return {
@@ -1736,7 +1793,8 @@ class SmartHeatingOverview extends HTMLElement {
       if (sel.boolean || f.type === "boolean") out.push({ ...f, kind: "bool" });
       else if (sel.number || f.type === "float" || f.type === "integer") {
         const n = sel.number || {};
-        out.push({ ...f, kind: "num", step: n.step && n.step !== "any" ? Number(n.step) : 0.5, min: n.min, max: n.max });
+        out.push({ ...f, kind: "num", step: n.step && n.step !== "any" ? Number(n.step) : 0.5, min: n.min, max: n.max,
+          unit: n.unit_of_measurement || "°" });
       }
     }
     return out;
@@ -1746,11 +1804,21 @@ class SmartHeatingOverview extends HTMLElement {
     return Object.prototype.hasOwnProperty.call(this._changes, f.name) ? this._changes[f.name] : f.default;
   }
 
+  _fmtNum(v, f) {
+    const dec = f.step && f.step < 1 ? 1 : 0;
+    const txt = Number(v).toFixed(dec);
+    const unit = f.unit || "°";
+    if (unit === "°" || unit === "°C") return `${txt}°`;
+    return `${txt} ${unit}`;
+  }
+
   _renderSettingsPanel() {
     const panel = this.querySelector(".sho-set");
     const fields = this._settingsFields();
-    const general = fields.filter((f) => !f.name.startsWith("notify_"));
+    const isPv = (f) => f.name.startsWith("pv_") || f.name === "grid_export_negative" || f.name === "battery_charge_positive";
+    const general = fields.filter((f) => !f.name.startsWith("notify_") && !isPv(f));
     const notify = fields.filter((f) => f.name.startsWith("notify_"));
+    const pv = fields.filter(isPv);
     const fieldHtml = (f) => {
       const label = esc(this._t(`of_${f.name}`));
       if (f.kind === "bool") {
@@ -1759,12 +1827,12 @@ class SmartHeatingOverview extends HTMLElement {
       }
       const v = this._fieldValue(f);
       return `<div class="sho-f"><span>${label}</span><span class="sho-num">
-        <button type="button" data-f="${esc(f.name)}" data-d="-1">−</button><b>${v == null ? "–" : esc(Number(v).toFixed(1))}°</b>
+        <button type="button" data-f="${esc(f.name)}" data-d="-1">−</button><b>${v == null ? "–" : esc(this._fmtNum(v, f))}</b>
         <button type="button" data-f="${esc(f.name)}" data-d="1">+</button></span></div>`;
     };
     const group = (title, list) => (list.length ? `<div class="sho-grp"><div class="h">${esc(this._t(title))}</div>${list.map(fieldHtml).join("")}</div>` : "");
     panel.innerHTML = `<div class="sho-set-h">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></div>
-      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_notify", notify)}</div>
+      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_pv", pv)}${group("ov_grp_notify", notify)}</div>
       ${this._settingsFooter(true)}`;
   }
 

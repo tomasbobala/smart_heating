@@ -2,6 +2,43 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.19.0
+- **Solar surplus controlled by power** (Global settings → "Control solar
+  surplus by power"; replaces the surplus on/off switch and the automation
+  behind it). Inputs: PV production, grid and battery power (+ battery SOC),
+  with selectable sign conventions. Evaluated every 30 s, not on every sensor
+  update.
+  - Adding: available surplus = grid export + battery charging (charging only
+    counts above `pv_start_soc`, so the battery is charged first) >=
+    `pv_add_power` for `pv_add_minutes` -> next priority; the following one
+    after the same time again.
+  - Removing (hysteresis): battery discharge or grid import over
+    `pv_shed_power`, or production below `pv_min_power`, for `pv_shed_minutes`
+    -> the lowest active priority is removed; if it continues, the next one
+    after the same time. Below `pv_stop_soc` everything stops at once.
+  - Defaults: 1000 W / 5 min to add, 200 W / 10 min to remove, 500 W minimum
+    production, battery counts from 90 %, stop below 40 %.
+- New `sensor.smart_heating_fve_kaskada`: active priority (0 = none) with
+  production, export, import, battery, SOC, available surplus and what is about
+  to happen (`pridanie_za_min` / `odobratie_za_min`) - usable in other
+  automations instead of the old surplus switch.
+- Overview card: the solar tile shows active priorities and surplus
+  ("P1–2 · 1.8 kW"); all solar parameters can be tuned in the settings panel
+  (W / min / % units).
+
+## 0.18.0
+- **Solar surplus cascade.** New per-zone select `select.smart_heating_<id>_fve_priorita`
+  (1 / 2 / 3, default 1 = previous behaviour). Zones with priority 1 heat from
+  the surplus first; the next priority joins once all higher-priority zones are
+  at their solar target (within 0.2 °C) for 10 minutes; lower priorities are
+  released immediately when a higher-priority zone drops more than 0.5 °C below
+  target. Zones that can't use the surplus (floor over max, fireplace, cooling,
+  mode Off) don't block the cascade. Attributes `fve_priorita` and `fve_caka`,
+  "Solar – waiting for priority rooms" badge, priority chips next to the
+  "Use solar surplus" switch.
+- Fixed (0.17.0): the zone card didn't re-render when the new floor numbers or
+  the min-floor switch changed.
+
 ## 0.17.0
 - **Floor max with hysteresis.** Heating stops at `floor_max` and resumes only
   below `floor_max - floor_hysterezia` (new number, default 1.5 °C), so the relay

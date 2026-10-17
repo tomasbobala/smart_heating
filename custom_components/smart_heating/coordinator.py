@@ -45,6 +45,13 @@ from .const import (
     CONF_HOLIDAY_ACTIVE,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
+    CONF_PV_AUTO,
+    CONF_PV_POWER_ENTITY,
+    CONF_GRID_POWER_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_GRID_EXPORT_NEGATIVE,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    PV_ENGINE_NUMBERS,
     CONF_RADIATOR_ENTITY,
     CONF_TARIFF_ENTITY,
     CONF_USE_FIREPLACE_GUARD,
@@ -92,6 +99,12 @@ WARMUP_MIN_MINUTES = 5      # kratsie nabehy su sum
 WARMUP_KEEP = 30            # poslednych N nabehov na zonu
 WARMUP_STORE_VERSION = 1
 
+# Kaskada FVE prebytku
+PV_CASCADE_DELAY = timedelta(minutes=10)   # vyssie priority nahriate tak dlho -> pridaj dalsiu
+PV_SATISFIED_MARGIN = 0.2                  # °C pod FVE cielom = este "nahriata"
+PV_RELEASE_GAP = 0.5                       # °C pod cielom vo vyssej priorite -> nizsie hned odpoj
+PV_ENGINE_INTERVAL = timedelta(seconds=30)  # vyhodnotenie vykonov (nie pri kazdej zmene senzora)
+
 
 def mode_entity_id(zone_id: str) -> str:
     return f"select.smart_heating_{zone_id}_rezim"
@@ -99,6 +112,10 @@ def mode_entity_id(zone_id: str) -> str:
 
 def season_entity_id(zone_id: str) -> str:
     return f"select.smart_heating_{zone_id}_sezona"
+
+
+def pv_priority_entity_id(zone_id: str) -> str:
+    return f"select.smart_heating_{zone_id}_fve_priorita"
 
 
 def number_entity_id(zone_id: str, key: str) -> str:
@@ -129,6 +146,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_tracking = None
         self._unsub_interval = None
         self._unsub_debounce = None
+        self._unsub_pv_engine = None
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
         self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
@@ -161,6 +179,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_interval = async_track_time_interval(
             self.hass, self._periodic_tick, RECOMPUTE_INTERVAL
         )
+        self._unsub_pv_engine = async_track_time_interval(
+            self.hass, self._pv_engine_tick, PV_ENGINE_INTERVAL
+        )
 
     def _tracked_entity_ids(self) -> list[str]:
         ids: list[str] = []
@@ -184,6 +205,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             ids.extend(zone.get(CONF_PRESENCE_ENTITIES, []))
             ids.extend(zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
             ids.append(mode_entity_id(zone_id))
+            ids.append(pv_priority_entity_id(zone_id))
             is_floor_ac = zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC
             if is_floor_ac:
                 ids.append(season_entity_id(zone_id))
@@ -299,13 +321,27 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         now_t = dt_util.now().time()
         weekday = dt_util.now().weekday()  # 0=Po ... 6=Ne
 
+        # Kaskada FVE: ktore zony smu prave teraz kurit z prebytku (podla priority)
+        if self._pv_auto_enabled():
+            tier = self._pv_engine_state()["tier"]
+            participants = self._pv_participants()
+            pv_surplus = tier >= 1 and bool(participants)
+            pv_allowed = {z: t <= tier for z, t in participants.items()} if pv_surplus else {}
+        else:
+            pv_allowed = self._pv_cascade(pv_surplus)
+
         zones_data = {
             zone_id: self._compute_zone(
                 zone_id, zone, tariff_ok, holiday_active, emergency_temp,
-                krb_threshold, fireplace_temp, pv_surplus, battery_soc, outdoor, now_t, weekday,
+                krb_threshold, fireplace_temp, pv_surplus and pv_allowed.get(zone_id, True),
+                battery_soc, outdoor, now_t, weekday,
             )
             for zone_id, zone in self.zones.items()
         }
+        for zone_id, zdata in zones_data.items():
+            zdata["pv_priority"] = self._pv_priority(zone_id)
+            # zona by chcela FVE, ale caka, kym sa nahreju vyssie priority
+            zdata["pv_waiting"] = bool(pv_surplus) and pv_allowed.get(zone_id, True) is False
 
         for zone_id, zdata in zones_data.items():
             zdata["diag_static"] = self._diag_static(zone_id, self.zones[zone_id], zdata)
@@ -315,6 +351,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._process_global_notifications(tariff_ok, holiday_active, zones_data)
 
         return {
+            "pv_engine": self._pv_snapshot(pv_surplus),
             "outdoor_temp": outdoor,
             "tariff_ok": tariff_ok,
             "holiday_active": holiday_active,
@@ -511,6 +548,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "season": SEASON_KURENIE,
             "floor_guard": floor_guard,
             "floor_hysterezia": floor_hyst,
+            "pv_target": comfort_target,
             "radiator_entity": zone.get(CONF_RADIATOR_ENTITY),
             "mode": mode,
             "effective_mode": effective_mode,
@@ -967,6 +1005,235 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_on)) if on]
         zdata["actual_action"] = self._resolve_action(running, bool(running), "heating") if running else "idle"
 
+    # ------------------------------------------------------------- kaskada FVE
+
+    def _pv_priority(self, zone_id: str) -> int:
+        state = self.hass.states.get(pv_priority_entity_id(zone_id))
+        try:
+            return int(state.state) if state and state.state not in ("unknown", "unavailable") else 1
+        except (TypeError, ValueError):
+            return 1
+
+    def _zone_current_temp(self, zone: dict):
+        if zone.get(CONF_EXTERNAL_TEMP_ENTITY):
+            return self._state_float(zone[CONF_EXTERNAL_TEMP_ENTITY])
+        state = self.hass.states.get(zone[CONF_CLIMATE_ENTITY])
+        try:
+            value = state.attributes.get("current_temperature") if state else None
+            return float(value) if value is not None else None
+        except (TypeError, ValueError):
+            return None
+
+    def _pv_participants(self) -> dict[str, int]:
+        """{zone_id: priorita} pre zony, ktore FVE prebytok vyuzivaju (nie Vypnute)."""
+        tiers: dict[str, int] = {}
+        for zone_id in self.zones:
+            if not self._state_bool(switch_entity_id(zone_id, "vyuzi_fve_prebytok"), True):
+                continue
+            mode_state = self.hass.states.get(mode_entity_id(zone_id))
+            if mode_state is not None and mode_state.state == MODE_VYPNUTE:
+                continue
+            tiers[zone_id] = self._pv_priority(zone_id)
+        return tiers
+
+    # --------------------------------------------- FVE prebytok podla vykonu
+
+    def _pv_auto_enabled(self) -> bool:
+        opt = self.entry.options
+        return bool(opt.get(CONF_PV_AUTO)) and bool(
+            opt.get(CONF_GRID_POWER_ENTITY) or opt.get(CONF_BATTERY_POWER_ENTITY)
+        )
+
+    def _pv_engine_state(self) -> dict:
+        return self._global_rt.setdefault(
+            "pv_engine", {"tier": 0, "add_since": None, "bad_since": None, "reason": None, "values": {}}
+        )
+
+    def _pv_param(self, key: str) -> float:
+        try:
+            return float(self.entry.options.get(key, PV_ENGINE_NUMBERS[key][4]))
+        except (TypeError, ValueError):
+            return float(PV_ENGINE_NUMBERS[key][4])
+
+    def _pv_engine_step(self) -> int:
+        """Jeden krok kaskady podla vykonu. Vrati novu aktivnu prioritu (0 = nic).
+
+        Pridanie: dostupny prebytok (export + nabijanie baterie nad pv_start_soc)
+        >= pv_add_power nepretrzite pv_add_minutes -> dalsia priorita.
+        Odobratie: vybijanie baterie alebo odber zo siete nad pv_shed_power, alebo
+        vyroba pod pv_min_power, nepretrzite pv_shed_minutes -> najnizsia aktivna
+        priorita sa odpoji; ak to trva dalej, po rovnakom case dalsia.
+        Pod pv_stop_soc sa vypne vsetko hned."""
+        opt = self.entry.options
+        eng = self._pv_engine_state()
+        now = dt_util.now()
+
+        pv = self._state_float(opt.get(CONF_PV_POWER_ENTITY))
+        grid = self._state_float(opt.get(CONF_GRID_POWER_ENTITY))
+        bat = self._state_float(opt.get(CONF_BATTERY_POWER_ENTITY))
+        soc = self._state_float(opt.get(CONF_BATTERY_SOC_ENTITY))
+        # normalizacia: grid + = odber, - = export; bateria + = nabijanie, - = vybijanie
+        if grid is not None and not opt.get(CONF_GRID_EXPORT_NEGATIVE, True):
+            grid = -grid
+        if bat is not None and not opt.get(CONF_BATTERY_CHARGE_POSITIVE, True):
+            bat = -bat
+        export = max(0.0, -grid) if grid is not None else 0.0
+        grid_import = max(0.0, grid) if grid is not None else 0.0
+        charge = max(0.0, bat) if bat is not None else 0.0
+        discharge = max(0.0, -bat) if bat is not None else 0.0
+        charge_counts = soc is None or soc >= self._pv_param("pv_start_soc")
+        available = export + (charge if charge_counts else 0.0)
+        eng["values"] = {
+            "pv": pv, "export": export, "import": grid_import, "battery": bat, "soc": soc, "available": available,
+        }
+
+        levels = sorted(set(self._pv_participants().values()))
+        tier = eng["tier"]
+        if tier and tier not in levels:
+            lower = [lvl for lvl in levels if lvl < tier]
+            tier = lower[-1] if lower else 0
+
+        def reset():
+            eng["add_since"] = None
+            eng["bad_since"] = None
+
+        if not levels:
+            tier, eng["reason"] = 0, "no_zones"
+            reset()
+        elif soc is not None and soc < self._pv_param("pv_stop_soc"):
+            tier, eng["reason"] = 0, "low_soc"
+            reset()
+        elif grid is None and bat is None:
+            eng["reason"] = "no_data"          # bez dat nic nemenime
+            reset()
+        else:
+            shed = self._pv_param("pv_shed_power")
+            bad = []
+            if discharge > shed:
+                bad.append("battery")
+            if grid_import > shed:
+                bad.append("import")
+            if pv is not None and pv < self._pv_param("pv_min_power"):
+                bad.append("low_pv")
+            nxt = next((lvl for lvl in levels if lvl > tier), None)
+            if bad and tier > 0:
+                eng["add_since"] = None
+                eng["bad_since"] = eng["bad_since"] or now
+                eng["reason"] = "shed:" + ",".join(bad)
+                if now - eng["bad_since"] >= timedelta(minutes=self._pv_param("pv_shed_minutes")):
+                    lower = [lvl for lvl in levels if lvl < tier]
+                    tier = lower[-1] if lower else 0
+                    eng["bad_since"] = now if tier else None   # dalsia priorita az po dalsom intervale
+            elif not bad and nxt is not None and available >= self._pv_param("pv_add_power"):
+                eng["bad_since"] = None
+                eng["add_since"] = eng["add_since"] or now
+                eng["reason"] = "add"
+                if now - eng["add_since"] >= timedelta(minutes=self._pv_param("pv_add_minutes")):
+                    tier = nxt
+                    eng["add_since"] = now if next((lvl for lvl in levels if lvl > tier), None) else None
+            else:
+                eng["reason"] = "hold"
+                reset()
+        eng["tier"] = tier
+        return tier
+
+    async def _pv_engine_tick(self, _now=None) -> None:
+        if not self._pv_auto_enabled():
+            return
+        before = self._pv_engine_state()["tier"]
+        after = self._pv_engine_step()
+        if after != before:
+            await self.async_recompute_and_apply()
+        elif isinstance(self.data, dict):
+            self.data["pv_engine"] = self._pv_snapshot(after >= 1)
+            self.async_update_listeners()
+
+    def _pv_snapshot(self, pv_surplus) -> dict:
+        """Stav pre senzor sensor.smart_heating_fve_kaskada a prehladovu kartu."""
+        if not self._pv_auto_enabled():
+            tier = self._global_rt.get("pv_tier") if pv_surplus else 0
+            return {"mode": "switch", "tier": tier or 0}
+        eng = self._pv_engine_state()
+        now = dt_util.now()
+
+        def remaining(since, key):
+            if since is None:
+                return None
+            left = self._pv_param(key) - (now - since).total_seconds() / 60
+            return max(0, round(left, 1))
+
+        return {
+            "mode": "power",
+            "tier": eng["tier"],
+            "reason": eng.get("reason"),
+            "add_in_min": remaining(eng.get("add_since"), "pv_add_minutes"),
+            "shed_in_min": remaining(eng.get("bad_since"), "pv_shed_minutes"),
+            **{k: (round(v) if isinstance(v, float) else v) for k, v in eng.get("values", {}).items()},
+        }
+
+    def _pv_cascade(self, pv_surplus) -> dict[str, bool]:
+        """Vrati {zone_id: smie_kurit_z_FVE} pre zony, ktore FVE vyuzivaju.
+
+        Zony s prioritou 1 kuria z prebytku hned. Dalsia priorita sa prida, az ked
+        su vsetky zony vyssich priorit nahriate (FVE ciel - PV_SATISFIED_MARGIN)
+        aspon PV_CASCADE_DELAY. Ked niektora vyssia vychladne o viac ako
+        PV_RELEASE_GAP, nizsie priority sa odpoja hned. Zona, ktora prebytok
+        aktualne vyuzit nemoze (prehriata podlaha, krb, chladenie), sa berie ako
+        nahriata, aby neblokovala ostatne."""
+        grt = self._global_rt
+        if not pv_surplus:
+            grt["pv_tier"] = None
+            grt["pv_sat_since"] = None
+            return {}
+
+        tiers = self._pv_participants()
+        if not tiers:
+            return {}
+
+        levels = sorted(set(tiers.values()))
+        active = grt.get("pv_tier")
+        if active not in levels:
+            active = levels[0]
+        prev = self.data.get("zones", {}) if isinstance(self.data, dict) else {}
+
+        def gap(zone_id):
+            """FVE ciel - aktualna teplota (kladne = pod cielom); None = nevieme/nemoze."""
+            z = prev.get(zone_id)
+            if not z or z.get("season") != SEASON_KURENIE or z.get("floor_override") or z.get("krb_override"):
+                return None
+            target = z.get("pv_target")
+            current = self._zone_current_temp(self.zones[zone_id])
+            if target is None or current is None:
+                return None
+            return target - current
+
+        # odpojenie: vyssia priorita vychladla -> zostan na nej
+        for level in levels:
+            if level >= active:
+                break
+            if any((g := gap(z)) is not None and g > PV_RELEASE_GAP for z, t in tiers.items() if t == level):
+                active = level
+                grt["pv_sat_since"] = None
+                break
+
+        # pridanie dalsej priority: vsetky doterajsie su nahriate dost dlho
+        nxt = next((lvl for lvl in levels if lvl > active), None)
+        satisfied = all(
+            (g := gap(z)) is None or g <= PV_SATISFIED_MARGIN for z, t in tiers.items() if t <= active
+        )
+        now = dt_util.now()
+        if nxt is not None and satisfied:
+            since = grt.get("pv_sat_since") or now
+            grt["pv_sat_since"] = since
+            if now - since >= PV_CASCADE_DELAY:
+                active = nxt
+                grt["pv_sat_since"] = None
+        else:
+            grt["pv_sat_since"] = None
+
+        grt["pv_tier"] = active
+        return {z: t <= active for z, t in tiers.items()}
+
     # ------------------------------------------------------------- radiator + podlaha
 
     async def _apply_switch(self, entity_id, on: bool) -> None:
@@ -1168,3 +1435,6 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         if self._unsub_debounce:
             self._unsub_debounce()
             self._unsub_debounce = None
+        if self._unsub_pv_engine:
+            self._unsub_pv_engine()
+            self._unsub_pv_engine = None

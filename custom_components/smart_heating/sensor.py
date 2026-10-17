@@ -29,6 +29,7 @@ async def async_setup_entry(
     for zone_id, zone in entry.options.get(OPT_ZONES, {}).items():
         entities.append(ZoneReasonSensor(coordinator, zone_id, zone["name"]))
         entities.append(ZoneTemperatureSensor(coordinator, zone_id, zone["name"]))
+    entities.append(PvCascadeSensor(coordinator))
     async_add_entities(entities)
 
 
@@ -68,6 +69,9 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "zdroj_kurenia": z.get("heat_source"),
             "zone_type": z.get("zone_type"),
             "floor_guard": z.get("floor_guard", False),
+            # kaskada FVE: priorita zony a ci prave caka na nahriatie vyssich priorit
+            "fve_priorita": z.get("pv_priority", 1),
+            "fve_caka": z.get("pv_waiting", False),
             "floor_max": z.get("floor_max"),
             "radiator_entity": z.get("radiator_entity"),
             # diagnostika: zoznam aktualnych poruch (prazdny = v poriadku)
@@ -113,3 +117,41 @@ class ZoneTemperatureSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEn
             return round(float(value), 2) if value is not None else None
         except (TypeError, ValueError):
             return None
+
+
+class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
+    """Kaskada FVE prebytku pre celu integraciu: stav = najnizsia priorita, ktora
+    smie kurit z prebytku (0 = ziadna). Atributy ukazuju vykony a co sa chysta."""
+
+    _attr_icon = "mdi:solar-power-variant"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.entry.entry_id}_fve_kaskada"
+        self.entity_id = "sensor.smart_heating_fve_kaskada"
+        self._attr_name = "Smart Heating FVE kaskada"
+
+    @property
+    def _snap(self) -> dict:
+        data = self.coordinator.data if isinstance(self.coordinator.data, dict) else {}
+        return data.get("pv_engine") or {}
+
+    @property
+    def native_value(self):
+        return self._snap.get("tier", 0)
+
+    @property
+    def extra_state_attributes(self):
+        snap = self._snap
+        return {
+            "rezim": "vykon" if snap.get("mode") == "power" else "prepinac",
+            "dovod": snap.get("reason"),
+            "pridanie_za_min": snap.get("add_in_min"),
+            "odobratie_za_min": snap.get("shed_in_min"),
+            "vyroba_w": snap.get("pv"),
+            "export_w": snap.get("export"),
+            "odber_w": snap.get("import"),
+            "bateria_w": snap.get("battery"),
+            "soc": snap.get("soc"),
+            "prebytok_w": snap.get("available"),
+        }

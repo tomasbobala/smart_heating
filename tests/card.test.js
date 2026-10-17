@@ -942,3 +942,112 @@ test("overview settings: error message when not allowed", async () => {
   await tick();
   assert.match(card.querySelector(".sho-set").textContent, /administrátora/);
 });
+
+// ---------------------------------------------------------------- kaskada FVE
+
+function pvHass(prio, pvOn = "on", extra = {}) {
+  const hass = buildHass({ stavAttrs: extra });
+  hass.states[`switch.smart_heating_${ZONE_ID}_vyuzi_fve_prebytok`] = { state: pvOn, attributes: {} };
+  hass.states[`select.smart_heating_${ZONE_ID}_fve_priorita`] = { state: prio, attributes: { options: ["1", "2", "3"] } };
+  return hass;
+}
+
+test("pv priority: chips shown with the switch on, selecting calls select_option", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = pvHass("2");
+  const calls = [];
+  hass.callService = (d, s, data) => calls.push({ d, s, data });
+  card.hass = hass;
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  const row = card.querySelector(".sh-pv-prio");
+  assert.ok(row);
+  assert.strictEqual(row.querySelector(".sh-chip.active").textContent, "2");
+  row.querySelector('[data-pv-prio="1"]').click();
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(calls.at(-1))), {
+    d: "select", s: "select_option",
+    data: { entity_id: `select.smart_heating_${ZONE_ID}_fve_priorita`, option: "1" },
+  });
+});
+
+test("pv priority: hidden when the zone doesn't use solar surplus", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = pvHass("1", "off");
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  assert.strictEqual(card.querySelector(".sh-pv-prio"), null);
+});
+
+test("pv priority: waiting badge", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = pvHass("2", "on", { fve_caka: true });
+  document.body.appendChild(card);
+  assert.match(card.querySelector(".sh-badges").textContent, /FVE – čaká na prioritné izby/);
+});
+
+test("card re-renders when floor settings or solar priority change", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = pvHass("1");
+  document.body.appendChild(card);
+  const ids = card._entityIds();
+  for (const k of ["number.%_floor_min", "number.%_floor_max", "number.%_floor_hysterezia",
+    "number.%_radiator_hysterezia", "switch.%_udrzat_min_podlahy", "select.%_fve_priorita"]) {
+    assert.ok(ids.includes(k.replace("%", `smart_heating_${ZONE_ID}`)), k);
+  }
+});
+
+// ---------------------------------------------------------------- FVE podla vykonu
+
+test("overview: solar tile in power mode shows active priorities and surplus", () => {
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_fve_kaskada"] = {
+    state: "2", attributes: { rezim: "vykon", prebytok_w: 1840 },
+  };
+  const card = renderOverview({}, hass);
+  const text = pvTile(card).textContent;
+  assert.match(text, /P1–2 · 1,8 kW/);
+  assert.match(text, /1,8 kW/);
+});
+
+test("overview: solar tile in power mode with nothing active", () => {
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_fve_kaskada"] = { state: "0", attributes: { rezim: "vykon", prebytok_w: 300 } };
+  const card = renderOverview({}, hass);
+  assert.match(pvTile(card).textContent, /Nie · 0,3 kW/);
+});
+
+test("overview settings: solar group with units W / min / %", async () => {
+  const { hass } = settingsHass();
+  const base = hass.callApi;
+  hass.callApi = async (method, path, data) => {
+    const r = await base(method, path, data);
+    if (r.type === "form") {
+      r.data_schema.push(
+        { name: "pv_auto", selector: { boolean: {} }, default: true },
+        { name: "pv_add_power", selector: { number: { min: 100, max: 10000, step: 100, unit_of_measurement: "W" } }, default: 1000 },
+        { name: "pv_shed_minutes", selector: { number: { min: 1, max: 60, step: 1, unit_of_measurement: "min" } }, default: 10 },
+        { name: "pv_stop_soc", selector: { number: { min: 0, max: 100, step: 5, unit_of_measurement: "%" } }, default: 40 },
+      );
+    }
+    return r;
+  };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  const text = card.querySelector(".sho-set").textContent;
+  assert.match(text, /FVE prebytok/);
+  assert.match(text, /1000 W/);
+  assert.match(text, /10 min/);
+  assert.match(text, /40 %/);
+  assert.match(text, /8\.0°/);                      // povodne teplotne pole stale so stupnom
+  card.querySelector('[data-f="pv_add_power"][data-d="1"]').click();
+  assert.match(card.querySelector(".sho-set").textContent, /1100 W/);
+});

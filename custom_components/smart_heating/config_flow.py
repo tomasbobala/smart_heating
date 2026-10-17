@@ -28,6 +28,13 @@ from .const import (
     CONF_NOTIFY_COLD_OUTDOOR,
     CONF_NOTIFY_DIAGNOSTICS,
     CONF_RADIATOR_ENTITY,
+    CONF_PV_AUTO,
+    CONF_PV_POWER_ENTITY,
+    CONF_GRID_POWER_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_GRID_EXPORT_NEGATIVE,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    PV_ENGINE_NUMBERS,
     CONF_USE_FLOOR_MIN,
     RADIATOR_NUMBER_DEFS,
     ZONE_TYPE_RADIATOR_FLOOR,
@@ -145,6 +152,23 @@ def _hub_schema_dict(current: dict) -> dict:
         schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
     )
+    # --- FVE prebytok podla vykonu (kaskada priorit s hysterezou) ---
+    schema_dict[vol.Optional(CONF_PV_AUTO, default=current.get(CONF_PV_AUTO, False))] = selector.BooleanSelector()
+    for key in (CONF_PV_POWER_ENTITY, CONF_GRID_POWER_ENTITY, CONF_BATTERY_POWER_ENTITY):
+        _add_optional(
+            schema_dict, key, current.get(key),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="power")),
+        )
+    schema_dict[
+        vol.Optional(CONF_GRID_EXPORT_NEGATIVE, default=current.get(CONF_GRID_EXPORT_NEGATIVE, True))
+    ] = selector.BooleanSelector()
+    schema_dict[
+        vol.Optional(CONF_BATTERY_CHARGE_POSITIVE, default=current.get(CONF_BATTERY_CHARGE_POSITIVE, True))
+    ] = selector.BooleanSelector()
+    for key, (lo, hi, step, unit, default) in PV_ENGINE_NUMBERS.items():
+        schema_dict[vol.Optional(key, default=current.get(key, default))] = selector.NumberSelector(
+            selector.NumberSelectorConfig(min=lo, max=hi, step=step, mode="box", unit_of_measurement=unit)
+        )
     _add_optional(
         schema_dict, CONF_BATTERY_SOC_ENTITY, current.get(CONF_BATTERY_SOC_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="battery")),

@@ -65,6 +65,27 @@ SEASON_CHLADENIE = "Chladenie"
 SEASON_AUTO = "Auto"
 SEASONS = [SEASON_KURENIE, SEASON_CHLADENIE, SEASON_AUTO]
 
+# ---- Kaskada FVE prebytku: 1 = najvyssia priorita ----
+PV_PRIORITIES = ["1", "2", "3"]
+
+# ---- FVE prebytok riadeny podla vykonu (nahradza prepinac FVE prebytku) ----
+CONF_PV_AUTO = "pv_auto"
+CONF_PV_POWER_ENTITY = "pv_power_entity"
+CONF_GRID_POWER_ENTITY = "grid_power_entity"
+CONF_BATTERY_POWER_ENTITY = "battery_power_entity"
+CONF_GRID_EXPORT_NEGATIVE = "grid_export_negative"        # True: export do siete je zaporne cislo
+CONF_BATTERY_CHARGE_POSITIVE = "battery_charge_positive"  # True: nabijanie baterie je kladne cislo
+# key -> (min, max, step, unit, default)
+PV_ENGINE_NUMBERS = {
+    "pv_add_power": (100, 10000, 100, "W", 1000),     # dostupny prebytok na pridanie priority
+    "pv_add_minutes": (1, 60, 1, "min", 5),           # ako dlho musi prebytok trvat
+    "pv_shed_power": (0, 5000, 50, "W", 200),         # vybijanie baterie / odber zo siete = zle
+    "pv_shed_minutes": (1, 60, 1, "min", 10),         # ako dlho, kym sa odoberie priorita
+    "pv_min_power": (0, 10000, 100, "W", 500),        # vyroba pod tymto = nedostatocna
+    "pv_start_soc": (0, 100, 5, "%", 90),             # nabijanie baterie sa ráta ako prebytok az od tohto SOC
+    "pv_stop_soc": (0, 100, 5, "%", 40),              # pod tymto SOC sa vypne vsetko hned
+}
+
 # ---- Defaultne hodnoty ----
 DEFAULT_DEN_TEMP = 21.0
 DEFAULT_NOC_TEMP = 19.0

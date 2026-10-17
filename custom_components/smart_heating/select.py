@@ -14,6 +14,7 @@ from .const import (
     OPT_ZONES,
     SEASON_AUTO,
     SEASONS,
+    PV_PRIORITIES,
     ZONE_MODES,
     ZONE_TYPE_FLOOR_AC,
 )
@@ -27,6 +28,7 @@ async def async_setup_entry(
     entities: list = []
     for zone_id, zone in entry.options.get(OPT_ZONES, {}).items():
         entities.append(ZoneModeSelect(coordinator, zone_id, zone["name"]))
+        entities.append(ZonePvPrioritySelect(coordinator, zone_id, zone["name"]))
         if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC:
             entities.append(ZoneSeasonSelect(coordinator, zone_id, zone["name"]))
     async_add_entities(entities)
@@ -74,6 +76,34 @@ class ZoneSeasonSelect(SelectEntity, RestoreEntity):
         await super().async_added_to_hass()
         last_state = await self.async_get_last_state()
         if last_state and last_state.state in SEASONS:
+            self._attr_current_option = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._coordinator.async_recompute_and_apply()
+
+
+class ZonePvPrioritySelect(SelectEntity, RestoreEntity):
+    """Priorita zony pri FVE prebytku (kaskada). 1 = kuri z prebytku prva; nizsie
+    priority sa pridaju az ked su vsetky vyssie nahriate a odpoja sa hned, ked
+    niektora vyssia vychladne."""
+
+    _attr_options = PV_PRIORITIES
+    _attr_icon = "mdi:solar-power-variant"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
+        self._coordinator = coordinator
+        self._zone_id = zone_id
+        self._attr_unique_id = f"{DOMAIN}_{zone_id}_fve_priorita"
+        self.entity_id = f"select.smart_heating_{zone_id}_fve_priorita"
+        self._attr_name = f"{zone_name} FVE priorita"
+        self._attr_current_option = PV_PRIORITIES[0]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state in PV_PRIORITIES:
             self._attr_current_option = last_state.state
 
     async def async_select_option(self, option: str) -> None:

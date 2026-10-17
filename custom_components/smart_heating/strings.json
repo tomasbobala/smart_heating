@@ -67,7 +67,20 @@
           "notify_ac_backup": "Notification: floor engaged as AC backup",
           "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
           "language": "Language (backend-generated texts: reasons, notifications)",
-          "notify_diagnostics": "Notification: faults (device unavailable, implausible value, zone not reaching target)"
+          "notify_diagnostics": "Notification: faults (device unavailable, implausible value, zone not reaching target)",
+          "pv_auto": "Control solar surplus by power (replaces the surplus switch)",
+          "pv_power_entity": "Solar production power",
+          "grid_power_entity": "Grid power",
+          "battery_power_entity": "Battery power",
+          "grid_export_negative": "Export to grid is a negative number",
+          "battery_charge_positive": "Battery charging is a positive number",
+          "pv_add_power": "Add a priority at surplus of at least (W)",
+          "pv_add_minutes": "...lasting (min)",
+          "pv_shed_power": "Remove a priority at battery discharge / grid import over (W)",
+          "pv_shed_minutes": "...lasting (min), then the next one after the same time",
+          "pv_min_power": "Insufficient production below (W)",
+          "pv_start_soc": "Battery charging counts as surplus from SOC (%)",
+          "pv_stop_soc": "Switch everything off below battery SOC (%)"
         },
         "description": "Smart Heating version {version}"
       },
