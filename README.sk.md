@@ -458,7 +458,7 @@ nastavení (Options Flow).
 | `select.smart_heating_<id>_rezim` | Auto / Den / Noc / Min / Mraz / Vypnute |
 | `select.smart_heating_<id>_sezona` | **len `floor_ac`**: Kurenie / Chladenie / Auto |
 | `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | teploty kúrenia |
-| `number..._floor_max` / `_floor_hysterezia` | max. podlahy: vypne na maxime, znova zapne pod max - hysteréza |
+| `number..._floor_max` / `_floor_hysterezia` | max. podlahy: vypne na maxime, znova zapne pod max - hysteréza. Keď senzor podlahy 10 min nedáva platnú hodnotu, podlahovka sa vypne (atribút `floor_sensor_lost`) |
 | `number..._floor_min` + `switch..._udrzat_min_podlahy` | min. teplota podlahy: podlaha kúri pod ňou aj keď je vzduch teplý |
 | `sensor.smart_heating_fve_kaskada` | FVE podľa výkonu: aktívna priorita (0 = nič), výkony, dostupný prebytok, kedy sa pridá / odoberie ďalšia priorita |
 | `select..._fve_priorita` | kaskáda FVE prebytku: 1 kúri prvá; 2 a 3 sa pridajú, keď sú vyššie priority 10 min nahriate, a odpoja sa hneď, keď vyššia vychladne o > 0,5 °C |

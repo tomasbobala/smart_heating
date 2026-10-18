@@ -37,6 +37,13 @@ async def async_setup_entry(
 class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
     _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # Konfiguracia (zoznamy entit) sa nemeni - netreba ju ukladat do historie pri
+    # kazdej zmene dovodu. Karty ju citaju zo stavu, nie z historie.
+    _unrecorded_attributes = frozenset({
+        "zone_id", "config_entry_id", "zone_type", "radiator_entity", "floor_max",
+        "power_entities", "energy_entities", "sources", "outdoor_entity", "tariff_entity",
+        "pv_surplus_entity", "presence_entities", "manual_presence_entities",
+    })
 
     def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
         super().__init__(coordinator)
@@ -69,6 +76,7 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "outdoor_temperature": z["outdoor_temperature"],
             "cold_outdoor_active": z["cold_outdoor_active"],
             "floor_override": z["floor_override"],
+            "floor_sensor_lost": z.get("floor_sensor_lost", False),
             "krb_override": z["krb_override"],
             "tariff_blocked": z["tariff_blocked"],
             "emergency_active": z["emergency_active"],
@@ -142,6 +150,12 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
     smie kurit z prebytku (0 = ziadna). Atributy ukazuju vykony a co sa chysta."""
 
     _attr_icon = "mdi:solar-power-variant"
+    # Vykony a odpocty sa menia kazdych 30 s - v historii by len nafukovali databazu
+    # (vykony FVE sa ukladaju aj tak v senzoroch stridaca).
+    _unrecorded_attributes = frozenset({
+        "pridanie_za_min", "odobratie_za_min", "vyroba_w", "export_w", "odber_w",
+        "bateria_w", "soc", "prebytok_w",
+    })
 
     def __init__(self, coordinator: SmartHeatingCoordinator) -> None:
         super().__init__(coordinator)

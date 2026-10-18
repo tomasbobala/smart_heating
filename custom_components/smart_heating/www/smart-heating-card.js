@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.21.1";
+const CARD_VERSION = "0.21.2";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -65,6 +65,7 @@ const I18N = {
   badge_emergency: { en: "Emergency protection", sk: "Núdzová ochrana" },
   badge_tariff: { en: "Blocked by tariff", sk: "Zablokované tarifou" },
   badge_floor: { en: "Floor at max", sk: "Podlaha na maxime" },
+  badge_floor_sensor: { en: "Floor sensor lost", sk: "Senzor podlahy výpadok" },
   badge_krb: { en: "Fireplace", sk: "Krb" },
   badge_pv: { en: "Solar surplus", sk: "FVE prebytok" },
   badge_cold: { en: "Cold outside", sk: "Mráz vonku" },
@@ -767,6 +768,7 @@ class SmartHeatingCard extends HTMLElement {
       .sh-root.is-heat { --sh-acc: var(--sh-heat); background: linear-gradient(135deg, rgba(255,138,61,0.10), transparent 55%); }
       .sh-root.is-cool { --sh-acc: var(--sh-cool); background: linear-gradient(135deg, rgba(79,163,255,0.10), transparent 55%); }
       .sh-root.is-off { --sh-acc: rgba(127,127,127,0.18); }
+      .sh-root.is-stale { opacity: .55; pointer-events: none; }
       .sh-accent { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--sh-acc); transition: background .4s ease; }
 
       .sh-hd { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
@@ -852,7 +854,7 @@ class SmartHeatingCard extends HTMLElement {
       .sh-gear[aria-expanded="true"] { color: var(--sh-txt); background: var(--sh-fill-hover); }
       .sh-gear[aria-expanded="true"] svg { transform: rotate(60deg); }
 
-      .sh-why { font-size: 11.5px; color: var(--sh-sub); opacity: .85; margin-top: 8px; line-height: 1.45; min-height: 1.45em;
+      .sh-why { font-size: 11.5px; color: var(--sh-sub); opacity: .85; margin-top: 8px; line-height: 1.45; height: 2.9em; flex-shrink: 0;
         display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .sh-badges:empty { display: none; }
       .sh-badge { font-weight: 650; margin-right: 6px; white-space: nowrap; }
@@ -958,9 +960,18 @@ class SmartHeatingCard extends HTMLElement {
     const stavSensor = hass.states[eid(zoneId, "sensor", "stav")];
 
     if (!climate || !stavSensor) {
+      // Pri reloade integracie (napr. po ulozeni nastaveni) entity na chvilu zmiznu.
+      // Keby sa karta zmenila na kratku spravu, stranka by poskocila - nechame
+      // posledny obsah a len ho stlmime.
+      const root = this.querySelector(".sh-root");
+      if (this._rendered && root && this.querySelector(".sh-pill")) {
+        root.classList.add("is-stale");
+        return;
+      }
       this._showMessage(this._t("zone_not_found", { zone: zoneId }));
       return;
     }
+    this._rendered = true;
     if (!this.querySelector(".sh-pill")) {
       this._buildSkeleton();
       this._built = true;
@@ -1101,6 +1112,7 @@ class SmartHeatingCard extends HTMLElement {
     if (zAttrs.emergency_active) badges.push(["err", this._t("badge_emergency")]);
     if (zAttrs.tariff_blocked) badges.push(["warn", this._t("badge_tariff")]);
     if (zAttrs.floor_override) badges.push(["err", this._t("badge_floor")]);
+    if (zAttrs.floor_sensor_lost) badges.push(["err", this._t("badge_floor_sensor")]);
     if (zAttrs.krb_override) badges.push(["warn", this._t("badge_krb")]);
     if (zAttrs.pv_active) badges.push(["ok", this._t("badge_pv")]);
     if (zAttrs.cold_outdoor_active) badges.push(["info", this._t("badge_cold")]);
@@ -1760,6 +1772,7 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-tile.err .i { background: rgba(229,72,77,0.22); color: var(--sh-err); }
       .sho-sum { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
       .sho-sum .r { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--sh-sub); }
+      .sho-sum .r > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .sho-sum .r b { color: var(--sh-txt); font-variant-numeric: tabular-nums; white-space: nowrap; }
       .sho-sum .r .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
       .sho-msg { padding: 16px; color: var(--sh-sub); }
@@ -2039,9 +2052,11 @@ class SmartHeatingOverview extends HTMLElement {
   _renderSummary(zones) {
     const wrap = this.querySelector(".sho-sum");
     if (!zones.length) {
+      if (this._hadZones) return; // reload integracie - nemen vysku karty
       wrap.innerHTML = `<div class="sho-msg">${this._t("no_zones")}</div>`;
       return;
     }
+    this._hadZones = true;
     let ok = 0;
     let up = 0;
     let dn = 0;
@@ -2062,7 +2077,7 @@ class SmartHeatingOverview extends HTMLElement {
       row("var(--sh-ok)", this._t("ov_on_target"), ok) +
       row("var(--sh-warn)", this._t("ov_above"), up) +
       row("var(--sh-cool)", this._t("ov_below"), dn) +
-      (faulty ? row("var(--sh-err, #e5484d)", this._t("ov_problems"), faulty) : "") +
+      row(faulty ? "var(--sh-err, #e5484d)" : "", this._t("ov_problems"), faulty) +
       row("", this._t(cooling ? "ov_cooled_today" : "ov_heated_today"), runtime) +
       (this._allCons("power_entities").length
         ? row("", this._t("ov_power_now"), fmtPower(sumPowerW(this._hass, this._allCons("power_entities")), this._lang)) : "") +

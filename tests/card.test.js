@@ -854,13 +854,15 @@ test("overview: tiles use vector icons", () => {
   assert.ok(icons.every((i) => i.querySelector("svg path")));
 });
 
-test("overview: faults row appears only when a zone has a fault", () => {
+test("overview: faults row shows 0 without faults and is highlighted with a fault", () => {
   let card = renderOverview({});
-  assert.doesNotMatch(card.querySelector(".sho-sum").textContent, /Poruchy/);
+  assert.match(card.querySelector(".sho-sum").textContent, /Poruchy\s*0/);
+  assert.strictEqual(card.querySelector(".sho-sum .dot[style*='sh-err']"), null);
   const hass = overviewHass();
   hass.states["sensor.smart_heating_bbb22222_stav"].attributes.problemy = ["x"];
   card = renderOverview({}, hass);
   assert.match(card.querySelector(".sho-sum").textContent, /Poruchy\s*1/);
+  assert.ok(card.querySelector(".sho-sum .dot[style*='sh-err']"));
 });
 
 function settingsHass() {
@@ -1291,4 +1293,61 @@ test("zone card: power broken down by source when two sources have meters", () =
   const t = card.querySelector(".sh-cons").textContent.replace(/\s+/g, " ");
   assert.match(t, /Podlaha 800 W/);
   assert.match(t, /Klíma 1,2 kW/);
+});
+
+// --- stabilna vyska kariet (stranka nesmie poskakovat pri scrollovani na koniec) ---
+
+test("zone card: keeps its content (dimmed) while zone entities briefly disappear on reload", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  const gone = buildHass();
+  delete gone.states[`climate.smart_heating_${ZONE_ID}`];
+  delete gone.states[`sensor.smart_heating_${ZONE_ID}_stav`];
+  card.hass = gone;
+  assert.strictEqual(card.querySelector(".sh-msg"), null);
+  assert.ok(card.querySelector(".sh-pill"));
+  assert.ok(card.querySelector(".sh-root").classList.contains("is-stale"));
+  card.hass = buildHass();
+  assert.ok(!card.querySelector(".sh-root").classList.contains("is-stale"));
+});
+
+test("zone card: reason line always reserves two lines", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  const css = card.querySelector("style").textContent;
+  const rule = css.match(/\.sh-why \{[^}]*\}/)[0];
+  assert.match(rule, /[^-]height: 2\.9em/);
+});
+
+test("overview: summary has the same rows with and without faults", () => {
+  const ok = renderOverview({});
+  const rowsOk = ok.querySelectorAll(".sho-sum .r").length;
+  const hass = overviewHass();
+  hass.states["sensor.smart_heating_bbb22222_stav"].attributes.problemy = ["Termostat neodpovedá"];
+  const bad = renderOverview({}, hass);
+  assert.strictEqual(bad.querySelectorAll(".sho-sum .r").length, rowsOk);
+  assert.match(ok.querySelector(".sho-sum").textContent, /Poruchy\s*0/);
+});
+
+test("overview: keeps the summary while zones briefly disappear on reload", () => {
+  const card = renderOverview({});
+  const before = card.querySelector(".sho-sum").innerHTML;
+  card.hass = { states: {}, language: "sk", callService: () => {} };
+  card._render();
+  assert.strictEqual(card.querySelector(".sho-sum").innerHTML, before);
+});
+
+test("zone card: badge when the floor sensor is lost", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ stavAttrs: { floor_sensor_lost: true } });
+  document.body.appendChild(card);
+  assert.match(card.querySelector(".sh-badges").textContent, /Senzor podlahy výpadok/);
 });

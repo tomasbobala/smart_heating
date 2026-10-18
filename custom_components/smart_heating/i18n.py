@@ -82,6 +82,10 @@ TEXTS: dict[str, dict[str, str]] = {
     "source_floor_min": {"en": "Floor (min. floor temp.)", "sk": "Podlaha (min. teplota podlahy)"},
     "source_radiator": {"en": "Radiator", "sk": "Radiátor"},
     "source_radiator_floor": {"en": "Radiator + Floor", "sk": "Radiátor + Podlaha"},
+    "reason_floor_sensor_lost": {
+        "en": "STOP floor heating: floor sensor unavailable or implausible (overheat protection)",
+        "sk": "STOP podlahovky: senzor podlahy nedostupný alebo nezmyselný (ochrana pred prehriatím)",
+    },
     "reason_floor_wait": {
         "en": "Floor cooling down after max: {floor_temp}°C, heating resumes at {resume}°C",
         "sk": "Podlaha chladne po maxime: {floor_temp}°C, kúrenie sa obnoví pri {resume}°C",

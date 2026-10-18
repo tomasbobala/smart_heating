@@ -467,7 +467,7 @@ settings.
 | `select.smart_heating_<id>_rezim` | Auto / Day / Night / Min / Frost / Off |
 | `select.smart_heating_<id>_sezona` | **`floor_ac` only**: Heating / Cooling / Auto |
 | `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | heating temperatures |
-| `number..._floor_max` / `_floor_hysterezia` | floor max: heating stops at max, resumes below max - hysteresis |
+| `number..._floor_max` / `_floor_hysterezia` | floor max: heating stops at max, resumes below max - hysteresis. If the floor sensor has no valid value for 10 min, floor heating stops (attribute `floor_sensor_lost`) |
 | `number..._floor_min` + `switch..._udrzat_min_podlahy` | minimum floor temperature: floor heats below it even when the air is warm |
 | `sensor.smart_heating_fve_kaskada` | solar by power: active priority (0 = none), powers, available surplus, when the next priority is added / removed |
 | `select..._fve_priorita` | solar surplus cascade: 1 heats first; 2 and 3 join once higher priorities have been warm for 10 min and are released as soon as a higher one drops > 0.5 °C below target |

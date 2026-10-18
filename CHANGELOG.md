@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.21.2
+- Fixed: the page jumped back up a bit when scrolled to the very bottom. Cards
+  changed height on ordinary updates (reason line 1 vs 2 lines, the "Faults"
+  row in the overview appearing and disappearing) and when the browser was at
+  the end of the page it had to scroll up. The reason line now always reserves
+  two lines and the "Faults" row is always shown (0 when everything is fine).
+- Fixed: during an integration reload (e.g. after saving settings from the
+  overview card) zone cards collapsed into a short "zone not found" message for
+  a moment. They now keep their content, dimmed, until the entities are back.
+- Fixed: every recompute briefly wrote an estimated state before the real one -
+  `hvac_action` / `binary_sensor.*_v_chode` blinked "heating" for idle zones,
+  the heat source went empty and faults from meters / slow warm-up disappeared
+  and came back (blinking fault line on the card, doubled history rows). The
+  last applied values are now kept until the next apply.
+- Devices that are unavailable no longer get `set_hvac_mode` /
+  `set_temperature` on every recompute (log noise).
+- The target sent to a device is rounded to its `target_temp_step` (Daikin
+  1 °C) and compared with a tolerance, so it is not resent on every recompute.
+- **Floor sensor failsafe.** When a configured floor sensor has no valid value
+  (unavailable or outside -10..45 °C, e.g. a disconnected NTC) for 10 minutes,
+  floor heating stops: a `floor` zone as a whole, in `floor_ac` and
+  `radiator_floor` zones only the floor (AC / radiator keep heating). Before,
+  the max. floor temperature protection silently switched off. An overheat
+  block is kept during a short outage, solar surplus does not override the
+  stop, the emergency frost protection still does. New attribute
+  `floor_sensor_lost` and a badge on the zone card.
+- Recorder: static configuration attributes of `sensor.*_stav` and the 30 s
+  power values of `sensor.smart_heating_fve_kaskada` are no longer stored in
+  history (smaller database).
+
 ## 0.21.1
 - Fixed: the statistics panel under-counted today (e.g. 1.5 kWh vs 3.14 kWh in
   the summary) - hourly/daily long-term statistics only exist for finished

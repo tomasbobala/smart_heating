@@ -96,6 +96,7 @@ DIAG_SLOW_AFTER = timedelta(hours=3)             # kuri a stale je hlboko pod ci
 DIAG_SLOW_GAP = 1.0                              # °C pod cielom, od ktorych sa to sleduje
 DIAG_AIR_RANGE = (-20.0, 50.0)                   # mimo = nezmyselna hodnota
 DIAG_FLOOR_RANGE = (-10.0, 45.0)
+FLOOR_SENSOR_GRACE = timedelta(minutes=10)      # senzor podlahy nedostupny tak dlho -> podlahovka stop
 
 # Logovanie nabehov (zaklad pre buduce adaptivne predkurenie)
 WARMUP_MIN_GAP = 0.5        # nabeh sa zacne logovat, ked chyba aspon tolko °C
@@ -351,9 +352,19 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             # zona by chcela FVE, ale caka, kym sa nahreju vyssie priority
             zdata["pv_waiting"] = bool(pv_surplus) and pv_allowed.get(zone_id, True) is False
 
+        prev_zones = self.data.get("zones", {}) if isinstance(self.data, dict) else {}
         for zone_id, zdata in zones_data.items():
             zdata["diag_static"] = self._diag_static(zone_id, self.zones[zone_id], zdata)
-            zdata.setdefault("problems", [m for _, m in zdata["diag_static"]])
+            # Poruchy z aplikovania (merace, pomaly nabeh) a skutocny stav zariadeni
+            # pocita az _async_apply. Entity sa vsak zapisu uz teraz - bez prevzatia
+            # poslednych hodnot by kazdy prepocet na chvilu zapisal "kuri" a "bez poruch"
+            # (blikajuci v_chode, nafuknuta historia, poskakujuca karta).
+            dynamic = self._rt(zone_id).get("diag_dynamic", [])
+            zdata["problems"] = [m for _, m in zdata["diag_static"]] + [m for _, m in dynamic]
+            prev = prev_zones.get(zone_id) or {}
+            for key in ("actual_action", "heat_source", "src_cmd", "meter_problems"):
+                if key in prev:
+                    zdata.setdefault(key, prev[key])
             zdata["warmup_rate"], zdata["warmup_count"] = self._warmup_summary(zone_id)
 
         self._process_global_notifications(tariff_ok, holiday_active, zones_data)
@@ -365,6 +376,22 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "holiday_active": holiday_active,
             "zones": zones_data,
         }
+
+    def _floor_sensor_lost(self, zone_id: str, zone: dict, floor_temp) -> bool:
+        """True, ked je senzor podlahy nastaveny, ale uz FLOOR_SENSOR_GRACE nedava
+        platnu hodnotu (nedostupny / mimo DIAG_FLOOR_RANGE - napr. odpojene NTC)."""
+        rt = self._rt(zone_id)
+        if not zone.get(CONF_FLOOR_TEMP_ENTITY):
+            rt["floor_lost_since"] = None
+            return False
+        ok = floor_temp is not None and DIAG_FLOOR_RANGE[0] <= floor_temp <= DIAG_FLOOR_RANGE[1]
+        if ok:
+            rt["floor_lost_since"] = None
+            return False
+        now = dt_util.now()
+        if rt.get("floor_lost_since") is None:
+            rt["floor_lost_since"] = now
+        return now - rt["floor_lost_since"] >= FLOOR_SENSOR_GRACE
 
     def _resolve_season(self, zone_id: str, outdoor, vonkajsia_hranica_chladenie) -> str:
         state = self.hass.states.get(season_entity_id(zone_id))
@@ -476,6 +503,14 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             tariff_blocked = True
             reason = self._t("reason_tariff_blocked")
 
+        # --- 2b: VYPADOK SENZORA PODLAHY (vyhodnoti sa pred ochranou max.) ---
+        # Bez platnej teploty podlahy nefunguje ochrana max. podlahy. Po FLOOR_SENSOR_GRACE
+        # sa podlahovka vypne: zona typu floor cela, floor_ac a radiator_floor len podlaha
+        # (klima / radiator kuria dalej). Nudzova protimrazova ochrana ma prednost.
+        floor_sensor_lost = self._floor_sensor_lost(zone_id, zone, floor_temp)
+        floor_only_zone = not is_radiator and not is_floor_ac
+        floor_lost_blocks_zone = floor_sensor_lost and floor_only_zone
+
         # --- 2: BEZPECNOST PODLAHY (s hysterezou) ---
         # Vypne na floor_max a znova povoli az pod floor_max - hystereza, aby rele
         # necvakalo dokola okolo jednej hodnoty.
@@ -484,19 +519,27 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 rt["floor_blocked"] = True
             elif floor_temp <= floor_max - floor_hyst:
                 rt["floor_blocked"] = False
-        else:
+        elif not zone.get(CONF_FLOOR_TEMP_ENTITY) or floor_sensor_lost:
+            # bez senzora / po vyhodnoteni vypadku (ochranu preberie floor_sensor_lost)
             rt["floor_blocked"] = False
+        # Kratky vypadok senzora (do FLOOR_SENSOR_GRACE): blokaciu z prehriatia si
+        # pamatame - nevieme, ci podlaha uz vychladla.
         floor_override = bool(rt.get("floor_blocked"))
         # Pri radiator_floor blokuje prehriata podlaha len podlahu, radiator kuri dalej.
         floor_blocks_zone = floor_override and not is_radiator
         if floor_blocks_zone:
             heating_allowed = False
-            if floor_temp >= floor_max:
+            if floor_temp is None:
+                reason = self._t("reason_floor_sensor_lost")
+            elif floor_temp >= floor_max:
                 reason = self._t("reason_floor_stop", floor_temp=floor_temp, floor_max=floor_max)
             else:
                 reason = self._t(
                     "reason_floor_wait", floor_temp=floor_temp, resume=round(floor_max - floor_hyst, 1)
                 )
+        if floor_lost_blocks_zone:
+            heating_allowed = False
+            reason = self._t("reason_floor_sensor_lost")
 
         # --- 3: KRB ---
         krb_override = False
@@ -512,7 +555,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # --- 0.5: FVE PREBYTOK (preraza TARIFU, nie floor/krb) ---
         pv_active = False
         use_fve = self._state_bool(switch_entity_id(zone_id, "vyuzi_fve_prebytok"), True)
-        if pv_surplus and use_fve and not floor_blocks_zone and not krb_override:
+        if pv_surplus and use_fve and not floor_blocks_zone and not floor_lost_blocks_zone and not krb_override:
             heating_allowed = True
             target = comfort_target
             effective_mode = comfort_mode
@@ -571,6 +614,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "cold_outdoor_active": cold_outdoor_active,
             "heating_allowed": heating_allowed,
             "floor_override": floor_override,
+            "floor_sensor_lost": floor_sensor_lost,
             "krb_override": krb_override,
             "emergency_active": emergency_active,
             "pv_active": pv_active,
@@ -928,15 +972,30 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     async def _apply_device(self, entity_id: str, hvac_mode: str, target) -> None:
         state = self.hass.states.get(entity_id)
-        if state is None:
+        # Nedostupne zariadenie prikaz aj tak nevykona - len by sa pri kazdom
+        # prepocte (kazde 2 s pri zmenach) zapisovala chyba do logu.
+        if state is None or state.state in ("unavailable", "unknown"):
             return
         if state.state != hvac_mode:
             await self.hass.services.async_call(
                 "climate", "set_hvac_mode", {"entity_id": entity_id, "hvac_mode": hvac_mode}, blocking=False,
             )
         if hvac_mode != "off" and target is not None:
+            # Zariadenie berie ciel len v svojom kroku (Daikin 1 °C, termostat 0,5 °C).
+            # Bez zaokruhlenia by 21,5 °C na Daikine (ulozi 22) vyzeralo ako rozdiel
+            # a prikaz by sa posielal pri kazdom prepocte dokola.
+            try:
+                step = float(state.attributes.get("target_temp_step") or 0)
+            except (TypeError, ValueError):
+                step = 0
+            if step > 0:
+                target = round(round(float(target) / step) * step, 2)
             current_target = state.attributes.get("temperature")
-            if current_target != target:
+            try:
+                same = current_target is not None and abs(float(current_target) - float(target)) < 0.01
+            except (TypeError, ValueError):
+                same = False
+            if not same:
                 await self.hass.services.async_call(
                     "climate", "set_temperature", {"entity_id": entity_id, "temperature": target}, blocking=False,
                 )
@@ -1009,7 +1068,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             floor_engaged = False
 
         guard = bool(zdata.get("floor_guard"))
-        floor_on = floor_engaged or guard
+        floor_on = (floor_engaged or guard) and not zdata.get("floor_sensor_lost")
         floor_setpoint = zdata.get("floor_max") if guard else target
         await self._apply_device(floor_entity, "heat" if floor_on else "off", floor_setpoint if floor_on else None)
         self._maybe_notify_ac_backup(zone_id, zdata["name"], floor_engaged)
@@ -1406,7 +1465,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         elif cur <= tgt - hyst:
             rt["rad_on"] = True
         rad_on = bool(rt.get("rad_on"))
-        floor_on = bool(zdata.get("floor_guard")) and not zdata.get("floor_override")
+        floor_on = (
+            bool(zdata.get("floor_guard")) and not zdata.get("floor_override")
+            and not zdata.get("floor_sensor_lost")
+        )
 
         await self._apply_switch(radiator, rad_on)
         await self._apply_device(
@@ -1489,6 +1551,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
         meter_problems = self._meter_check(zone_id, zdata)
         problems.extend(meter_problems)
+        rt["diag_dynamic"] = problems[len(zdata.get("diag_static", [])):]
         zdata["meter_problems"] = [msg for _, msg in meter_problems]
         zdata["problems"] = [msg for _, msg in problems]
 
