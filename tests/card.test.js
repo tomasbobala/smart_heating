@@ -1197,14 +1197,15 @@ function statsOverview(resFn) {
 
 test("overview: Statistics button opens the panel with KPIs, ranking and meter check", async () => {
   const { hass, calls } = statsOverview((msg) => {
+    if (msg.period !== "day") return {};
     const start = Date.parse(msg.start_time) + 7 * 86400000;
     return statsRes(start, Date.parse(msg.start_time));
   });
   const card = renderOverview({}, hass);
   card.querySelector(".sho-statsbtn").click();
   await new Promise((r) => setTimeout(r, 20));
-  const q = calls.find((c) => c.types && c.types.includes("mean"));
-  assert.strictEqual(q.period, "day");
+  const q = calls.find((c) => c.types && c.types.includes("mean") && c.period === "day");
+  assert.ok(q);
   assert.ok(Array.from(q.statistic_ids).includes("sensor.smart_heating_energia_z_fve"));
   const text = card.querySelector(".sho-stats").textContent.replace(/\s+/g, " ");
   assert.match(text, /Štatistiky kúrenia/);
@@ -1223,8 +1224,48 @@ test("overview: period switch to Today asks for hourly statistics", async () => 
   await new Promise((r) => setTimeout(r, 10));
   card.querySelector('.sho-per[data-days="1"]').click();
   await new Promise((r) => setTimeout(r, 10));
-  const last = calls.filter((c) => c.types && c.types.includes("mean")).at(-1);
-  assert.strictEqual(last.period, "hour");
+  const periods = calls.filter((c) => c.types && c.types.includes("mean")).slice(-2).map((c) => c.period).sort();
+  assert.deepStrictEqual(periods, ["5minute", "hour"]);
+});
+
+test("overview: today's consumption comes from 5-minute statistics (hourly ones lag behind)", async () => {
+  // o 9:00 hodinove statistiky este nemaju hodinu 8-9, 5-minutove ano
+  const { hass } = statsOverview((msg) => {
+    if (msg.period !== "5minute") return {};
+    const t0 = Date.parse(msg.start_time);
+    const rows = [];
+    for (let i = 0; i < 12; i++) rows.push({ start: t0 + i * 300000, change: 0.2617 });   // 3,14 kWh
+    return { "sensor.a_floor": rows };
+  });
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  card.querySelector('.sho-per[data-days="1"]').click();
+  await new Promise((r) => setTimeout(r, 20));
+  assert.match(card.querySelector(".sho-stats").textContent, /Spotreba\s*3,1 kWh/);
+});
+
+test("computeStats: degree-days of a partial day count only the elapsed time", () => {
+  const { window } = loadCard();
+  const DAY = 86400000;
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const start = midnight.getTime(), prevStart = start - DAY;
+  const res = { "sensor.e": [], "sensor.out": [] };
+  for (let h = 0; h < 24; h++) {                 // vcera: 24 h po 1 kWh pri 8 °C -> 24 kWh / 10 stupnodni
+    res["sensor.e"].push({ start: prevStart + h * 3600000, change: 1, dur: 1 / 24 });
+    res["sensor.out"].push({ start: prevStart + h * 3600000, mean: 8, dur: 1 / 24 });
+  }
+  for (let i = 0; i < 72; i++) {                 // dnes 6 h: rovnaka spotreba na hodinu pri 8 °C
+    res["sensor.e"].push({ start: start + i * 300000, change: 1 / 12, dur: 1 / 288 });
+    res["sensor.out"].push({ start: start + i * 300000, mean: 8, dur: 1 / 288 });
+  }
+  const st = window.computeStats(res, {
+    zones: [{ id: "z", name: "Z", problems: [], srcs: [{ key: "floor", energy: ["sensor.e"] }] }],
+    energyIds: ["sensor.e"], fveId: null, outdoorId: "sensor.out", start, prevStart, hourly: true, days: 1, lang: "sk",
+  });
+  assert.ok(Math.abs(st.total - 6) < 1e-9);
+  assert.ok(Math.abs(st.eff - 2.4) < 1e-9);        // rovnake ako vcera, nie 10x "lepsie"
+  assert.ok(Math.abs(st.effDelta) < 1e-9);
 });
 
 test("overview: statistics panel without energy meters explains what to set", async () => {

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.21.0";
+const CARD_VERSION = "0.21.1";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -338,7 +338,8 @@ function computeStats(res, o) {
     for (const r of res[id] || []) {
       const k = keyOf(ts(r.start));
       if (id === o.outdoorId) {
-        if (r.mean != null) (tempBy[k] = tempBy[k] || []).push(Number(r.mean));
+        const dur = r.dur != null ? r.dur : (o.hourly ? 1 / 24 : 1);   // podiel dna, ktory riadok pokryva
+        if (r.mean != null) (tempBy[k] = tempBy[k] || []).push({ t: Number(r.mean), dur });
       } else if (r.change != null && !isNaN(Number(r.change))) {
         sumBy[id] = sumBy[id] || {};
         sumBy[id][k] = (sumBy[id][k] || 0) + Number(r.change);
@@ -354,15 +355,8 @@ function computeStats(res, o) {
   const curKeys = o.hourly ? keysFrom(o.start, 24) : keysFrom(o.start, o.days);
   const prevKeys = o.hourly ? keysFrom(o.prevStart, 24) : keysFrom(o.prevStart, o.days);
   const total = (keys, ids) => ids.reduce((a, id) => a + keys.reduce((b, k) => b + ((sumBy[id] || {})[k] || 0), 0), 0);
-  const days = (keys) => {     // denne priemery pre stupnodni (pri hodinach po dnoch)
-    const byDay = {};
-    for (const k of keys) {
-      const day = o.hourly ? k.slice(0, k.lastIndexOf(" ")) : k;
-      for (const t of tempBy[k] || []) (byDay[day] = byDay[day] || []).push(t);
-    }
-    return Object.values(byDay).map((ts2) => ts2.reduce((a, b) => a + b, 0) / ts2.length);
-  };
-  const hdd = (keys) => days(keys).reduce((a, t) => a + Math.max(0, HDD_BASE - t), 0) * (o.hourly ? 1 : 1);
+  // stupnodni = suma (18 °C - priemer) * dlzka useku v dnoch, len za cas, ktory naozaj uplynul
+  const hdd = (keys) => keys.reduce((a, k) => a + (tempBy[k] || []).reduce((b, x) => b + Math.max(0, HDD_BASE - x.t) * x.dur, 0), 0);
   const cur = total(curKeys, o.energyIds);
   const prev = total(prevKeys, o.energyIds);
   const hddCur = hdd(curKeys), hddPrev = hdd(prevKeys);
@@ -2124,15 +2118,28 @@ class SmartHeatingOverview extends HTMLElement {
     const start = midnight.getTime() - (days - 1) * DAY;
     const prevStart = start - days * DAY;
     try {
-      const res = await this._hass.callWS({
+      // Dlhodobe statistiky (hodina/den) vznikaju az po skonceni obdobia, preto
+      // dokoncene dni citame z nich a dnesok z 5-minutovych (tie su aktualne -
+      // rovnako ako riadok "Spotreba dnes" v suhrne).
+      const req = {
         type: "recorder/statistics_during_period",
-        start_time: new Date(prevStart).toISOString(),
-        end_time: new Date().toISOString(),
         statistic_ids: [...energyIds, ...(fveId ? [fveId] : []), ...(outdoorId ? [outdoorId] : [])],
-        period: hourly ? "hour" : "day",
         types: ["change", "mean"],
         units: { energy: "kWh", temperature: "°C" },
-      });
+      };
+      const [past, today] = await Promise.all([
+        this._hass.callWS({ ...req, start_time: new Date(prevStart).toISOString(), end_time: midnight.toISOString(),
+          period: hourly ? "hour" : "day" }),
+        this._hass.callWS({ ...req, start_time: midnight.toISOString(), end_time: new Date().toISOString(), period: "5minute" }),
+      ]);
+      const res = {};
+      const add = (src, dur) => {
+        for (const [id, rows] of Object.entries(src || {})) {
+          for (const r of rows || []) (res[id] = res[id] || []).push({ ...r, dur });
+        }
+      };
+      add(past, hourly ? 1 / 24 : 1);
+      add(today, 1 / 288);
       if (this._statsDays !== days || !this._statsOpen) return;   // medzicasom prepnute
       this._stats = computeStats(res || {}, { zones: zoneIds, energyIds, fveId, outdoorId, start, prevStart, hourly, days, lang: this._lang });
       this._renderStats();

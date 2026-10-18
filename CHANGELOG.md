@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.21.1
+- Fixed: the statistics panel under-counted today (e.g. 1.5 kWh vs 3.14 kWh in
+  the summary) - hourly/daily long-term statistics only exist for finished
+  periods. Finished days now come from long-term statistics and today from the
+  5-minute statistics, the same source as "Consumption today".
+- Fixed: kWh per degree-day compared a partial day against full days ("91 %
+  better"). Degree-days are now weighted by the time each row covers, so only
+  the elapsed part of today counts.
+
 ## 0.21.0
 - **Meters per heat source.** New zone fields for floor, AC and radiator power
   and energy meters (lists, e.g. two floor circuits). The zone card shows the
