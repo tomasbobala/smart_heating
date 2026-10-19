@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.24.0
+- **Solar priorities 1–5** (was 1–3); the zone card shows five chips.
+- **Solar cascade panel** - tap the "Solar surplus" tile in the overview card:
+  state and since when the level is active, flows (production, export, import,
+  battery + SOC, surplus vs. the add threshold), what the cascade is doing and
+  why in plain words with a countdown bar (next priority joins in / priority is
+  removed in, battery discharging, low battery...), priorities 1–5 with every
+  zone's state (heating, heating to X°, storing X° of max Y° and time to the next
+  step, at max, waiting for higher priorities, blocked by fireplace / floor) and
+  today's timeline of the active level. The sensor `fve_kaskada` has new
+  attributes `uroven_od`, `urovne`, `nastavenia`; zones `fve_akumulacia_od`.
+- **Max. heating power from the solar surplus** (global setting
+  `pv_max_heat_power`, default 7000 W, 0 = no limit; editable in the overview
+  card settings). The cascade adds another priority only if heating + the add
+  threshold stays within the limit ("holding - heating X of max Y"); when heating
+  goes over the limit for the shed time, the lowest priority is removed. Heating
+  power = sum of all zones' power meters (new attribute `kurenie_w`), shown in
+  the cascade panel as "Heating X of max Y".
+- **Statistics open on "Today"** every time.
+- On a phone the opened panels are shown under the tiles.
+
 ## 0.23.0
 - **Storing solar surplus as heat.** While a zone heats from the solar surplus,
   its target starts at the day temperature and is raised by a step (default

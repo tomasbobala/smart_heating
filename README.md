@@ -307,6 +307,19 @@ from the solar, grid and battery power sensors (Global settings) into
 the whole house - this also works for sources with only an energy meter (AC).
 Time before these sensors existed is shown as "unsplit".
 
+### Solar cascade panel
+
+Tap the **Solar surplus** tile in the overview to open a panel: cascade state
+and since when, flows (production, export, import, battery, surplus vs. the
+threshold), what the cascade does and why with a countdown (adding / removing a
+priority), priorities 1–5 with each room's state (heating, storing and time to
+the next step, at max, waiting, blocked) and today's timeline. Priorities are 1–5.
+
+**Max. heating power from the surplus** (`pv_max_heat_power`, default 7000 W,
+0 = no limit) keeps a reserve for the house: another priority is added only if
+heating plus the next zone fits the limit; above the limit the lowest priority
+is removed. Heating power = sum of the zones' power meters.
+
 ### Storing solar surplus
 
 While there is a solar surplus the zone starts at the day temperature and each

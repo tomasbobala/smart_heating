@@ -86,6 +86,7 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             # FVE akumulacia: aktualny ciel a strop zony, krb -> akumuluje podlaha
             "fve_akumulacia_ciel": z.get("pv_acc_target"),
             "fve_akumulacia_max": z.get("pv_acc_max"),
+            "fve_akumulacia_od": z.get("pv_acc_since"),     # posledny krok - karta ukaze cas do dalsieho
             "fve_krb_podlaha": z.get("pv_krb_floor", False),
             "krb_override": z["krb_override"],
             "tariff_blocked": z["tariff_blocked"],
@@ -173,7 +174,7 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
     # (vykony FVE sa ukladaju aj tak v senzoroch stridaca).
     _unrecorded_attributes = frozenset({
         "pridanie_za_min", "odobratie_za_min", "vyroba_w", "export_w", "odber_w",
-        "bateria_w", "soc", "prebytok_w",
+        "bateria_w", "soc", "prebytok_w", "urovne", "nastavenia", "kurenie_w",
     })
 
     def __init__(self, coordinator: SmartHeatingCoordinator) -> None:
@@ -205,6 +206,10 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
             "bateria_w": snap.get("battery"),
             "soc": snap.get("soc"),
             "prebytok_w": snap.get("available"),
+            "kurenie_w": snap.get("heat"),
+            "uroven_od": snap.get("tier_since"),
+            "urovne": snap.get("levels"),
+            "nastavenia": snap.get("params"),
         }
 
 

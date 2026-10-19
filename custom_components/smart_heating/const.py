@@ -86,7 +86,7 @@ SEASON_AUTO = "Auto"
 SEASONS = [SEASON_KURENIE, SEASON_CHLADENIE, SEASON_AUTO]
 
 # ---- Kaskada FVE prebytku: 1 = najvyssia priorita ----
-PV_PRIORITIES = ["1", "2", "3"]
+PV_PRIORITIES = ["1", "2", "3", "4", "5"]
 
 # ---- FVE prebytok riadeny podla vykonu (nahradza prepinac FVE prebytku) ----
 CONF_PV_AUTO = "pv_auto"
@@ -107,6 +107,8 @@ PV_ENGINE_NUMBERS = {
     # akumulacia: pri trvajucom prebytku zvys ciel zony o krok, ked ho dosiahla (najskor po intervale)
     "pv_acc_step": (0.5, 3, 0.5, "°C", 1.0),
     "pv_acc_minutes": (5, 120, 5, "min", 15),
+    # max. prikon kurenia z FVE (W): rezerva pre dom, aby sa zbytocne nebralo zo siete; 0 = bez limitu
+    "pv_max_heat_power": (0, 30000, 500, "W", 7000),
 }
 
 # ---- Defaultne hodnoty ----

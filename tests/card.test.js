@@ -1218,6 +1218,8 @@ test("overview: Statistics button opens the panel with KPIs, ranking and meter c
   const card = renderOverview({}, hass);
   card.querySelector(".sho-statsbtn").click();
   await new Promise((r) => setTimeout(r, 20));
+  card.querySelector('.sho-per[data-days="7"]').click();
+  await new Promise((r) => setTimeout(r, 20));
   const q = calls.find((c) => c.types && c.types.includes("mean") && c.period === "hour");
   assert.ok(q);
   assert.ok(Array.from(q.statistic_ids).includes("sensor.smart_heating_energia_z_fve"));
@@ -1581,4 +1583,110 @@ test("overview settings: storage step and interval are editable in the card", as
   const { window } = loadCard();
   assert.ok(window.translate("sk", "of_pv_acc_step").includes("Akumulácia"));
   assert.ok(window.translate("sk", "of_pv_acc_minutes").includes("každých"));
+});
+
+
+// ---------------------------------------------------------------- 0.24: Dnes, priority 1-5, panel kaskady
+
+test("overview: Statistics always open on Today", async () => {
+  const { hass, calls } = statsOverview(() => ({}));
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await tick();
+  assert.ok(card.querySelector('.sho-per[data-days="1"]').classList.contains("on"));
+  card.querySelector('.sho-per[data-days="30"]').click();
+  await tick();
+  card.querySelector(".sho-statsbtn").click();            // zavriet
+  card.querySelector(".sho-statsbtn").click();            // znova otvorit
+  await tick();
+  assert.ok(card.querySelector('.sho-per[data-days="1"]').classList.contains("on"));
+  assert.ok(calls.some((c) => c.period === "5minute"));
+});
+
+function cascadeHass(attrs = {}, state = "1") {
+  const hass = overviewHass();
+  const prio = { aaa11111: "1", bbb22222: "1", ccc33333: "4", ddd44444: "5" };
+  for (const [z, p] of Object.entries(prio)) hass.states[`select.smart_heating_${z}_fve_priorita`] = { state: p, attributes: {} };
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes = Object.assign(hass.states["sensor.smart_heating_aaa11111_stav"].attributes, {
+    pv_active: true, fve_akumulacia_ciel: 23, fve_akumulacia_max: 25, fve_akumulacia_od: new Date(Date.now() - 5 * 60000).toISOString(),
+  });
+  hass.states["climate.smart_heating_aaa11111"].attributes.current_temperature = 23;
+  hass.states["sensor.smart_heating_bbb22222_stav"].attributes.pv_active = true;
+  hass.states["sensor.smart_heating_ccc33333_stav"].attributes.fve_caka = true;
+  hass.states["switch.smart_heating_ddd44444_vyuzi_fve_prebytok"] = { state: "off", attributes: {} };
+  hass.states["sensor.smart_heating_fve_kaskada"] = { state, attributes: Object.assign({
+    rezim: "vykon", dovod: "add", pridanie_za_min: 1.7, odobratie_za_min: null, vyroba_w: 6691, export_w: 6325, odber_w: 0,
+    bateria_w: 0, soc: 100, prebytok_w: 6325, uroven_od: new Date(Date.now() - 35 * 60000).toISOString(), urovne: [1, 4],
+    nastavenia: { pv_add_power: 1000, pv_add_minutes: 5, pv_shed_power: 500, pv_shed_minutes: 10, pv_stop_soc: 40, pv_acc_step: 1, pv_acc_minutes: 15 },
+  }, attrs) };
+  hass.callWS = async (msg) => (msg.type === "history/history_during_period" && msg.entity_ids.includes("sensor.smart_heating_fve_kaskada")
+    ? { "sensor.smart_heating_fve_kaskada": [{ s: "0", lu: (Date.now() - 3 * 3600000) / 1000 }, { s: "1", lu: (Date.now() - 35 * 60000) / 1000 }] }
+    : {});
+  return hass;
+}
+
+test("overview: solar tile opens the cascade panel with flows, countdown, priorities and timeline", async () => {
+  const card = renderOverview({}, cascadeHass());
+  const tile = Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent));
+  tile.click();
+  await tick();
+  const p = card.querySelector(".sho-pv");
+  assert.strictEqual(p.hidden, false);
+  const t = p.textContent.replace(/\s+/g, " ");
+  assert.match(t, /Kaskáda FVE/);
+  assert.match(t, /Aktívna P1/);
+  assert.match(t, /od \d+:\d\d \(35 min\)/);
+  assert.match(t, /Výroba\s*6,7 kW/);
+  assert.match(t, /Do siete\s*6,3 kW/);
+  assert.match(t, /Batéria\s*0 W · 100 %/);
+  assert.match(t, /pridá od 1,0 kW/);
+  assert.match(t, /Prebytok stačí – P4 sa pridá o 2 min/);
+  assert.match(t, /Alpha\s*23° z max 25° · ďalšie \+1° o 10 min/);
+  assert.match(t, /Gamma\s*čaká na vyššie priority/);
+  assert.match(t, /Nevyužívajú prebytok\s*Delta/);
+  assert.ok(p.querySelector(".sho-pvbar i"));
+  assert.ok(p.querySelector(".sho-pvtl rect.lv"));
+  assert.ok(p.querySelector(".sho-pvl.on"));
+  tile.click();
+  assert.strictEqual(card.querySelector(".sho-pv").hidden, true);
+});
+
+test("cascade panel: shedding reason in Slovak and low battery", async () => {
+  const card = renderOverview({}, cascadeHass({ dovod: "shed:battery,import", pridanie_za_min: null, odobratie_za_min: 4 }));
+  Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent)).click();
+  await tick();
+  assert.match(card.querySelector(".sho-pv").textContent, /Batéria sa vybíja, Odber zo siete – P1 sa odoberie o 4 min/);
+  const card2 = renderOverview({}, cascadeHass({ dovod: "low_soc", pridanie_za_min: null }, "0"));
+  Array.from(card2.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent)).click();
+  await tick();
+  const t2 = card2.querySelector(".sho-pv").textContent;
+  assert.match(t2, /Batéria pod 40 % – všetko vypnuté/);
+  assert.match(t2, /Neaktívna/);
+});
+
+test("zone card: five solar priority chips", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass();
+  hass.states[`select.smart_heating_${ZONE_ID}_fve_priorita`] = { state: "4", attributes: { options: ["1", "2", "3", "4", "5"] } };
+  card.hass = hass;
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  const chips = card.querySelectorAll("[data-pv-prio]");
+  assert.strictEqual(chips.length, 5);
+  assert.ok(chips[3].classList.contains("active"));
+});
+
+test("cascade panel: heating power vs limit and holding at the limit", async () => {
+  const hass = cascadeHass({ dovod: "limit_hold", pridanie_za_min: null, kurenie_w: 6500 });
+  hass.states["sensor.smart_heating_fve_kaskada"].attributes.nastavenia.pv_max_heat_power = 7000;
+  const card = renderOverview({}, hass);
+  Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent)).click();
+  await tick();
+  const t = card.querySelector(".sho-pv").textContent.replace(/\s+/g, " ");
+  assert.match(t, /Kúrenie\s*6,5 kW\s*z max 7,0 kW/);
+  assert.match(t, /Drží sa – kúrenie 6,5 kW z max 7,0 kW/);
+  const { window } = loadCard();
+  assert.match(window.translate("sk", "of_pv_max_heat_power"), /Max\. príkon kúrenia/);
 });

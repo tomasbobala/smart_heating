@@ -302,6 +302,19 @@ a batérie (Globálne nastavenia) rozdelí spotrebu domu na
 pomerom ako celý dom – funguje aj pre zdroje len s meračom energie (klíma).
 Obdobie pred vznikom týchto senzorov je „nerozdelené“.
 
+### Panel kaskády FVE
+
+Klik na dlaždicu **FVE prebytok** v prehľade otvorí panel: stav kaskády a od
+kedy platí, toky (výroba, do siete, zo siete, batéria, prebytok vs. prah),
+čo kaskáda robí a prečo s odpočtom (pridanie / odobratie priority), priority
+1–5 so stavom každej izby (kúri, akumulácia a čas do ďalšieho kroku, na maxime,
+čaká, blokované) a priebeh dňa. Priority sú 1–5.
+
+**Max. príkon kúrenia z prebytku** (`pv_max_heat_power`, predvolene 7000 W,
+0 = bez limitu) necháva rezervu pre dom: ďalšia priorita sa pridá, len ak sa
+kúrenie aj s ďalšou zónou zmestí do limitu; nad limitom sa najnižšia priorita
+odoberie. Príkon kúrenia = súčet meračov príkonu zón.
+
 ### Akumulácia prebytku FVE
 
 Pri prebytku FVE zóna začne na dennej teplote a vždy, keď ju dosiahne (najskôr

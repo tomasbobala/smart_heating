@@ -92,7 +92,8 @@
           "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
           "notify_humidity": "Notify: high / low humidity in a room",
           "pv_acc_step": "Solar storage: raise target by (°C) once reached",
-          "pv_acc_minutes": "Solar storage: at most every (min)"
+          "pv_acc_minutes": "Solar storage: at most every (min)",
+          "pv_max_heat_power": "Solar: max. heating power (W, reserve for the house; 0 = no limit)"
         },
         "description": "Smart Heating version {version}"
       },

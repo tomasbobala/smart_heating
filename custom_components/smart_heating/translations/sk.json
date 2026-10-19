@@ -92,7 +92,8 @@
           "clear_outdoor_pressure_sensor": "Vymazať senzor vonkajšieho tlaku",
           "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe",
           "pv_acc_step": "FVE akumulácia: zvýšiť cieľ o (°C) po jeho dosiahnutí",
-          "pv_acc_minutes": "FVE akumulácia: najskôr každých (min)"
+          "pv_acc_minutes": "FVE akumulácia: najskôr každých (min)",
+          "pv_max_heat_power": "FVE: max. príkon kúrenia (W, rezerva pre dom; 0 = bez limitu)"
         },
         "description": "Smart Heating verzia {version}"
       },

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.23.0";
+const CARD_VERSION = "0.24.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -194,7 +194,7 @@ const I18N = {
   ov_power_now: { en: "Heating power", sk: "Príkon kúrenia" },
   ov_energy_today: { en: "Consumption today", sk: "Spotreba dnes" },
   pv_priority: { en: "Solar priority", sk: "Priorita FVE" },
-  pv_priority_hint: { en: "1 = first; 2 and 3 join once higher priorities are warm", sk: "1 = prvá; 2 a 3 sa pridajú, keď sú vyššie nahriate" },
+  pv_priority_hint: { en: "1 = first; 2–5 join one by one while there is surplus", sk: "1 = prvá; 2–5 sa pridávajú postupne, kým je prebytok" },
   badge_pv_waiting: { en: "Solar – waiting for priority rooms", sk: "FVE – čaká na prioritné izby" },
   temp_floor_min: { en: "Min. floor temperature", sk: "Min. teplota podlahy" },
   temp_floor_max: { en: "Max. floor temperature", sk: "Max. teplota podlahy" },
@@ -217,6 +217,46 @@ const I18N = {
   of_holiday_active: { en: "Holiday", sk: "Dovolenka" },
   ov_grp_pv: { en: "Solar surplus", sk: "FVE prebytok" },
   ov_pv_prio: { en: "P1–{tier}", sk: "P1–{tier}" },
+  pv_title: { en: "Solar cascade", sk: "Kaskáda FVE" },
+  pv_state_on: { en: "Active P1–{tier}", sk: "Aktívna P1–{tier}" },
+  pv_state_p1: { en: "Active P1", sk: "Aktívna P1" },
+  pv_state_off: { en: "Inactive", sk: "Neaktívna" },
+  pv_since: { en: "since {t} ({d})", sk: "od {t} ({d})" },
+  pv_f_pv: { en: "Production", sk: "Výroba" },
+  pv_f_export: { en: "Export", sk: "Do siete" },
+  pv_f_import: { en: "Import", sk: "Zo siete" },
+  pv_f_bat: { en: "Battery", sk: "Batéria" },
+  pv_f_avail: { en: "Surplus", sk: "Prebytok" },
+  pv_f_add_at: { en: "adds from {w}", sk: "pridá od {w}" },
+  pv_r_add: { en: "Surplus is enough – P{n} joins in {m}", sk: "Prebytok stačí – P{n} sa pridá o {m}" },
+  pv_r_add_max: { en: "All priorities are on", sk: "Všetky priority sú zapnuté" },
+  pv_r_shed: { en: "{why} – P{n} is removed in {m}", sk: "{why} – P{n} sa odoberie o {m}" },
+  pv_r_hold: { en: "Holding – surplus below {w} needed for the next priority", sk: "Drží sa – na ďalšiu prioritu treba prebytok aspoň {w}" },
+  pv_r_hold_top: { en: "Holding – all priorities are on", sk: "Drží sa – všetky priority sú zapnuté" },
+  pv_r_low_soc: { en: "Battery below {soc} % – everything off", sk: "Batéria pod {soc} % – všetko vypnuté" },
+  pv_r_no_data: { en: "No data from the inverter", sk: "Žiadne dáta zo striedača" },
+  pv_r_no_zones: { en: "No zone uses the solar surplus", sk: "Žiadna zóna nevyužíva FVE prebytok" },
+  pv_why_battery: { en: "Battery discharging", sk: "Batéria sa vybíja" },
+  pv_why_import: { en: "Drawing from the grid", sk: "Odber zo siete" },
+  pv_why_low_pv: { en: "Low production", sk: "Nízka výroba" },
+  pv_why_limit: { en: "Heating over the power limit", sk: "Kúrenie nad limitom príkonu" },
+  pv_r_limit_hold: { en: "Holding – heating {w} of max {max}, no room for another priority", sk: "Drží sa – kúrenie {w} z max {max}, ďalšia priorita by limit prekročila" },
+  pv_f_heat: { en: "Heating", sk: "Kúrenie" },
+  pv_f_of_max: { en: "of max {max}", sk: "z max {max}" },
+  pv_z_heating: { en: "heating", sk: "kúri" },
+  pv_z_to: { en: "heating to {t}°", sk: "ohrieva na {t}°" },
+  pv_z_acc: { en: "{t}° of max {m}° · next +{s}° in {in}", sk: "{t}° z max {m}° · ďalšie +{s}° o {in}" },
+  pv_z_acc_ready: { en: "{t}° of max {m}° · next step soon", sk: "{t}° z max {m}° · ďalší krok čoskoro" },
+  pv_z_max: { en: "at max {m}°", sk: "na maxime {m}°" },
+  pv_z_target: { en: "at target", sk: "v cieli" },
+  pv_z_wait_higher: { en: "waiting for higher priorities", sk: "čaká na vyššie priority" },
+  pv_z_wait: { en: "waiting for surplus", sk: "čaká na prebytok" },
+  pv_z_krb: { en: "blocked – fireplace", sk: "blokované – krb" },
+  pv_z_krb_floor: { en: "AC off (fireplace), floor storing", sk: "klíma stop (krb), akumuluje podlaha" },
+  pv_z_floor: { en: "blocked – floor at max", sk: "blokované – podlaha na maxime" },
+  pv_z_off: { en: "off", sk: "vypnutá" },
+  pv_no_fve: { en: "Not using surplus", sk: "Nevyužívajú prebytok" },
+  pv_today: { en: "Today", sk: "Dnes" },
   of_pv_auto: { en: "Control by power", sk: "Riadiť podľa výkonu" },
   of_grid_export_negative: { en: "Grid export is negative", sk: "Export do siete je záporný" },
   of_battery_charge_positive: { en: "Battery charging is positive", sk: "Nabíjanie batérie je kladné" },
@@ -227,6 +267,7 @@ const I18N = {
   of_pv_min_power: { en: "Insufficient production below", sk: "Nedostatočná výroba pod" },
   of_pv_start_soc: { en: "Battery charge is surplus from", sk: "Nabíjanie batérie je prebytok od" },
   of_pv_stop_soc: { en: "Everything off below battery", sk: "Všetko vypnúť pri batérii pod" },
+  of_pv_max_heat_power: { en: "Max. heating power", sk: "Max. príkon kúrenia" },
   of_pv_acc_step: { en: "Storage: raise target by", sk: "Akumulácia: zvýšiť cieľ o" },
   of_pv_acc_minutes: { en: "…at most every", sk: "…najskôr každých" },
   of_nudzova_teplota: { en: "Emergency temperature", sk: "Núdzová teplota" },
@@ -1896,6 +1937,41 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-statsbtn svg { width: 17px; height: 17px; }
       .sho-statsbtn[aria-expanded="true"] { background: rgba(124,108,240,.22); border-color: var(--primary-color, #7c6cf0); }
       .sho-stats { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 18px; }
+      .sho-pv { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; }
+      .sho-pv[hidden] { display: none; }
+      .sho-pvst { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--sh-sub); flex-wrap: wrap; }
+      .sho-pvst b { font-size: 14px; color: var(--sh-txt); padding: 4px 10px; border-radius: 999px; background: rgba(127,127,127,.14); }
+      .sho-pvst.on b { background: rgba(242,184,75,.18); color: #f2b84b; }
+      .sho-pvfs { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+      .sho-pvf { background: rgba(127,127,127,.08); border-radius: 12px; padding: 10px 14px; }
+      .sho-pvf .l { font-size: 12px; color: var(--sh-sub); }
+      .sho-pvf .v { font-size: 20px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; margin-top: 2px; }
+      .sho-pvf .s { font-size: 11.5px; color: var(--sh-sub); margin-top: 2px; }
+      .sho-pvf.pv .v, .sho-pvf.av .v { color: #f2b84b; }
+      .sho-pvf.bad .v { color: var(--sh-warn, #e8a838); }
+      .sho-pvmsg { font-size: 13.5px; color: var(--sh-txt); }
+      .sho-pvmsg.add { color: var(--sh-ok, #4caf7d); } .sho-pvmsg.shed { color: var(--sh-warn, #e8a838); }
+      .sho-pvbar { height: 6px; border-radius: 3px; background: rgba(127,127,127,.15); overflow: hidden; margin-top: -6px; }
+      .sho-pvbar i { display: block; height: 100%; background: var(--sh-ok, #4caf7d); border-radius: 3px; }
+      .sho-pvbar.shed i { background: var(--sh-warn, #e8a838); }
+      .sho-pvls { display: flex; flex-direction: column; gap: 8px; }
+      .sho-pvl { display: flex; gap: 10px; align-items: flex-start; }
+      .sho-pvl .p { flex: 0 0 34px; text-align: center; font-weight: 700; font-size: 12.5px; padding: 6px 0; border-radius: 8px;
+        background: rgba(127,127,127,.12); color: var(--sh-sub); }
+      .sho-pvl.on .p { background: rgba(242,184,75,.22); color: #f2b84b; }
+      .sho-pvl .zs { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; min-width: 0; }
+      .sho-pvz { display: inline-flex; flex-direction: column; padding: 5px 10px; border-radius: 9px; background: rgba(127,127,127,.08);
+        border-left: 3px solid rgba(127,127,127,.4); font-size: 12px; color: var(--sh-sub); }
+      .sho-pvz b { color: var(--sh-txt); font-size: 12.5px; font-weight: 600; }
+      .sho-pvz.heat { border-left-color: var(--sh-heat, #ff8a3d); } .sho-pvz.acc { border-left-color: #f2b84b; }
+      .sho-pvz.max, .sho-pvz.ok { border-left-color: var(--sh-ok, #4caf7d); } .sho-pvz.block { border-left-color: var(--sh-err, #e5484d); }
+      .sho-pvz.wait { border-left-color: var(--sh-cool, #4fa3ff); } .sho-pvz.off { opacity: .7; }
+      .sho-pvtl .tl { width: 100%; height: 34px; display: block; border-radius: 6px; overflow: hidden; }
+      .sho-pvtl .bg { fill: rgba(127,127,127,.08); } .sho-pvtl .lv { fill: #f2b84b; opacity: .85; }
+      .sho-pvtl .now { stroke: var(--sh-txt); stroke-width: 2; opacity: .5; }
+      .sho-pvtl .ticks { position: relative; height: 14px; font-size: 10.5px; color: var(--sh-sub); }
+      .sho-pvtl .ticks span { position: absolute; transform: translateX(-50%); top: 2px; }
+      .sho-pvtl .ticks span:first-child { transform: none; } .sho-pvtl .ticks span:last-child { transform: translateX(-100%); }
       .sho-stats[hidden] { display: none; }
       .sho-st-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
       .sho-st-h h2 { margin: 0; font-size: 18px; font-weight: 650; display: flex; align-items: center; gap: 8px; }
@@ -1998,6 +2074,7 @@ class SmartHeatingOverview extends HTMLElement {
       @container (max-width: 760px) {
         .sho-root { grid-template-columns: 1fr 1fr; }
         .sho-tiles { grid-column: 1 / -1; order: 3; }
+        .sho-set, .sho-stats, .sho-pv { order: 4; }   /* panely pod dlazdicami (FVE panel sa otvara z dlazdice) */
       }
       @container (max-width: 560px) {
         .sho-tiles { grid-template-columns: 1fr 1fr; }
@@ -2018,10 +2095,11 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-sum"></div>
         <div class="sho-blk sho-set" hidden></div>
         <div class="sho-blk sho-stats" hidden></div>
+        <div class="sho-blk sho-pv" hidden></div>
       </div></ha-card>`;
       this.querySelector(".sho-sum").addEventListener("click", (e) => {
-        if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); this._toggleSettings(); }
-        if (e.target.closest(".sho-statsbtn")) this._toggleStats();
+        if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); if (this._pvOpen) this._togglePv(); this._toggleSettings(); }
+        if (e.target.closest(".sho-statsbtn")) { if (this._pvOpen) this._togglePv(); this._toggleStats(); }
       });
       this.querySelector(".sho-set").addEventListener("click", (e) => this._onSettingsClick(e));
       this.querySelector(".sho-stats").addEventListener("click", (e) => {
@@ -2043,6 +2121,7 @@ class SmartHeatingOverview extends HTMLElement {
       const tiles = this.querySelector(".sho-tiles");
       const activate = (tile) => {
         const entityId = tile.dataset.entity;
+        if (tile.dataset.tap === "pv-panel") { this._togglePv(); return; }
         if (tile.dataset.tap !== "toggle") {
           fireMoreInfo(this, entityId);
           return;
@@ -2067,6 +2146,7 @@ class SmartHeatingOverview extends HTMLElement {
     this._renderTiles(zones);
     this._renderSummary(zones);
     this._maybeFetch(zones);
+    if (this._pvOpen) this._renderPv();
   }
 
   // ------------------------------------------------------------------ vonku
@@ -2159,7 +2239,7 @@ class SmartHeatingOverview extends HTMLElement {
             value: tier ? `${tier === 1 ? "P1" : this._t("ov_pv_prio", { tier })} · ${kwTxt}` : `${this._t("ov_no")} · ${kwTxt}`,
             cls: used ? "on" : "",
             entity: "sensor.smart_heating_fve_kaskada",
-            tap: "more-info",
+            tap: "pv-panel",
           };
         }
         const ent = this._zoneEntities("pv_surplus_entity")[0];
@@ -2339,6 +2419,175 @@ class SmartHeatingOverview extends HTMLElement {
 
   // -------------------------------------------------- statistiky (spotreba, FVE, stupnodni, poradie)
 
+  // -------------------------------------------------- panel kaskady FVE
+
+  _togglePv() {
+    const panel = this.querySelector(".sho-pv");
+    if (!panel) return;
+    this._pvOpen = !this._pvOpen;
+    if (!this._pvOpen) { panel.hidden = true; panel.innerHTML = ""; return; }
+    if (this._statsOpen) this._toggleStats();
+    if (this._setOpen) this._closeSettings(true);
+    panel.hidden = false;
+    this._renderPv();
+    this._fetchPvHistory();
+  }
+
+  /** Priebeh urovne kaskady dnes (historia stavu bez atributov - lacny dotaz). */
+  _fetchPvHistory() {
+    const hass = this._hass;
+    if (!hass || typeof hass.callWS !== "function") return;
+    if (this._pvHistAt && Date.now() - this._pvHistAt < OVERVIEW_REFRESH_MS) return;
+    this._pvHistAt = Date.now();
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const id = "sensor.smart_heating_fve_kaskada";
+    hass.callWS({
+      type: "history/history_during_period", start_time: midnight.toISOString(), end_time: new Date().toISOString(),
+      entity_ids: [id], minimal_response: true, no_attributes: true, significant_changes_only: false,
+    }).then((res) => {
+      this._pvHist = ((res && res[id]) || [])
+        .map((r) => [tsOf(r.lu ?? r.last_updated ?? r.lc ?? r.last_changed), Number(r.s ?? r.state)])
+        .filter(([t, v]) => !isNaN(t) && !isNaN(v));
+      if (this._pvOpen) this._renderPv();
+    }).catch(() => { this._pvHistAt = 0; });
+  }
+
+  /** Stav zony v kaskade: [trieda, text]. */
+  _pvZoneStatus(z, tier, acc) {
+    const s = z.s, L = this._lang;
+    const n = (v) => fmtShort(v, L);
+    const useSw = this._hass.states[eid(z.id, "switch", "vyuzi_fve_prebytok")];
+    if (z.c.rezim === "Vypnute") return ["off", this._t("pv_z_off")];
+    if (useSw && useSw.state === "off") return ["off", this._t("pv_z_off")];
+    if (s.fve_krb_podlaha) return ["heat", this._t("pv_z_krb_floor")];
+    if (s.pv_active) {
+      const cur = num(z.c.current_temperature);
+      const t = num(s.fve_akumulacia_ciel), m = num(s.fve_akumulacia_max);
+      if (t != null && m != null) {
+        if (t >= m && cur != null && cur >= m - 0.2) return ["max", this._t("pv_z_max", { m: n(m) })];
+        if (cur != null && cur < t - 0.2) return ["heat", this._t("pv_z_to", { t: n(t) })];
+        const since = s.fve_akumulacia_od ? Date.parse(s.fve_akumulacia_od) : NaN;
+        const left = isNaN(since) ? null : (since + (acc.minutes || 15) * 60000 - Date.now()) / 60000;
+        return ["acc", left != null && left > 0.5
+          ? this._t("pv_z_acc", { t: n(t), m: n(m), s: n(acc.step || 1), in: fmtDuration(left, L) })
+          : this._t("pv_z_acc_ready", { t: n(t), m: n(m) })];
+      }
+      return z.c.hvac_action === "heating" ? ["heat", this._t("pv_z_heating")] : ["ok", this._t("pv_z_target")];
+    }
+    if (s.krb_override) return ["block", this._t("pv_z_krb")];
+    if (s.floor_override) return ["block", this._t("pv_z_floor")];
+    if (s.fve_caka) return ["wait", this._t("pv_z_wait_higher")];
+    return ["wait", this._t("pv_z_wait")];
+  }
+
+  _renderPv() {
+    const panel = this.querySelector(".sho-pv");
+    if (!panel || !this._hass) return;
+    const L = this._lang;
+    const casc = this._hass.states["sensor.smart_heating_fve_kaskada"];
+    const a = (casc && casc.attributes) || {};
+    const tier = Number(casc && casc.state) || 0;
+    const prm = a.nastavenia || {};
+    const acc = { step: prm.pv_acc_step, minutes: prm.pv_acc_minutes };
+    const kw = (w) => (w == null ? "–" : Math.abs(w) >= 1000 ? `${fmtNum(w / 1000, L)} kW` : `${Math.round(w)} W`);
+    const zones = this._zoneData();
+    const prioOf = (z) => Number((this._hass.states[eid(z.id, "select", "fve_priorita")] || {}).state) || Number(z.s.fve_priorita) || 1;
+    const levels = Array.isArray(a.urovne) && a.urovne.length ? a.urovne
+      : [...new Set(zones.map(prioOf))].sort((x, y) => x - y);
+    const maxLevel = levels.length ? levels[levels.length - 1] : 0;
+    const next = levels.find((l) => l > tier);
+
+    // hlavicka: stav + od kedy
+    let since = "";
+    if (a.uroven_od) {
+      const t0 = Date.parse(a.uroven_od);
+      if (!isNaN(t0)) {
+        const d = new Date(t0);
+        since = this._t("pv_since", { t: `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`, d: fmtDuration((Date.now() - t0) / 60000, L) });
+      }
+    }
+    const state = tier ? (tier === 1 ? this._t("pv_state_p1") : this._t("pv_state_on", { tier })) : this._t("pv_state_off");
+
+    // toky
+    const bat = num(a.bateria_w);
+    const batTxt = bat == null ? "–" : `${bat > 0 ? "+" : bat < 0 ? "−" : ""}${kw(Math.abs(bat))}${a.soc != null ? ` · ${Math.round(a.soc)} %` : ""}`;
+    const flow = (k, v, cls = "") => `<div class="sho-pvf ${cls}"><div class="l">${esc(this._t(k))}</div><div class="v">${esc(v)}</div></div>`;
+    const flows = flow("pv_f_pv", kw(num(a.vyroba_w)), "pv") + flow("pv_f_export", kw(num(a.export_w))) +
+      flow("pv_f_import", kw(num(a.odber_w)), num(a.odber_w) > 50 ? "bad" : "") + flow("pv_f_bat", batTxt) +
+      (a.kurenie_w != null || prm.pv_max_heat_power
+        ? `<div class="sho-pvf ${prm.pv_max_heat_power && num(a.kurenie_w) > prm.pv_max_heat_power ? "bad" : ""}"><div class="l">${esc(this._t("pv_f_heat"))}</div><div class="v">${esc(kw(num(a.kurenie_w)))}</div>
+            <div class="s">${prm.pv_max_heat_power ? esc(this._t("pv_f_of_max", { max: kw(prm.pv_max_heat_power) })) : ""}</div></div>` : "") +
+      `<div class="sho-pvf av"><div class="l">${esc(this._t("pv_f_avail"))}</div><div class="v">${esc(kw(num(a.prebytok_w)))}</div>
+        <div class="s">${prm.pv_add_power != null ? esc(this._t("pv_f_add_at", { w: kw(prm.pv_add_power) })) : ""}</div></div>`;
+
+    // dovod + odpocet
+    const reason = String(a.dovod || "");
+    let msg = "", prog = null, cls = "";
+    const left = (v) => (Number(v) < 1 ? "< 1 min" : fmtDuration(Number(v), L));
+    if (reason === "add" && next != null && a.pridanie_za_min != null) {
+      msg = this._t("pv_r_add", { n: next, m: left(a.pridanie_za_min) });
+      prog = 1 - Number(a.pridanie_za_min) / (prm.pv_add_minutes || 5); cls = "add";
+    } else if (reason.startsWith("shed") && a.odobratie_za_min != null) {
+      const why = reason.split(":")[1] || "";
+      const whyTxt = why.split(",").map((w) => this._t(`pv_why_${w}`)).join(", ");
+      msg = this._t("pv_r_shed", { why: whyTxt, n: tier, m: left(a.odobratie_za_min) });
+      prog = 1 - Number(a.odobratie_za_min) / (prm.pv_shed_minutes || 10); cls = "shed";
+    } else if (reason === "low_soc") {
+      msg = this._t("pv_r_low_soc", { soc: prm.pv_stop_soc != null ? Math.round(prm.pv_stop_soc) : "–" }); cls = "shed";
+    } else if (reason === "limit_hold") {
+      msg = this._t("pv_r_limit_hold", { w: kw(num(a.kurenie_w)), max: kw(prm.pv_max_heat_power) }); cls = "shed";
+    } else if (reason === "no_data") msg = this._t("pv_r_no_data");
+    else if (reason === "no_zones") msg = this._t("pv_r_no_zones");
+    else if (tier && tier >= maxLevel) msg = this._t("pv_r_hold_top");
+    else msg = this._t("pv_r_hold", { w: kw(prm.pv_add_power) });
+    const progHtml = prog == null ? "" : `<div class="sho-pvbar ${cls}"><i style="width:${Math.max(0, Math.min(100, prog * 100)).toFixed(0)}%"></i></div>`;
+
+    // priority a zony
+    const useFve = (z) => { const sw = this._hass.states[eid(z.id, "switch", "vyuzi_fve_prebytok")]; return !sw || sw.state !== "off"; };
+    const rows = levels.map((lvl) => {
+      const zs = zones.filter((z) => useFve(z) && prioOf(z) === lvl);
+      const on = tier >= lvl;
+      const chips = zs.map((z) => {
+        const [c, txt] = this._pvZoneStatus(z, tier, acc);
+        return `<span class="sho-pvz ${c}"><b>${esc(z.name)}</b><span>${esc(txt)}</span></span>`;
+      }).join("") || `<span class="sho-pvz off"><span>–</span></span>`;
+      return `<div class="sho-pvl${on ? " on" : ""}"><span class="p">P${lvl}</span><div class="zs">${chips}</div></div>`;
+    }).join("");
+    const noFve = zones.filter((z) => !useFve(z));
+    const noFveHtml = noFve.length ? `<div class="sho-pvl none"><span class="p">–</span><div class="zs"><span class="sho-pvz off"><b>${esc(this._t("pv_no_fve"))}</b><span>${esc(noFve.map((z) => z.name).join(", "))}</span></span></div></div>` : "";
+
+    panel.innerHTML = `<div class="sho-st-h"><h2>${mdiSvg("solar-power-variant") || ""}${esc(this._t("pv_title"))}</h2>
+        <div class="sho-pvst${tier ? " on" : ""}"><b>${esc(state)}</b>${since ? `<span>${esc(since)}</span>` : ""}</div></div>
+      <div class="sho-pvfs">${flows}</div>
+      <div class="sho-pvmsg ${cls}">${esc(msg)}</div>${progHtml}
+      <div class="sho-pvls">${rows}${noFveHtml}</div>
+      ${this._pvTimeline(maxLevel || 1)}`;
+  }
+
+  /** Casova os dnes: vyska/farba = aktivna uroven kaskady. */
+  _pvTimeline(maxLevel) {
+    const hist = this._pvHist;
+    if (!hist || !hist.length) return "";
+    const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+    const t0 = midnight.getTime(), now = Date.now(), span = 86400000;
+    const W = 1000, H = 34;
+    let g = "";
+    for (let i = 0; i < hist.length; i++) {
+      const [t, v] = hist[i];
+      const start = Math.max(t0, t), end = i + 1 < hist.length ? hist[i + 1][0] : now;
+      if (!v || end <= start) continue;
+      const x = ((start - t0) / span) * W, w = Math.max(1, ((end - start) / span) * W);
+      const h = Math.max(4, (v / Math.max(1, maxLevel)) * (H - 4));
+      g += `<rect x="${x.toFixed(1)}" y="${(H - h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" class="lv"><title>P1–${v}</title></rect>`;
+    }
+    const nx = ((now - t0) / span) * W;
+    g += `<line x1="${nx.toFixed(1)}" y1="0" x2="${nx.toFixed(1)}" y2="${H}" class="now"></line>`;
+    const ticks = [0, 6, 12, 18, 24].map((h) => `<span style="left:${(h / 24) * 100}%">${h}</span>`).join("");
+    return `<div class="sho-pvtl"><div class="sho-leg"><b>${esc(this._t("pv_today"))}</b></div>
+      <svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" class="tl"><rect x="0" y="0" width="${W}" height="${H}" class="bg"></rect>${g}</svg>
+      <div class="ticks">${ticks}</div></div>`;
+  }
+
   _toggleStats() {
     const panel = this.querySelector(".sho-stats");
     if (!panel) return;
@@ -2350,10 +2599,11 @@ class SmartHeatingOverview extends HTMLElement {
       return;
     }
     if (this._setOpen) this._closeSettings(true);
+    if (this._pvOpen) this._togglePv();
     this._statsOpen = true;
     panel.hidden = false;
     this._renderSummary(this._zoneData());
-    this._loadStats(this._statsDays || 7);
+    this._loadStats(1);                       // vzdy zacne na "Dnes"
   }
 
   async _loadStats(days) {

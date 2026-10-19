@@ -727,6 +727,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "floor_sensor_lost": floor_sensor_lost,
             "pv_krb_floor": pv_krb_floor,
             "pv_acc_target": pv_acc["target"] if pv_acc and pv_acc["enabled"] else None,
+            "pv_acc_since": rt["pv_acc"]["since"].isoformat() if pv_acc and pv_acc["enabled"] and rt.get("pv_acc") else None,
             "pv_acc_max": pv_acc["max"] if pv_acc else None,
             "krb_override": krb_override,
             "emergency_active": emergency_active,
@@ -1308,8 +1309,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         discharge = max(0.0, -bat) if bat is not None else 0.0
         charge_counts = soc is None or soc >= self._pv_param("pv_start_soc")
         available = export + (charge if charge_counts else 0.0)
+        heat = self._heating_power_w()
+        limit = self._pv_param("pv_max_heat_power")
         eng["values"] = {
             "pv": pv, "export": export, "import": grid_import, "battery": bat, "soc": soc, "available": available,
+            "heat": heat,
         }
 
         levels = sorted(set(self._pv_participants().values()))
@@ -1340,6 +1344,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 bad.append("import")
             if pv is not None and pv < self._pv_param("pv_min_power"):
                 bad.append("low_pv")
+            # limit prikonu kurenia: nad limitom sa odobera, pri pridavani musi zostat
+            # miesto aspon na dalsiu zonu (odhad = prah pridania)
+            over_limit = bool(limit) and heat is not None and heat > limit
+            if over_limit:
+                bad.append("limit")
+            room = not limit or heat is None or heat + self._pv_param("pv_add_power") <= limit
             nxt = next((lvl for lvl in levels if lvl > tier), None)
             if bad and tier > 0:
                 eng["add_since"] = None
@@ -1349,6 +1359,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     lower = [lvl for lvl in levels if lvl < tier]
                     tier = lower[-1] if lower else 0
                     eng["bad_since"] = now if tier else None   # dalsia priorita az po dalsom intervale
+            elif not bad and nxt is not None and available >= self._pv_param("pv_add_power") and not room:
+                eng["add_since"] = None
+                eng["bad_since"] = None
+                eng["reason"] = "limit_hold"
             elif not bad and nxt is not None and available >= self._pv_param("pv_add_power"):
                 eng["bad_since"] = None
                 eng["add_since"] = eng["add_since"] or now
@@ -1359,6 +1373,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             else:
                 eng["reason"] = "hold"
                 reset()
+        if tier != eng["tier"] or eng.get("tier_since") is None:
+            eng["tier_since"] = now          # od kedy plati aktualna uroven (aj 0)
         eng["tier"] = tier
         return tier
 
@@ -1387,12 +1403,18 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             left = self._pv_param(key) - (now - since).total_seconds() / 60
             return max(0, round(left, 1))
 
+        since = eng.get("tier_since")
         return {
             "mode": "power",
             "tier": eng["tier"],
             "reason": eng.get("reason"),
             "add_in_min": remaining(eng.get("add_since"), "pv_add_minutes"),
             "shed_in_min": remaining(eng.get("bad_since"), "pv_shed_minutes"),
+            "tier_since": since.isoformat() if since else None,
+            "levels": sorted(set(self._pv_participants().values())),
+            "params": {k: self._pv_param(k) for k in (
+                "pv_add_power", "pv_add_minutes", "pv_shed_power", "pv_shed_minutes",
+                "pv_min_power", "pv_start_soc", "pv_stop_soc", "pv_acc_step", "pv_acc_minutes", "pv_max_heat_power")},
             **{k: (round(v) if isinstance(v, float) else v) for k, v in eng.get("values", {}).items()},
         }
 
@@ -1593,6 +1615,22 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         charge, discharge = max(0.0, bat), max(0.0, -bat)
         load = pv + grid_import + discharge - export - charge
         return {"fve": pv, "siet": grid_import, "bateria": discharge, "load": max(0.0, load)}
+
+    def _heating_power_w(self) -> float | None:
+        """Sucasny prikon kurenia vsetkych zon (W) z meracov prikonu; None = ziadny merac."""
+        seen: set[str] = set()
+        total, any_value = 0.0, False
+        for zone in self.zones.values():
+            for src in self._zone_sources(zone):
+                for entity_id in src["power"]:
+                    if entity_id in seen:
+                        continue
+                    seen.add(entity_id)
+                    w = self._power_w(entity_id)
+                    if w is not None:
+                        total += max(0.0, w)
+                        any_value = True
+        return total if any_value else None
 
     def _accumulate_house_energy(self) -> None:
         """Spotreba domu rozdelena podla zdroja (proporcionalne: kazdy spotrebic
