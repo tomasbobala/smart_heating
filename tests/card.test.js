@@ -1690,3 +1690,12 @@ test("cascade panel: heating power vs limit and holding at the limit", async () 
   const { window } = loadCard();
   assert.match(window.translate("sk", "of_pv_max_heat_power"), /Max\. príkon kúrenia/);
 });
+
+
+test("cascade panel: no bare .add / .shed classes (HA grid section styles .add with a dashed outline)", async () => {
+  const card = renderOverview({}, cascadeHass());
+  Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent)).click();
+  await tick();
+  assert.strictEqual(card.querySelectorAll(".sho-pv .add, .sho-pv .shed").length, 0);
+  assert.ok(card.querySelector(".sho-pvmsg.is-add") && card.querySelector(".sho-pvbar.is-add"));
+});

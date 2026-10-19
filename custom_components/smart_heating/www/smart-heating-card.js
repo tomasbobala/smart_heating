@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.24.0";
+const CARD_VERSION = "0.24.1";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -1949,11 +1949,12 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-pvf .s { font-size: 11.5px; color: var(--sh-sub); margin-top: 2px; }
       .sho-pvf.pv .v, .sho-pvf.av .v { color: #f2b84b; }
       .sho-pvf.bad .v { color: var(--sh-warn, #e8a838); }
+      /* triedy s prefixom: karta nema shadow DOM a HA sekcia ma vlastne .add (prerusovany ramik, order) */
       .sho-pvmsg { font-size: 13.5px; color: var(--sh-txt); }
-      .sho-pvmsg.add { color: var(--sh-ok, #4caf7d); } .sho-pvmsg.shed { color: var(--sh-warn, #e8a838); }
+      .sho-pvmsg.is-add { color: var(--sh-ok, #4caf7d); } .sho-pvmsg.is-shed { color: var(--sh-warn, #e8a838); }
       .sho-pvbar { height: 6px; border-radius: 3px; background: rgba(127,127,127,.15); overflow: hidden; margin-top: -6px; }
       .sho-pvbar i { display: block; height: 100%; background: var(--sh-ok, #4caf7d); border-radius: 3px; }
-      .sho-pvbar.shed i { background: var(--sh-warn, #e8a838); }
+      .sho-pvbar.is-shed i { background: var(--sh-warn, #e8a838); }
       .sho-pvls { display: flex; flex-direction: column; gap: 8px; }
       .sho-pvl { display: flex; gap: 10px; align-items: flex-start; }
       .sho-pvl .p { flex: 0 0 34px; text-align: center; font-weight: 700; font-size: 12.5px; padding: 6px 0; border-radius: 8px;
@@ -2526,16 +2527,16 @@ class SmartHeatingOverview extends HTMLElement {
     const left = (v) => (Number(v) < 1 ? "< 1 min" : fmtDuration(Number(v), L));
     if (reason === "add" && next != null && a.pridanie_za_min != null) {
       msg = this._t("pv_r_add", { n: next, m: left(a.pridanie_za_min) });
-      prog = 1 - Number(a.pridanie_za_min) / (prm.pv_add_minutes || 5); cls = "add";
+      prog = 1 - Number(a.pridanie_za_min) / (prm.pv_add_minutes || 5); cls = "is-add";
     } else if (reason.startsWith("shed") && a.odobratie_za_min != null) {
       const why = reason.split(":")[1] || "";
       const whyTxt = why.split(",").map((w) => this._t(`pv_why_${w}`)).join(", ");
       msg = this._t("pv_r_shed", { why: whyTxt, n: tier, m: left(a.odobratie_za_min) });
-      prog = 1 - Number(a.odobratie_za_min) / (prm.pv_shed_minutes || 10); cls = "shed";
+      prog = 1 - Number(a.odobratie_za_min) / (prm.pv_shed_minutes || 10); cls = "is-shed";
     } else if (reason === "low_soc") {
-      msg = this._t("pv_r_low_soc", { soc: prm.pv_stop_soc != null ? Math.round(prm.pv_stop_soc) : "–" }); cls = "shed";
+      msg = this._t("pv_r_low_soc", { soc: prm.pv_stop_soc != null ? Math.round(prm.pv_stop_soc) : "–" }); cls = "is-shed";
     } else if (reason === "limit_hold") {
-      msg = this._t("pv_r_limit_hold", { w: kw(num(a.kurenie_w)), max: kw(prm.pv_max_heat_power) }); cls = "shed";
+      msg = this._t("pv_r_limit_hold", { w: kw(num(a.kurenie_w)), max: kw(prm.pv_max_heat_power) }); cls = "is-shed";
     } else if (reason === "no_data") msg = this._t("pv_r_no_data");
     else if (reason === "no_zones") msg = this._t("pv_r_no_zones");
     else if (tier && tier >= maxLevel) msg = this._t("pv_r_hold_top");

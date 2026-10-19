@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.24.1
+- Fixed: in the solar cascade panel the countdown text and bar were moved to
+  the bottom, with a dashed frame and a huge bar. The card has no shadow DOM and
+  the dashboard section styles its own `.add` class (the "add card" button);
+  the panel now uses prefixed classes (`is-add` / `is-shed`).
+
 ## 0.24.0
 - **Solar priorities 1–5** (was 1–3); the zone card shows five chips.
 - **Solar cascade panel** - tap the "Solar surplus" tile in the overview card:
