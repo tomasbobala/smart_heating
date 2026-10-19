@@ -394,6 +394,35 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "zones": zones_data,
         }
 
+    def _pv_accumulation(self, zone_id: str, base, current) -> dict:
+        """Ciel pri FVE prebytku. Akumulacia (prepinac fve_akumulacia): zacne na dennej
+        teplote a vzdy, ked ju zona dosiahne (a odvtedy preslo aspon pv_acc_minutes),
+        zvysi ciel o pv_acc_step - az po max. teplotu zony (fve_max_teplota), nikdy
+        vyssie. Pri strate prebytku sa vynuluje (_compute_zone nastavi rt["pv_acc"] = None)."""
+        rt = self._rt(zone_id)
+        enabled = self._state_bool(switch_entity_id(zone_id, "fve_akumulacia"), True)
+        max_t = self._state_float(number_entity_id(zone_id, "fve_max_teplota"), NUMBER_DEFS["fve_max_teplota"][4])
+        base = base if base is not None else max_t
+        # max. teplota plati vzdy - aj ked je denna teplota nastavena vyssie
+        start = min(base, max_t) if max_t is not None else base
+        if not enabled or max_t is None:
+            rt["pv_acc"] = None
+            return {"target": start, "max": max_t, "enabled": False}
+        now = dt_util.now()
+        acc = rt.get("pv_acc")
+        step = self._pv_param("pv_acc_step")
+        wait = timedelta(minutes=self._pv_param("pv_acc_minutes"))
+        if acc is None or acc["target"] < start:
+            acc = {"target": start, "since": now}
+        elif (
+            current is not None and current >= acc["target"] - 0.2
+            and now - acc["since"] >= wait and acc["target"] < max_t
+        ):
+            acc = {"target": min(max_t, round(acc["target"] + step, 1)), "since": now}
+        acc["target"] = min(acc["target"], max_t)
+        rt["pv_acc"] = acc
+        return {"target": acc["target"], "max": max_t, "enabled": True}
+
     def _humidity_info(self, zone_id: str, zone: dict, zdata: dict, outdoor, outdoor_rh) -> dict:
         """Vlhkost v zone - len sledovanie: pocitova teplota, rosny bod, ucinok
         vetrania a upozornenie na dlhodobo vysoku / nizku vlhkost."""
@@ -591,7 +620,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # pamatame - nevieme, ci podlaha uz vychladla.
         floor_override = bool(rt.get("floor_blocked"))
         # Pri radiator_floor blokuje prehriata podlaha len podlahu, radiator kuri dalej.
-        floor_blocks_zone = floor_override and not is_radiator
+        # Pri floor_ac rovnako: klima kuri dalej, podlaha sa nezapne (_apply_floor_ac).
+        floor_blocks_zone = floor_override and not is_radiator and not is_floor_ac
         if floor_blocks_zone:
             heating_allowed = False
             if floor_temp is None:
@@ -618,14 +648,29 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             reason = self._t("reason_krb_stop", fireplace_temp=fireplace_temp, krb_threshold=krb_threshold)
 
         # --- 0.5: FVE PREBYTOK (preraza TARIFU, nie floor/krb) ---
+        # Akumulacia: ciel sa pri trvajucom prebytku postupne zvysuje az do max. teploty
+        # zony. V zone s klimou (floor_ac) krb zastavi len klimu - ak je podlaha este
+        # chladna, akumuluje dalej podlaha (az po max. teplotu podlahy).
         pv_active = False
+        pv_krb_floor = False
+        pv_acc = None
         use_fve = self._state_bool(switch_entity_id(zone_id, "vyuzi_fve_prebytok"), True)
-        if pv_surplus and use_fve and not floor_blocks_zone and not floor_lost_blocks_zone and not krb_override:
+        krb_blocks_pv = krb_override and not is_floor_ac
+        if pv_surplus and use_fve and not floor_blocks_zone and not floor_lost_blocks_zone and not krb_blocks_pv:
             heating_allowed = True
-            target = comfort_target
+            pv_acc = self._pv_accumulation(zone_id, comfort_target, current_temp)
+            target = pv_acc["target"]
             effective_mode = comfort_mode
-            reason = self._t("reason_pv_active")
+            reason = (
+                self._t("reason_pv_accumulate", target=f"{pv_acc['target']:g}", max=f"{pv_acc['max']:g}")
+                if pv_acc["enabled"] else self._t("reason_pv_active")
+            )
             pv_active = True
+            if krb_override:
+                pv_krb_floor = True
+                reason = self._t("reason_pv_krb_floor", fireplace_temp=f"{fireplace_temp:g}", floor_max=f"{floor_max:g}")
+        else:
+            rt["pv_acc"] = None
 
         # --- 0: NUDZOVA OCHRANA (prerazi TARIFU, nie floor/krb) ---
         emergency_active = False
@@ -680,6 +725,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "heating_allowed": heating_allowed,
             "floor_override": floor_override,
             "floor_sensor_lost": floor_sensor_lost,
+            "pv_krb_floor": pv_krb_floor,
+            "pv_acc_target": pv_acc["target"] if pv_acc and pv_acc["enabled"] else None,
+            "pv_acc_max": pv_acc["max"] if pv_acc else None,
             "krb_override": krb_override,
             "emergency_active": emergency_active,
             "pv_active": pv_active,
@@ -1118,7 +1166,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         )
         use_fixed_setpoint = zdata["has_external_temp"] or force_fixed_setpoint
 
-        if use_fixed_setpoint:
+        krb_floor = bool(zdata.get("pv_krb_floor"))
+        if krb_floor:
+            # FVE akumulacia a pri krbe je uz teplo: klima stop, akumuluje podlaha
+            rt["ac_running"] = False
+            await self._apply_device(ac_entity, "off", None)
+        elif use_fixed_setpoint:
             ac_setpoint = self._state_float(
                 number_entity_id(zone_id, "ac_setpoint_teplota"), AC_NUMBER_DEFS["ac_setpoint_teplota"][4]
             )
@@ -1132,6 +1185,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     rt["ac_running"] = True
                 # inak (v pasme hysterezie) - necha predchadzajuci stav bezo zmeny
             ac_running = rt.get("ac_running", True)  # bez udajov radsej bezpecnejsie zapnut
+            if zdata.get("pv_active") and target is not None and ac_setpoint is not None:
+                # akumulacia moze ist nad pevny setpoint - klima musi mat cielovu teplotu vyssie
+                ac_setpoint = max(ac_setpoint, target + 1)
             await self._apply_device(ac_entity, "heat" if ac_running else "off", ac_setpoint if ac_running else None)
         else:
             rt["ac_running"] = True
@@ -1141,6 +1197,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         minutes_limit = self._state_float(number_entity_id(zone_id, "ac_priorita_minuty"), AC_NUMBER_DEFS["ac_priorita_minuty"][4])
 
         deficit = current_temp is not None and target is not None and (target - current_temp) >= diff_limit
+        # pri FVE akumulacii ide najprv klima (ciel rastie postupne) - podlaha ako "zaloha
+        # za klimu" by sa zapinala zbytocne; podlahu zapne az krb (krb_floor)
+        if zdata.get("pv_active"):
+            deficit = False
         floor_engaged = False
 
         if deficit:
@@ -1153,12 +1213,16 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             floor_engaged = False
 
         guard = bool(zdata.get("floor_guard"))
-        floor_on = (floor_engaged or guard) and not zdata.get("floor_sensor_lost")
-        floor_setpoint = zdata.get("floor_max") if guard else target
+        floor_on = (
+            (floor_engaged or guard or krb_floor)
+            and not zdata.get("floor_sensor_lost") and not zdata.get("floor_override")
+        )
+        floor_setpoint = zdata.get("floor_max") if (guard or krb_floor) else target
         await self._apply_device(floor_entity, "heat" if floor_on else "off", floor_setpoint if floor_on else None)
         self._maybe_notify_ac_backup(zone_id, zdata["name"], floor_engaged)
         zdata["heat_source"] = (
-            self._t("source_ac_floor") if floor_on and rt.get("ac_running", True)
+            self._t("source_floor_pv") if krb_floor and floor_on
+            else self._t("source_ac_floor") if floor_on and rt.get("ac_running", True)
             else self._t("source_floor_min") if guard
             else (self._t("source_ac") if rt.get("ac_running", True) else self._t("source_none_waiting"))
         )

@@ -1537,3 +1537,48 @@ test("overview: outdoor humidity and pressure with 3 h trend", async () => {
   assert.match(t, /💧 85 %/);
   assert.match(t, /1012 hPa ▼ 4/);
 });
+
+// ---------------------------------------------------------------- 0.23: akumulacia z prebytku FVE
+
+test("zone card: solar storage switch and max temperature in settings, badge with target / max", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass({ stavAttrs: { pv_active: true, fve_akumulacia_ciel: 23, fve_akumulacia_max: 25 } });
+  hass.states[`sensor.smart_heating_${ZONE_ID}_stav`].state = "Núdzová ochrana";   // iny dovod -> odznak ukaze akumulaciu
+  hass.states[`switch.smart_heating_${ZONE_ID}_fve_akumulacia`] = { state: "on" };
+  hass.states[`number.smart_heating_${ZONE_ID}_fve_max_teplota`] = { state: "25", attributes: { min: 18, max: 28, step: 0.5 } };
+  hass.states[`select.smart_heating_${ZONE_ID}_fve_priorita`] = { state: "1", attributes: { options: ["1", "2", "3"] } };
+  const calls = [];
+  hass.callService = (d, s, data) => calls.push([d, s, data]);
+  card.hass = hass;
+  document.body.appendChild(card);
+  assert.match(card.querySelector(".sh-badges").textContent, /FVE akumulácia 23° \/ max 25°/);
+  card.querySelector(".sh-gear").click();
+  const t = card.querySelector(".sh-toggles").textContent.replace(/\s+/g, " ");
+  assert.match(t, /Akumulovať teplo z prebytku/);
+  assert.match(t, /Max\. teplota z prebytku\s*-\s*25,0°C/);
+  card.querySelector('.sh-toggles button[data-key="fve_max_teplota"][data-act="inc"]').click();
+  assert.strictEqual(JSON.stringify(calls.pop()), JSON.stringify(["number", "set_value", { entity_id: `number.smart_heating_${ZONE_ID}_fve_max_teplota`, value: 25.5 }]));
+  card.querySelector('.sh-toggles [data-switch-key="fve_akumulacia"]').click();
+  assert.strictEqual(JSON.stringify(calls.pop()), JSON.stringify(["switch", "turn_off", { entity_id: `switch.smart_heating_${ZONE_ID}_fve_akumulacia` }]));
+});
+
+test("zone card: no storage settings when the zone does not use solar surplus", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass();
+  hass.states[`switch.smart_heating_${ZONE_ID}_vyuzi_fve_prebytok`] = { state: "off" };
+  hass.states[`switch.smart_heating_${ZONE_ID}_fve_akumulacia`] = { state: "on" };
+  card.hass = hass;
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  assert.doesNotMatch(card.querySelector(".sh-toggles").textContent, /Akumulovať/);
+});
+
+test("overview settings: storage step and interval are editable in the card", async () => {
+  const { window } = loadCard();
+  assert.ok(window.translate("sk", "of_pv_acc_step").includes("Akumulácia"));
+  assert.ok(window.translate("sk", "of_pv_acc_minutes").includes("každých"));
+});

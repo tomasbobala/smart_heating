@@ -90,7 +90,9 @@
           "clear_outdoor_humidity_sensor": "Vymazať senzor vonkajšej vlhkosti",
           "outdoor_pressure_sensor": "Senzor vonkajšieho tlaku (voliteľné, len sledovanie)",
           "clear_outdoor_pressure_sensor": "Vymazať senzor vonkajšieho tlaku",
-          "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe"
+          "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe",
+          "pv_acc_step": "FVE akumulácia: zvýšiť cieľ o (°C) po jeho dosiahnutí",
+          "pv_acc_minutes": "FVE akumulácia: najskôr každých (min)"
         },
         "description": "Smart Heating verzia {version}"
       },
@@ -195,7 +197,9 @@
           "floor_hysterezia__min": "Hysteréza podlahy - min",
           "floor_hysterezia__max": "Hysteréza podlahy - max",
           "radiator_hysterezia__min": "Hysteréza radiátora - min",
-          "radiator_hysterezia__max": "Hysteréza radiátora - max"
+          "radiator_hysterezia__max": "Hysteréza radiátora - max",
+          "fve_max_teplota__min": "FVE akumulácia max. teplota - minimum",
+          "fve_max_teplota__max": "FVE akumulácia max. teplota - maximum"
         }
       }
     },

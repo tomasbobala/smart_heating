@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.23.0
+- **Storing solar surplus as heat.** While a zone heats from the solar surplus,
+  its target starts at the day temperature and is raised by a step (default
+  1 °C) each time the zone reaches it - at most every N minutes (default 15) -
+  up to the zone's **max. temperature from surplus** (new number
+  `number.*_fve_max_teplota`, default 24 °C; it also caps a higher day
+  temperature). When the surplus ends the target goes back to normal. Per-zone
+  switch `switch.*_fve_akumulacia` (on by default); step and interval in the
+  global settings (`pv_acc_step`, `pv_acc_minutes`). All of it is editable on
+  the cards (zone card -> Toggles, overview card -> integration settings).
+- **AC zone (floor_ac) with surplus: AC first, then the floor.** The deficit
+  "floor as AC backup" is not used while storing heat. When the fireplace area
+  reaches the fireplace threshold, the AC stops and the floor keeps storing heat
+  (setpoint = max. floor temperature) as long as the floor is below its maximum.
+  The AC setpoint follows the storage target when it goes above the fixed AC
+  setpoint.
+- floor_ac: an overheated floor now stops only the floor - the AC keeps heating.
+- Zone attributes `fve_akumulacia_ciel`, `fve_akumulacia_max`, `fve_krb_podlaha`.
+
 ## 0.22.0
 - **Statistics: heating split into solar / battery / grid.** "From the grid" was
   total minus the solar-cascade energy, which was wrong - heating outside the

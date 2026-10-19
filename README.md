@@ -307,6 +307,17 @@ from the solar, grid and battery power sensors (Global settings) into
 the whole house - this also works for sources with only an energy meter (AC).
 Time before these sensors existed is shown as "unsplit".
 
+### Storing solar surplus
+
+While there is a solar surplus the zone starts at the day temperature and each
+time it reaches the target (at most every `pv_acc_minutes`, default 15 min) the
+target is raised by `pv_acc_step` (default 1 °C) - up to the zone's **max.
+temperature from surplus** (`number.*_fve_max_teplota`, default 24 °C). When
+the surplus ends the target returns to normal. Switch `switch.*_fve_akumulacia`
+turns it off; everything is editable on the cards. In an AC zone the AC heats
+first; when the fireplace area reaches the fireplace threshold the AC stops and
+the floor keeps storing heat up to the max. floor temperature.
+
 ### Humidity (monitoring only)
 
 Optional humidity sensor per zone and outdoor humidity and pressure sensors in

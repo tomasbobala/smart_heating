@@ -83,6 +83,10 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "cold_outdoor_active": z["cold_outdoor_active"],
             "floor_override": z["floor_override"],
             "floor_sensor_lost": z.get("floor_sensor_lost", False),
+            # FVE akumulacia: aktualny ciel a strop zony, krb -> akumuluje podlaha
+            "fve_akumulacia_ciel": z.get("pv_acc_target"),
+            "fve_akumulacia_max": z.get("pv_acc_max"),
+            "fve_krb_podlaha": z.get("pv_krb_floor", False),
             "krb_override": z["krb_override"],
             "tariff_blocked": z["tariff_blocked"],
             "emergency_active": z["emergency_active"],

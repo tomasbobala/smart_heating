@@ -104,6 +104,9 @@ PV_ENGINE_NUMBERS = {
     "pv_min_power": (0, 10000, 100, "W", 500),        # vyroba pod tymto = nedostatocna
     "pv_start_soc": (0, 100, 5, "%", 90),             # nabijanie baterie sa ráta ako prebytok az od tohto SOC
     "pv_stop_soc": (0, 100, 5, "%", 40),              # pod tymto SOC sa vypne vsetko hned
+    # akumulacia: pri trvajucom prebytku zvys ciel zony o krok, ked ho dosiahla (najskor po intervale)
+    "pv_acc_step": (0.5, 3, 0.5, "°C", 1.0),
+    "pv_acc_minutes": (5, 120, 5, "min", 15),
 }
 
 # ---- Defaultne hodnoty ----
@@ -116,6 +119,7 @@ DEFAULT_FLOOR_MAX = 28.0
 DEFAULT_FLOOR_HYSTERESIS = 1.5
 DEFAULT_RADIATOR_HYSTERESIS = 0.5
 DEFAULT_BOOST_HOURS = 2.0
+DEFAULT_PV_ACC_MAX = 24.0
 DEFAULT_AC_PRIORITY_DIFF = 1.0
 DEFAULT_AC_PRIORITY_MINUTES = 30.0
 DEFAULT_AC_SETPOINT = 26.0
@@ -146,6 +150,10 @@ NUMBER_DEFS = {
     "vonkajsia_hranica": (
         "Vonkajsia teplota - hranica pre vynutene kurenie (°C)",
         -30, 15, "mdi:snowflake-thermometer", DEFAULT_OUTDOOR_THRESHOLD,
+    ),
+    # Akumulacia prebytku FVE: ciel sa postupne zvysuje az do tejto teploty (nikdy vyssie)
+    "fve_max_teplota": (
+        "FVE akumulacia - max. teplota (°C)", 18, 28, "mdi:thermometer-chevron-up", DEFAULT_PV_ACC_MAX,
     ),
 }
 
@@ -224,6 +232,7 @@ SWITCH_DEFS = {
     "predkurenie_povolene": ("Predkurenie povolene (len pracovne dni)", "mdi:home-clock", True),
     "reaguj_na_krb": ("Reaguj na krb", "mdi:fireplace", False),
     "vyuzi_fve_prebytok": ("Vyuzi FVE prebytok (kuri aj ked nikto nie je doma)", "mdi:solar-power", True),
+    "fve_akumulacia": ("FVE akumulacia - postupne zvysovat teplotu", "mdi:thermometer-chevron-up", True),
     # Podlaha nabehne pod floor_min aj ked je vzduch dost teply. Predvolene vypnute,
     # pri zone radiator_floor zapnute (CONF_USE_FLOOR_MIN).
     "udrzat_min_podlahy": ("Udrzat min. teplotu podlahy", "mdi:heat-wave", False),

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.22.0";
+const CARD_VERSION = "0.23.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -96,6 +96,10 @@ const I18N = {
   toggle_preheat: { en: "Pre-heating allowed (Mon-Fri)", sk: "Predkúrenie povolené (Po-Pia)" },
   toggle_krb: { en: "React to fireplace", sk: "Reaguj na krb" },
   toggle_pv: { en: "Use solar surplus", sk: "Využi FVE prebytok" },
+  toggle_pv_acc: { en: "Store heat from surplus", sk: "Akumulovať teplo z prebytku" },
+  pv_acc_hint: { en: "raises the target step by step while there is surplus", sk: "pri prebytku postupne zvyšuje cieľ" },
+  temp_pv_max: { en: "Max. temperature from surplus", sk: "Max. teplota z prebytku" },
+  badge_pv_acc: { en: "Solar storage {t}° / max {m}°", sk: "FVE akumulácia {t}° / max {m}°" },
   toggle_fixed_ac_setpoint: { en: "Use fixed AC setpoint even without external thermometer", sk: "Použiť pevný AC setpoint aj bez externého teplomera" },
 
   boost_running: { en: "Boost running", sk: "Boost beží" },
@@ -223,6 +227,8 @@ const I18N = {
   of_pv_min_power: { en: "Insufficient production below", sk: "Nedostatočná výroba pod" },
   of_pv_start_soc: { en: "Battery charge is surplus from", sk: "Nabíjanie batérie je prebytok od" },
   of_pv_stop_soc: { en: "Everything off below battery", sk: "Všetko vypnúť pri batérii pod" },
+  of_pv_acc_step: { en: "Storage: raise target by", sk: "Akumulácia: zvýšiť cieľ o" },
+  of_pv_acc_minutes: { en: "…at most every", sk: "…najskôr každých" },
   of_nudzova_teplota: { en: "Emergency temperature", sk: "Núdzová teplota" },
   of_krb_threshold: { en: "Fireplace threshold", sk: "Hranica krbu" },
   of_notify_tariff: { en: "Tariff", sk: "Tarifa" },
@@ -776,6 +782,8 @@ class SmartHeatingCard extends HTMLElement {
       eid(z, "switch", "pouzit_pevny_ac_setpoint"),
       eid(z, "switch", "udrzat_min_podlahy"),
       eid(z, "select", "fve_priorita"),
+      eid(z, "switch", "fve_akumulacia"),
+      eid(z, "number", "fve_max_teplota"),
       eid(z, "number", "floor_min"),
       eid(z, "number", "floor_max"),
       eid(z, "number", "floor_hysterezia"),
@@ -1285,7 +1293,13 @@ class SmartHeatingCard extends HTMLElement {
     if (zAttrs.floor_override) badges.push(["err", this._t("badge_floor")]);
     if (zAttrs.floor_sensor_lost) badges.push(["err", this._t("badge_floor_sensor")]);
     if (zAttrs.krb_override) badges.push(["warn", this._t("badge_krb")]);
-    if (zAttrs.pv_active) badges.push(["ok", this._t("badge_pv")]);
+    const reasonLc = String((this._hass.states[eid(this._zoneId, "sensor", "stav")] || {}).state || "").toLowerCase();
+    // dovod akumulacie uz obsahuje ciel aj max - odznak by ho len opakoval
+    if (zAttrs.pv_active && !(reasonLc.includes("akumul") || reasonLc.includes("storing heat"))) {
+      badges.push(num(zAttrs.fve_akumulacia_ciel) != null && num(zAttrs.fve_akumulacia_max) != null
+        ? ["ok", this._t("badge_pv_acc", { t: fmtShort(zAttrs.fve_akumulacia_ciel, this._lang), m: fmtShort(zAttrs.fve_akumulacia_max, this._lang) })]
+        : ["ok", this._t("badge_pv")]);
+    }
     if (zAttrs.cold_outdoor_active) badges.push(["info", this._t("badge_cold")]);
     if (zAttrs.boost_active) badges.push(["info", this._t("badge_boost")]);
     if (zAttrs.floor_guard) badges.push(["info", this._t("badge_floor_min")]);
@@ -1570,9 +1584,11 @@ class SmartHeatingCard extends HTMLElement {
       this._switchRow(this._t("toggle_krb"), "reaguj_na_krb") +
       this._switchRow(this._t("toggle_pv"), "vyuzi_fve_prebytok") +
       this._pvPriorityRow() +
+      this._pvAccRows() +
       (this._hass.states[eid(this._zoneId, "switch", "udrzat_min_podlahy")]
         ? this._switchRow(this._t("toggle_floor_min"), "udrzat_min_podlahy") : "") +
       (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "");
+    this._wireNumberRows(wrap);
     wrap.querySelectorAll(".sh-switch").forEach((el) => {
       const toggle = () => {
         const isOn = el.classList.contains("on");
@@ -1588,6 +1604,19 @@ class SmartHeatingCard extends HTMLElement {
         entity_id: eid(this._zoneId, "select", "fve_priorita"), option: el.dataset.pvPrio,
       });
     });
+  }
+
+  /** Akumulacia z prebytku FVE: prepinac + max. teplota (len ked zona FVE vyuziva). */
+  _pvAccRows() {
+    const sw = this._hass.states[eid(this._zoneId, "switch", "vyuzi_fve_prebytok")];
+    const acc = this._hass.states[eid(this._zoneId, "switch", "fve_akumulacia")];
+    if (!acc || (sw && sw.state !== "on")) return "";
+    const on = acc.state === "on";
+    return `<div class="sh-row"><div class="sh-row-label">${esc(this._t("toggle_pv_acc"))}
+        <div class="sh-row-hint">${esc(this._t("pv_acc_hint"))}</div></div>
+        <div class="sh-switch ${on ? "on" : ""}" data-switch-key="fve_akumulacia" role="switch" aria-checked="${on}" tabindex="0"><div class="knob"></div></div></div>` +
+      (on && this._hass.states[eid(this._zoneId, "number", "fve_max_teplota")]
+        ? this._numberRow(this._t("temp_pv_max"), "fve_max_teplota", 0.5, "°C") : "");
   }
 
   _pvPriorityRow() {

@@ -82,6 +82,15 @@ TEXTS: dict[str, dict[str, str]] = {
     "source_floor_min": {"en": "Floor (min. floor temp.)", "sk": "Podlaha (min. teplota podlahy)"},
     "source_radiator": {"en": "Radiator", "sk": "Radiátor"},
     "source_radiator_floor": {"en": "Radiator + Floor", "sk": "Radiátor + Podlaha"},
+    "reason_pv_accumulate": {
+        "en": "Solar surplus - storing heat: {target}°C (max {max}°C)",
+        "sk": "FVE prebytok – akumulácia tepla: {target}°C (max {max}°C)",
+    },
+    "reason_pv_krb_floor": {
+        "en": "Solar surplus - fireplace area warm ({fireplace_temp}°C): AC off, floor stores heat up to {floor_max}°C",
+        "sk": "FVE prebytok – pri krbe teplo ({fireplace_temp}°C): klíma stop, podlaha akumuluje do {floor_max}°C",
+    },
+    "source_floor_pv": {"en": "Floor (solar storage)", "sk": "Podlaha (akumulácia FVE)"},
     "reason_floor_sensor_lost": {
         "en": "STOP floor heating: floor sensor unavailable or implausible (overheat protection)",
         "sk": "STOP podlahovky: senzor podlahy nedostupný alebo nezmyselný (ochrana pred prehriatím)",

@@ -302,6 +302,17 @@ a batérie (Globálne nastavenia) rozdelí spotrebu domu na
 pomerom ako celý dom – funguje aj pre zdroje len s meračom energie (klíma).
 Obdobie pred vznikom týchto senzorov je „nerozdelené“.
 
+### Akumulácia prebytku FVE
+
+Pri prebytku FVE zóna začne na dennej teplote a vždy, keď ju dosiahne (najskôr
+po `pv_acc_minutes`, predvolene 15 min), sa cieľ zvýši o `pv_acc_step`
+(predvolene 1 °C) – až po **max. teplotu z prebytku** zóny
+(`number.*_fve_max_teplota`, predvolene 24 °C). Po skončení prebytku sa cieľ
+vráti na normál. Vypína sa prepínačom `switch.*_fve_akumulacia`; všetko sa
+nastavuje aj na kartách. V zóne s klímou kúri najprv klíma; keď pri krbe
+dosiahne teplota hranicu krbu, klíma sa vypne a ďalej akumuluje podlaha až po
+max. teplotu podlahy.
+
 ### Vlhkosť (len sledovanie)
 
 Voliteľný senzor vlhkosti pri zóne a senzory vonkajšej vlhkosti a tlaku

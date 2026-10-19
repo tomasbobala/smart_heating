@@ -90,7 +90,9 @@
           "clear_outdoor_humidity_sensor": "Clear outdoor humidity sensor",
           "outdoor_pressure_sensor": "Outdoor pressure sensor (optional, monitoring only)",
           "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
-          "notify_humidity": "Notify: high / low humidity in a room"
+          "notify_humidity": "Notify: high / low humidity in a room",
+          "pv_acc_step": "Solar storage: raise target by (°C) once reached",
+          "pv_acc_minutes": "Solar storage: at most every (min)"
         },
         "description": "Smart Heating version {version}"
       },
@@ -195,7 +197,9 @@
           "floor_hysterezia__min": "Floor hysteresis - min",
           "floor_hysterezia__max": "Floor hysteresis - max",
           "radiator_hysterezia__min": "Radiator hysteresis - min",
-          "radiator_hysterezia__max": "Radiator hysteresis - max"
+          "radiator_hysterezia__max": "Radiator hysteresis - max",
+          "fve_max_teplota__min": "Solar storage max. temperature - minimum",
+          "fve_max_teplota__max": "Solar storage max. temperature - maximum"
         }
       }
     },
