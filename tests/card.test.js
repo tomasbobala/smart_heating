@@ -1155,6 +1155,22 @@ function statsRes(start, prevStart, { withFve = true } = {}) {
   return res;
 }
 
+/** Mock recorder: vrati riadky statsRes, ktore patria do pozadovaneho rozsahu
+ * (predchadzajuce obdobie po dnoch, aktualne po hodinach - ako realny HA). */
+function statsByRange(msg) {
+  const DAY = 86400000;
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const start = midnight.getTime() - 6 * DAY, prevStart = start - 7 * DAY;
+  const all = statsRes(start, prevStart);
+  const from = Date.parse(msg.start_time), to = Date.parse(msg.end_time);
+  const out = {};
+  for (const [id, rows] of Object.entries(all)) {
+    const r = rows.filter((x) => x.start >= from && x.start < to);
+    if (r.length) out[id] = r;
+  }
+  return out;
+}
+
 function statsZones() {
   return [
     { id: "a", name: "Obývačka", problems: [], srcs: [{ key: "floor", energy: ["sensor.a_floor"] }, { key: "ac", energy: ["sensor.a_ac"] }] },
@@ -1198,21 +1214,17 @@ function statsOverview(resFn) {
 }
 
 test("overview: Statistics button opens the panel with KPIs, ranking and meter check", async () => {
-  const { hass, calls } = statsOverview((msg) => {
-    if (msg.period !== "day") return {};
-    const start = Date.parse(msg.start_time) + 7 * 86400000;
-    return statsRes(start, Date.parse(msg.start_time));
-  });
+  const { hass, calls } = statsOverview(statsByRange);
   const card = renderOverview({}, hass);
   card.querySelector(".sho-statsbtn").click();
   await new Promise((r) => setTimeout(r, 20));
-  const q = calls.find((c) => c.types && c.types.includes("mean") && c.period === "day");
+  const q = calls.find((c) => c.types && c.types.includes("mean") && c.period === "hour");
   assert.ok(q);
   assert.ok(Array.from(q.statistic_ids).includes("sensor.smart_heating_energia_z_fve"));
   const text = card.querySelector(".sho-stats").textContent.replace(/\s+/g, " ");
   assert.match(text, /Štatistiky kúrenia/);
   assert.match(text, /Spotreba\s*21,0 kWh/);
-  assert.match(text, /Z FVE prebytku\s*33 %/);
+  assert.match(text, /z toho prebytok 7,0 kWh/);
   assert.match(text, /Alpha\s*21,0 kWh/);
   assert.match(text, /merač ukazuje 0 W/);
   assert.match(text, /Na 1 stupeňodeň\s*–/);
@@ -1350,4 +1362,178 @@ test("zone card: badge when the floor sensor is lost", () => {
   card.hass = buildHass({ stavAttrs: { floor_sensor_lost: true } });
   document.body.appendChild(card);
   assert.match(card.querySelector(".sh-badges").textContent, /Senzor podlahy výpadok/);
+});
+
+// ---------------------------------------------------------------- 0.22: rozdelenie sieť / FVE / batéria, graf, vlhkosť
+
+function splitRes(start) {
+  const H = 3600000;
+  // hodina 0: kurenie 2 kWh, dom 1 zo siete + 1 z FVE -> 1/1
+  // hodina 1: kurenie 1 kWh, dom 2 z baterie -> 1 bateria
+  // hodina 2: kurenie 1 kWh, dom bez dat (pred meranim) -> nerozdelene
+  return {
+    "sensor.e": [{ start: start, change: 2, dur: 1 / 24 }, { start: start + H, change: 1, dur: 1 / 24 }, { start: start + 2 * H, change: 1, dur: 1 / 24 }],
+    "sensor.h_siet": [{ start: start, change: 1, dur: 1 / 24 }, { start: start + H, change: 0, dur: 1 / 24 }],
+    "sensor.h_fve": [{ start: start, change: 1, dur: 1 / 24 }, { start: start + H, change: 0, dur: 1 / 24 }],
+    "sensor.h_bat": [{ start: start, change: 0, dur: 1 / 24 }, { start: start + H, change: 2, dur: 1 / 24 }],
+    "sensor.rh": [{ start: start, mean: 40, dur: 1 / 24 }, { start: start + H, mean: 60, dur: 1 / 24 }],
+  };
+}
+
+function splitOpts(start, extra = {}) {
+  return {
+    zones: [{ id: "z", name: "Z", problems: [], srcs: [{ key: "floor", energy: ["sensor.e"] }] }],
+    energyIds: ["sensor.e"], fveId: null, outdoorId: null, start, prevStart: start - 86400000, hourly: true, days: 1, lang: "sk",
+    houseIds: { siet: "sensor.h_siet", fve: "sensor.h_fve", bateria: "sensor.h_bat" },
+    humidity: [{ name: "Obývačka", id: "sensor.rh" }], ...extra,
+  };
+}
+
+test("computeStats: heating split by the house mix in every hour, unsplit before metering", () => {
+  const { window } = loadCard();
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const st = window.computeStats(splitRes(start.getTime()), splitOpts(start.getTime()));
+  assert.ok(Math.abs(st.total - 4) < 1e-9);
+  assert.ok(Math.abs(st.split.siet - 1) < 1e-9);
+  assert.ok(Math.abs(st.split.fve - 1) < 1e-9);
+  assert.ok(Math.abs(st.split.bateria - 1) < 1e-9);
+  assert.ok(Math.abs(st.split.unknown - 1) < 1e-9);
+  const b0 = st.buckets[0], b2 = st.buckets[2];
+  assert.ok(Math.abs(b0.siet - 1) < 1e-9 && Math.abs(b0.fve - 1) < 1e-9);
+  assert.ok(Math.abs(b2.unknown - 1) < 1e-9);
+  assert.strictEqual(Math.round(st.humidity[0].value), 50);
+});
+
+test("computeStats: without house sensors there is no split (all unsplit)", () => {
+  const { window } = loadCard();
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const st = window.computeStats(splitRes(start.getTime()), splitOpts(start.getTime(), { houseIds: {} }));
+  assert.strictEqual(st.split, null);
+});
+
+test("computeStats: no comparison when the previous period has few degree-days", () => {
+  const { window } = loadCard();
+  const DAY = 86400000;
+  const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+  const start = midnight.getTime() - 6 * DAY, prevStart = start - 7 * DAY;
+  const res = statsRes(start, prevStart);
+  // predchadzajuci tyzden: koniec leta, 17 °C -> 7 stupnodni oproti 70
+  res["sensor.out"] = res["sensor.out"].map((r) => (r.start < start ? { ...r, mean: 17 } : r));
+  const st = window.computeStats(res, {
+    zones: statsZones(), energyIds: ["sensor.a_floor", "sensor.a_ac", "sensor.b_floor"],
+    fveId: null, outdoorId: "sensor.out", start, prevStart, hourly: false, days: 7, lang: "sk",
+  });
+  assert.ok(st.eff != null);
+  assert.strictEqual(st.comparable, false);
+  assert.strictEqual(st.effDelta, null);
+});
+
+test("niceStep gives round axis steps", () => {
+  const { window } = loadCard();
+  assert.strictEqual(window.niceStep(11.6), 5);
+  assert.strictEqual(window.niceStep(1.7), 0.5);
+  assert.strictEqual(window.niceStep(30), 10);
+});
+
+test("chart: value above every bar when there is room, only the max when narrow; grid lines", () => {
+  const { window } = loadCard();
+  const buckets = Array.from({ length: 30 }, (_, i) => ({ t: i, label: `${i + 1}.`, total: i === 7 ? 9 : 2, siet: 1, fve: 1, bateria: 0, unknown: 0 }));
+  buckets[7].siet = 5; buckets[7].fve = 4;
+  const st = { buckets, split: { siet: 1 }, hourly: false };
+  const wide = window.statsChartSvg(st, 1400, "sk");
+  const narrow = window.statsChartSvg(st, 360, "sk");
+  const count = (svg) => (svg.match(/class="vl"/g) || []).length;
+  assert.strictEqual(count(wide), 30);
+  assert.strictEqual(count(narrow), 1);
+  assert.match(narrow, />9,0</);
+  assert.ok((wide.match(/class="gr"/g) || []).length >= 2);
+  assert.strictEqual((wide.match(/class="hit"/g) || []).length, 30);
+  assert.doesNotMatch(wide, /preserveAspectRatio="none"/);
+});
+
+test("overview: statistics show solar, battery and grid tiles from the house split", async () => {
+  const { hass } = statsOverview((msg) => {
+    if (msg.period !== "5minute") return {};
+    const t0 = Date.parse(msg.start_time);
+    return {
+      "sensor.a_floor": [{ start: t0, change: 2 }],
+      "sensor.smart_heating_energia_domu_zo_siete": [{ start: t0, change: 1 }],
+      "sensor.smart_heating_energia_domu_z_fve": [{ start: t0, change: 2 }],
+      "sensor.smart_heating_energia_domu_z_baterie": [{ start: t0, change: 1 }],
+    };
+  });
+  for (const k of ["zo_siete", "z_fve", "z_baterie"]) hass.states[`sensor.smart_heating_energia_domu_${k}`] = { state: "1", attributes: {} };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  card.querySelector('.sho-per[data-days="1"]').click();
+  await new Promise((r) => setTimeout(r, 20));
+  const text = card.querySelector(".sho-stats").textContent.replace(/\s+/g, " ");
+  assert.match(text, /Spotreba\s*2,0 kWh/);
+  assert.match(text, /Z FVE\s*1,0 kWh\s*50 %/);
+  assert.match(text, /Z batérie\s*0,5 kWh\s*25 %/);
+  assert.match(text, /Zo siete\s*0,5 kWh\s*25 %/);
+  // tuknutie na stlpec ukaze detail
+  const hits = card.querySelectorAll(".sho-chart .hit");
+  hits[0].dispatchEvent(new card.ownerDocument.defaultView.MouseEvent("click", { bubbles: true }));
+  assert.match(card.querySelector(".sho-st-sel").textContent, /0:00–1:00: 2,0 kWh/);
+});
+
+test("zone card: humidity line with felt temperature, dew point and airing hint", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ stavAttrs: {
+    humidity_entity: "sensor.rh", humidity: 68, felt_temperature: 23.6, dew_point: 15.8,
+    humidity_alert: "high", ventilation: "helps",
+  } });
+  document.body.appendChild(card);
+  const el = card.querySelector(".sh-feel");
+  assert.strictEqual(el.hidden, false);
+  const t = el.textContent.replace(/\s+/g, " ");
+  assert.match(t, /68 %/);
+  assert.match(t, /pocitovo 23,6°/);
+  assert.match(t, /rosný bod 15,8°/);
+  assert.match(t, /vlhko, vetranie pomôže/);
+  assert.ok(el.classList.contains("wet"));
+});
+
+test("zone card: humidity line stays (with –) when the sensor drops out, hidden without sensor", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ stavAttrs: { humidity_entity: "sensor.rh", humidity: null } });
+  document.body.appendChild(card);
+  assert.strictEqual(card.querySelector(".sh-feel").hidden, false);
+  assert.match(card.querySelector(".sh-feel").textContent, /–/);
+  const card2 = new CardClass();
+  card2.setConfig({ zone_id: ZONE_ID });
+  card2.hass = buildHass();
+  document.body.appendChild(card2);
+  assert.strictEqual(card2.querySelector(".sh-feel").hidden, true);
+});
+
+test("overview: outdoor humidity and pressure with 3 h trend", async () => {
+  const hass = overviewHass();
+  for (const id of Object.keys(hass.states)) {
+    if (id.endsWith("_stav")) Object.assign(hass.states[id].attributes, {
+      outdoor_entity: "sensor.out", outdoor_humidity_entity: "sensor.out_rh", outdoor_pressure_entity: "sensor.out_p",
+    });
+  }
+  hass.states["sensor.out"] = { state: "6.7", attributes: {} };
+  hass.states["sensor.out_rh"] = { state: "84.6", attributes: {} };
+  hass.states["sensor.out_p"] = { state: "1012.4", attributes: {} };
+  const now = Date.now();
+  hass.callWS = async (msg) => {
+    if (msg.type !== "history/history_during_period") return {};
+    return {
+      "sensor.out": [{ s: "5", lu: (now - 4 * 3600000) / 1000 }],
+      "sensor.out_p": [{ s: "1016", lu: (now - 4 * 3600000) / 1000 }, { s: "1012", lu: (now - 600000) / 1000 }],
+    };
+  };
+  const card = renderOverview({}, hass);
+  await new Promise((r) => setTimeout(r, 20));
+  const t = card.querySelector(".sho-out .hp").textContent;
+  assert.match(t, /💧 85 %/);
+  assert.match(t, /1012 hPa ▼ 4/);
 });

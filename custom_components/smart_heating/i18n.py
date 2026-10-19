@@ -184,6 +184,17 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "{zone}: floor off, AC keeping up on its own again.",
         "sk": "{zone}: podlaha vypnutá, AC opäť stíha samo.",
     },
+    "notif_humidity_high": {
+        "en": "{zone}: humidity {rh} % for over an hour (risk of mould / condensation).",
+        "sk": "{zone}: vlhkosť {rh} % už viac ako hodinu (riziko plesne / rosenia).",
+    },
+    "notif_humidity_low": {
+        "en": "{zone}: humidity only {rh} % for over an hour (dry air).",
+        "sk": "{zone}: vlhkosť len {rh} % už viac ako hodinu (suchý vzduch).",
+    },
+    "notif_humidity_ok": {"en": "{zone}: humidity back to normal ({rh} %).", "sk": "{zone}: vlhkosť opäť v norme ({rh} %)."},
+    "notif_vent_helps": {"en": " Airing will help (drier air outside).", "sk": " Vetranie pomôže (vonku je sušší vzduch)."},
+    "notif_vent_worse": {"en": " Airing will not help (more moisture outside).", "sk": " Vetranie nepomôže (vonku je vlhkejší vzduch)."},
     "notif_boost": {
         "en": "Boost activated in zone {zone} for {hours} h.",
         "sk": "Boost aktivovaný v zóne {zone} na {hours} h.",

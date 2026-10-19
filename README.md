@@ -294,13 +294,27 @@ source**: floor, AC and radiator (each a list, e.g. two floor circuits), plus
 ### Statistics
 
 The **Statistics** button in the overview card opens a panel for today, 7 or
-30 days: total consumption, the share from the solar surplus and from the grid,
-**kWh per heating degree-day** (base 18 °C, from the outdoor sensor's
-statistics) compared with the previous period, consumption by day or hour,
-rooms ranked with a split by source, and the meter check. The solar share comes
-from `sensor.smart_heating_energia_z_fve`, which integrates the zones' power
-while they heat from the surplus - an estimate, since it's not a dedicated
-meter on the heating supply.
+30 days: total consumption split into **solar / battery / grid** (solar +
+battery + grid = consumption), of which surplus from the solar cascade, **kWh
+per heating degree-day** (base 18 °C) compared with the previous period (only
+when comparable), a chart by day or hour with grid lines and values (tap a bar
+for details), rooms ranking, meter check and average humidity.
+
+Split by source: every 30 s the integration splits the house load by source
+from the solar, grid and battery power sensors (Global settings) into
+`sensor.smart_heating_energia_domu_zo_siete`, `..._z_fve` and `..._z_baterie`
+(proportionally). The panel splits heating in every hour with the same mix as
+the whole house - this also works for sources with only an energy meter (AC).
+Time before these sensors existed is shown as "unsplit".
+
+### Humidity (monitoring only)
+
+Optional humidity sensor per zone and outdoor humidity and pressure sensors in
+the Global settings. The zone gets a felt temperature (Steadman, no wind), dew
+point and an airing hint (absolute humidity inside vs outside); the zone card
+shows them on one line, the overview shows outdoor humidity and pressure with a
+3 h trend. Optional notification when humidity stays above 65 % or below 30 %
+for an hour. Heating is not controlled by humidity yet.
 
 ## Diagnostics
 

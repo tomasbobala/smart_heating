@@ -24,7 +24,12 @@
           "notify_preheat": "Notification: pre-heating started/ended",
           "notify_ac_backup": "Notification: floor engaged as AC backup",
           "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
-          "language": "Language (backend-generated texts: reasons, notifications)"
+          "language": "Language (backend-generated texts: reasons, notifications)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (optional, monitoring only)",
+          "clear_outdoor_humidity_sensor": "Clear outdoor humidity sensor",
+          "outdoor_pressure_sensor": "Outdoor pressure sensor (optional, monitoring only)",
+          "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
+          "notify_humidity": "Notify: high / low humidity in a room"
         }
       }
     },
@@ -80,7 +85,12 @@
           "pv_shed_minutes": "...lasting (min), then the next one after the same time",
           "pv_min_power": "Insufficient production below (W)",
           "pv_start_soc": "Battery charging counts as surplus from SOC (%)",
-          "pv_stop_soc": "Switch everything off below battery SOC (%)"
+          "pv_stop_soc": "Switch everything off below battery SOC (%)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (optional, monitoring only)",
+          "clear_outdoor_humidity_sensor": "Clear outdoor humidity sensor",
+          "outdoor_pressure_sensor": "Outdoor pressure sensor (optional, monitoring only)",
+          "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
+          "notify_humidity": "Notify: high / low humidity in a room"
         },
         "description": "Smart Heating version {version}"
       },
@@ -108,7 +118,9 @@
           "ac_power_entities": "AC - power meter (W)",
           "ac_energy_entities": "AC - energy meter (kWh)",
           "radiator_power_entities": "Radiator - power meter (W)",
-          "radiator_energy_entities": "Radiator - energy meter (kWh)"
+          "radiator_energy_entities": "Radiator - energy meter (kWh)",
+          "humidity_entity": "Humidity sensor (optional, monitoring only)",
+          "clear_humidity_entity": "Clear humidity sensor"
         }
       },
       "edit_zone": {
@@ -136,7 +148,9 @@
           "ac_power_entities": "AC - power meter (W)",
           "ac_energy_entities": "AC - energy meter (kWh)",
           "radiator_power_entities": "Radiator - power meter (W)",
-          "radiator_energy_entities": "Radiator - energy meter (kWh)"
+          "radiator_energy_entities": "Radiator - energy meter (kWh)",
+          "humidity_entity": "Humidity sensor (optional, monitoring only)",
+          "clear_humidity_entity": "Clear humidity sensor"
         }
       },
       "remove_zone": {

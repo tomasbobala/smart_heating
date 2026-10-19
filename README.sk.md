@@ -289,12 +289,27 @@ podlahy), plus "ostatné" senzory. Karta zóny potom ukazuje príkon po zdrojoch
 ### Štatistiky
 
 Tlačidlo **Štatistiky** v prehľadovej karte otvorí panel za dnes, 7 alebo 30
-dní: celková spotreba, podiel z FVE prebytku a zo siete, **kWh na stupeňodeň**
-(základ 18 °C, zo štatistík vonkajšieho senzora) v porovnaní s predchádzajúcim
-obdobím, spotreba po dňoch alebo hodinách, poradie izieb s rozpadom po zdrojoch
-a kontrola meračov. Podiel z FVE pochádza zo `sensor.smart_heating_energia_z_fve`,
-ktorý integruje príkon zón v čase, keď kúria z prebytku – je to odhad, nie
-samostatný merač na prívode kúrenia.
+dní: celková spotreba rozdelená na **FVE / batériu / sieť** (FVE + batéria +
+sieť = spotreba), z toho prebytok z kaskády FVE, **kWh na stupeňodeň** (základ
+18 °C) v porovnaní s predchádzajúcim obdobím (len keď je porovnateľné), graf po
+dňoch alebo hodinách s mriežkou a hodnotami (ťuknutím na stĺpec detail), poradie
+izieb, kontrola meračov a priemerná vlhkosť.
+
+Rozdelenie podľa zdroja: integrácia každých 30 s zo senzorov výkonu FVE, siete
+a batérie (Globálne nastavenia) rozdelí spotrebu domu na
+`sensor.smart_heating_energia_domu_zo_siete`, `..._z_fve` a `..._z_baterie`
+(proporcionálne). Panel v každej hodine rozdelí spotrebu kúrenia rovnakým
+pomerom ako celý dom – funguje aj pre zdroje len s meračom energie (klíma).
+Obdobie pred vznikom týchto senzorov je „nerozdelené“.
+
+### Vlhkosť (len sledovanie)
+
+Voliteľný senzor vlhkosti pri zóne a senzory vonkajšej vlhkosti a tlaku
+v Globálnych nastaveniach. Zóna dostane pocitovú teplotu (Steadman, bez vetra),
+rosný bod a odporúčanie vetrania (porovnáva absolútnu vlhkosť dnu a vonku);
+karta zóny ich ukáže v jednom riadku, prehľad vonkajšiu vlhkosť a tlak s trendom
+za 3 h. Voliteľná notifikácia, keď je vlhkosť hodinu nad 65 % alebo pod 30 %.
+Podľa vlhkosti sa zatiaľ nereguluje.
 
 ## Diagnostika
 

@@ -1,6 +1,7 @@
 """Coordinator - centralna rozhodovacia logika Smart Heating v2 (+ sezona/chladenie)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, time as dt_time, timedelta
 
@@ -15,8 +16,14 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
 
-from . import i18n
+from . import comfort, i18n
 from .const import (
+    CONF_HUMIDITY_ENTITY,
+    CONF_NOTIFY_HUMIDITY,
+    CONF_OUTDOOR_HUMIDITY,
+    HUMIDITY_ALERT_MINUTES,
+    HUMIDITY_HIGH,
+    HUMIDITY_LOW,
     AC_NUMBER_DEFS,
     COOLING_NUMBER_DEFS,
     CONF_AC_ENTITY,
@@ -89,6 +96,7 @@ _LOGGER = logging.getLogger(__name__)
 
 RECOMPUTE_INTERVAL = timedelta(minutes=5)
 NOTIFY_STARTUP_GRACE = timedelta(minutes=3)
+NOTIFY_TIMEOUT = 15  # s - nedostupny ciel nesmie blokovat notifikacie dlhsie
 
 # Diagnostika
 DIAG_UNAVAILABLE_AFTER = timedelta(minutes=15)   # entita nedostupna dlhsie -> porucha
@@ -156,6 +164,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._meter_cache: dict[str, bool] = {}
         self._pv_energy_kwh = 0.0          # energia kurenia v case FVE kaskady (sensor energia_z_fve)
         self._pv_energy_at = None
+        # energia domu podla zdroja (siet / FVE priamo / bateria) - z okamzitych tokov
+        # kazdych 30 s; karta z nej v kazdej hodine rozdeli spotrebu kurenia
+        self._house_energy_kwh: dict[str, float] = {"siet": 0.0, "fve": 0.0, "bateria": 0.0}
+        self._house_energy_at = None
+        self._notify_fail_logged: dict[str, datetime] = {}
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
         self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
@@ -195,7 +208,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     def _tracked_entity_ids(self) -> list[str]:
         ids: list[str] = []
         opt = self.entry.options
-        for key in (CONF_OUTDOOR_SENSOR, CONF_TARIFF_ENTITY, CONF_FIREPLACE_TEMP_ENTITY, CONF_PV_SURPLUS_ENTITY, CONF_BATTERY_SOC_ENTITY):
+        for key in (CONF_OUTDOOR_SENSOR, CONF_TARIFF_ENTITY, CONF_FIREPLACE_TEMP_ENTITY, CONF_PV_SURPLUS_ENTITY, CONF_BATTERY_SOC_ENTITY, CONF_OUTDOOR_HUMIDITY):
             if opt.get(key):
                 ids.append(opt[key])
 
@@ -211,6 +224,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 ids.append(zone[CONF_EXTERNAL_TEMP_ENTITY])
             if zone.get(CONF_RADIATOR_ENTITY):
                 ids.append(zone[CONF_RADIATOR_ENTITY])
+            if zone.get(CONF_HUMIDITY_ENTITY):
+                ids.append(zone[CONF_HUMIDITY_ENTITY])
             ids.extend(zone.get(CONF_PRESENCE_ENTITIES, []))
             ids.extend(zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
             ids.append(mode_entity_id(zone_id))
@@ -275,7 +290,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         rt["boost_until"] = dt_util.now() + timedelta(hours=hours)
         zone_name = self.zones.get(zone_id, {}).get(CONF_ZONE_NAME, zone_id)
         if self.entry.options.get(CONF_NOTIFY_BOOST, True):
-            await self._notify(self._t("notif_boost", zone=zone_name, hours=hours))
+            self.hass.async_create_task(self._notify(self._t("notif_boost", zone=zone_name, hours=hours)))
         await self.async_recompute_and_apply()
 
     # ---------------------------------------------------------------- stav helpers
@@ -313,6 +328,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         opt = self.entry.options
         self._lang = i18n.resolve_lang(self.hass, opt.get(CONF_LANGUAGE))
         outdoor = self._state_float(opt.get(CONF_OUTDOOR_SENSOR))
+        outdoor_rh = self._state_float(opt.get(CONF_OUTDOOR_HUMIDITY))
 
         tariff_entity = opt.get(CONF_TARIFF_ENTITY)
         tariff_ok = True
@@ -366,6 +382,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 if key in prev:
                     zdata.setdefault(key, prev[key])
             zdata["warmup_rate"], zdata["warmup_count"] = self._warmup_summary(zone_id)
+            zdata.update(self._humidity_info(zone_id, self.zones[zone_id], zdata, outdoor, outdoor_rh))
 
         self._process_global_notifications(tariff_ok, holiday_active, zones_data)
 
@@ -376,6 +393,54 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "holiday_active": holiday_active,
             "zones": zones_data,
         }
+
+    def _humidity_info(self, zone_id: str, zone: dict, zdata: dict, outdoor, outdoor_rh) -> dict:
+        """Vlhkost v zone - len sledovanie: pocitova teplota, rosny bod, ucinok
+        vetrania a upozornenie na dlhodobo vysoku / nizku vlhkost."""
+        rt = self._rt(zone_id)
+        rh = self._state_float(zone.get(CONF_HUMIDITY_ENTITY)) if zone.get(CONF_HUMIDITY_ENTITY) else None
+        if rh is not None and not 0 <= rh <= 100:
+            rh = None
+        temp = zdata.get("current_temperature")
+        try:
+            temp = float(temp) if temp is not None else None
+        except (TypeError, ValueError):
+            temp = None
+        out = {"humidity": rh, "felt_temperature": None, "dew_point": None, "ventilation": None,
+               "humidity_alert": None}
+        if rh is None:
+            rt["hum_since"] = {}
+            rt["notif_hum_high"] = rt["notif_hum_low"] = False
+            return out
+        if temp is not None:
+            out["felt_temperature"] = round(comfort.apparent_temperature(temp, rh), 1)
+            out["dew_point"] = round(comfort.dew_point(temp, rh), 1)
+            out["ventilation"] = comfort.ventilation_effect(temp, rh, outdoor, outdoor_rh)
+
+        now = dt_util.now()
+        since = rt.setdefault("hum_since", {})
+        level = "high" if rh > HUMIDITY_HIGH else "low" if rh < HUMIDITY_LOW else None
+        for key in ("high", "low"):
+            if key != level:
+                since.pop(key, None)
+        if level:
+            since.setdefault(level, now)
+            if now - since[level] >= timedelta(minutes=HUMIDITY_ALERT_MINUTES):
+                out["humidity_alert"] = level
+        enabled = bool(self.entry.options.get(CONF_NOTIFY_HUMIDITY, False))
+        name = zone.get(CONF_ZONE_NAME, zone_id)
+        vent = {"helps": self._t("notif_vent_helps"), "worse": self._t("notif_vent_worse")}.get(out["ventilation"], "")
+        self._notify_bool_transition(
+            rt, "notif_hum_high", out["humidity_alert"] == "high", enabled,
+            self._t("notif_humidity_high", zone=name, rh=round(rh)) + vent,
+            self._t("notif_humidity_ok", zone=name, rh=round(rh)),
+        )
+        self._notify_bool_transition(
+            rt, "notif_hum_low", out["humidity_alert"] == "low", enabled,
+            self._t("notif_humidity_low", zone=name, rh=round(rh)),
+            self._t("notif_humidity_ok", zone=name, rh=round(rh)),
+        )
+        return out
 
     def _floor_sensor_lost(self, zone_id: str, zone: dict, floor_temp) -> bool:
         """True, ked je senzor podlahy nastaveny, ale uz FLOOR_SENSOR_GRACE nedava
@@ -862,18 +927,38 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             self._global_rt["emergency_zones"] = emergency_zones
 
     async def _notify(self, message: str) -> None:
+        """Posle spravu na vsetky ciele - kazdy zvlast a s cakanim na vysledok.
+
+        Pri blocking=False by chyba (napr. vypnuta TV: Host is unreachable) vznikla
+        az v ulohe sluzby, mimo nasho try/except, a plnila by log tracebackmi. Takto
+        sa chyba zachyti a zaloguje jednym riadkom (najviac raz za hodinu na ciel);
+        ostatne ciele spravu dostanu normalne."""
         entity_ids = self.entry.options.get(CONF_NOTIFY_ENTITY)
         if not entity_ids:
             return
         if isinstance(entity_ids, str):
             entity_ids = [entity_ids]
-        for entity_id in entity_ids:
-            try:
+        await asyncio.gather(*(self._notify_one(e, message) for e in entity_ids))
+
+    async def _notify_one(self, entity_id: str, message: str) -> None:
+        state = self.hass.states.get(entity_id)
+        if state is not None and state.state == "unavailable":
+            self._log_notify_fail(entity_id, "unavailable")
+            return
+        try:
+            async with asyncio.timeout(NOTIFY_TIMEOUT):
                 await self.hass.services.async_call(
-                    "notify", "send_message", {"entity_id": entity_id, "message": message}, blocking=False
+                    "notify", "send_message", {"entity_id": entity_id, "message": message}, blocking=True,
                 )
-            except Exception:  # noqa: BLE001
-                _LOGGER.warning("Notifikaciu sa nepodarilo odoslat (%s): %s", entity_id, message)
+        except Exception as err:  # noqa: BLE001 - ziadny ciel nesmie zhodit ostatne
+            self._log_notify_fail(entity_id, err)
+
+    def _log_notify_fail(self, entity_id: str, err) -> None:
+        now = dt_util.now()
+        last = self._notify_fail_logged.get(entity_id)
+        if last is None or now - last >= timedelta(hours=1):
+            self._notify_fail_logged[entity_id] = now
+            _LOGGER.warning("Notifikaciu sa nepodarilo dorucit na %s: %s", entity_id, err or type(err).__name__)
 
     # ---------------------------------------------------------------- aplikacia na zariadenia
 
@@ -1392,6 +1477,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         """Kazdych 30 s: kaskada FVE, energia z FVE a prepocet len pri zmene stavu meracov."""
         await self._pv_engine_tick()
         self._accumulate_pv_energy()
+        self._accumulate_house_energy()
         meters = {}
         for zone in self.zones.values():
             for src in self._zone_sources(zone):
@@ -1422,6 +1508,45 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             for src in self._zone_sources(self.zones.get(zone_id, {})):
                 watts += sum(w for w in (self._power_w(e) for e in src["power"]) if w is not None)
         self._pv_energy_kwh += watts * hours / 1000
+
+    def _house_flows(self) -> dict | None:
+        """Okamzite toky domu vo W: zdroje (FVE, odber zo siete, vybijanie baterie)
+        a spotreba domu. None, ked chyba vyroba alebo siet."""
+        opt = self.entry.options
+        pv = self._power_w(opt.get(CONF_PV_POWER_ENTITY))
+        grid = self._power_w(opt.get(CONF_GRID_POWER_ENTITY))
+        if pv is None or grid is None:
+            return None
+        bat = self._power_w(opt.get(CONF_BATTERY_POWER_ENTITY)) if opt.get(CONF_BATTERY_POWER_ENTITY) else 0.0
+        bat = bat or 0.0
+        # normalizacia ako v kaskade: siet + = odber, bateria + = nabijanie
+        if not opt.get(CONF_GRID_EXPORT_NEGATIVE, True):
+            grid = -grid
+        if not opt.get(CONF_BATTERY_CHARGE_POSITIVE, True):
+            bat = -bat
+        pv = max(0.0, pv)
+        grid_import, export = max(0.0, grid), max(0.0, -grid)
+        charge, discharge = max(0.0, bat), max(0.0, -bat)
+        load = pv + grid_import + discharge - export - charge
+        return {"fve": pv, "siet": grid_import, "bateria": discharge, "load": max(0.0, load)}
+
+    def _accumulate_house_energy(self) -> None:
+        """Spotreba domu rozdelena podla zdroja (proporcionalne: kazdy spotrebic
+        dostane rovnaky mix ako cely dom). Karta z hodinovych statistik tychto
+        senzorov rozdeli spotrebu kurenia na siet / FVE / bateriu."""
+        now = dt_util.now()
+        last, self._house_energy_at = self._house_energy_at, now
+        flows = self._house_flows()
+        if last is None or flows is None:
+            return
+        hours = (now - last).total_seconds() / 3600
+        if hours <= 0 or hours > 0.25:     # po vypadku neodhadujeme dlhe useky
+            return
+        sources = flows["fve"] + flows["siet"] + flows["bateria"]
+        if sources <= 0 or flows["load"] <= 0:
+            return
+        for key in ("fve", "siet", "bateria"):
+            self._house_energy_kwh[key] += flows["load"] * (flows[key] / sources) * hours / 1000
 
     # ------------------------------------------------------------- radiator + podlaha
 

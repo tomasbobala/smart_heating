@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.22.0
+- **Statistics: heating split into solar / battery / grid.** "From the grid" was
+  total minus the solar-cascade energy, which was wrong - heating outside the
+  cascade also runs on solar or battery. New sensors
+  `sensor.smart_heating_energia_domu_zo_siete`, `..._z_fve`, `..._z_baterie`
+  integrate the house load by source every 30 s (proportional: sources = PV +
+  grid import + battery discharge). The statistics panel splits heating in every
+  hour by that mix - it also works for sources that only have an energy meter
+  (e.g. the AC). Tiles: Consumption | From solar (of which surplus) | From
+  battery | From the grid | Per degree-day; solar + battery + grid = consumption.
+  Time before the sensors existed is shown as "unsplit".
+- **Chart:** stacked solar / battery / grid bars, grid lines with a kWh axis, the
+  value above every bar when it fits (Today and 30 days too; on a phone the
+  maximum, tap a bar for its value and split). Drawn at the real width - text is
+  no longer stretched. Re-drawn when the width changes.
+- The per-degree-day comparison is shown only when the previous period is
+  comparable (enough degree-days and data), otherwise "not enough data to
+  compare" (end of summer vs October gave "167 % worse").
+- **Humidity (monitoring only, no control yet).** Optional humidity sensor per
+  zone and outdoor humidity / pressure sensors in the global settings. The zone
+  gets `humidity`, felt temperature (Steadman, no wind), dew point and an airing
+  hint (absolute humidity inside vs outside); the climate entity reports
+  `current_humidity`. Zone card: one fixed line "💧 67 % · feels like 25,1° ·
+  humid, airing helps · dew point 16,9°". Overview: outdoor humidity and
+  pressure with a 3 h trend; statistics: average humidity per room and outside.
+  Optional notification (off by default) when humidity stays above 65 % or below
+  30 % for an hour.
+- **Notifications:** every target is sent separately and awaited with a 15 s
+  timeout. A target that is off (e.g. TV: `Host is unreachable`) no longer fills
+  the log with tracebacks - one warning per target per hour - and the other
+  targets still get the message. Unavailable targets are skipped.
+
 ## 0.21.2
 - Fixed: the page jumped back up a bit when scrolled to the very bottom. Cards
   changed height on ordinary updates (reason line 1 vs 2 lines, the "Faults"

@@ -26,6 +26,9 @@ CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_KRB_THRESHOLD = "krb_threshold"
 CONF_NUDZOVA_TEPLOTA = "nudzova_teplota"
 CONF_HOLIDAY_ACTIVE = "holiday_active"
+CONF_OUTDOOR_HUMIDITY = "outdoor_humidity_sensor"   # vonkajsia vlhkost (%) - len sledovanie
+CONF_OUTDOOR_PRESSURE = "outdoor_pressure_sensor"   # vonkajsi tlak (hPa) - len sledovanie
+CONF_NOTIFY_HUMIDITY = "notify_humidity"            # upozornenie na vysoku / nizku vlhkost v izbe
 
 OPT_ZONES = "zones"
 
@@ -42,6 +45,7 @@ CONF_USE_FIREPLACE_GUARD = "use_fireplace_guard"
 CONF_USE_FIXED_AC_SETPOINT = "use_fixed_ac_setpoint"
 CONF_RADIATOR_ENTITY = "radiator_entity"
 CONF_USE_FLOOR_MIN = "use_floor_min"
+CONF_HUMIDITY_ENTITY = "humidity_entity"          # vlhkost v zone (%) - len sledovanie
 # Spotreba zony: zoznamy entit (scitavaju sa, napr. podlaha + klima v jednej zone)
 CONF_POWER_ENTITIES = "power_entities"     # prikon (W/kW)
 CONF_ENERGY_ENTITIES = "energy_entities"   # energia (kWh/Wh) so statistikami
@@ -54,6 +58,10 @@ SOURCE_METERS = {
 METER_ON_W = 20          # zdroj kuri, ked taha viac
 METER_STUCK_W = 50       # vypnuty zdroj, ktory taha viac = zaseknute rele
 HDD_BASE_TEMP = 18.0     # zaklad stupnodni (°C)
+# Vlhkost (len sledovanie, regulacia zatial nie)
+HUMIDITY_HIGH = 65.0     # % - dlhsie nad = riziko plesne / rosenia
+HUMIDITY_LOW = 30.0      # % - dlhsie pod = suchy vzduch
+HUMIDITY_ALERT_MINUTES = 60
 
 ZONE_TYPE_FLOOR = "floor"
 ZONE_TYPE_FLOOR_AC = "floor_ac"

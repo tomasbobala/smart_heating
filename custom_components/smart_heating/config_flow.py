@@ -27,6 +27,10 @@ from .const import (
     CONF_NOTIFY_BOOST,
     CONF_NOTIFY_COLD_OUTDOOR,
     CONF_NOTIFY_DIAGNOSTICS,
+    CONF_NOTIFY_HUMIDITY,
+    CONF_OUTDOOR_HUMIDITY,
+    CONF_OUTDOOR_PRESSURE,
+    CONF_HUMIDITY_ENTITY,
     CONF_RADIATOR_ENTITY,
     CONF_PV_AUTO,
     CONF_PV_POWER_ENTITY,
@@ -103,6 +107,21 @@ def _hub_schema_dict(current: dict) -> dict:
         schema_dict, CONF_OUTDOOR_SENSOR, current.get(CONF_OUTDOOR_SENSOR),
         selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
     )
+    # vonkajsia vlhkost a tlak - len sledovanie (prehlad, odporucanie vetrania)
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_HUMIDITY, current.get(CONF_OUTDOOR_HUMIDITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="humidity")),
+    )
+    if current.get(CONF_OUTDOOR_HUMIDITY):
+        schema_dict[vol.Optional("clear_outdoor_humidity_sensor", default=False)] = selector.BooleanSelector()
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_PRESSURE, current.get(CONF_OUTDOOR_PRESSURE),
+        selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", device_class=["pressure", "atmospheric_pressure"])
+        ),
+    )
+    if current.get(CONF_OUTDOOR_PRESSURE):
+        schema_dict[vol.Optional("clear_outdoor_pressure_sensor", default=False)] = selector.BooleanSelector()
     _add_optional(
         schema_dict, CONF_TARIFF_ENTITY, current.get(CONF_TARIFF_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
@@ -151,6 +170,10 @@ def _hub_schema_dict(current: dict) -> dict:
         CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR, CONF_NOTIFY_DIAGNOSTICS,
     ):
         schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
+    # vlhkost je nove a len informativne - upozornenia predvolene vypnute
+    schema_dict[
+        vol.Optional(CONF_NOTIFY_HUMIDITY, default=current.get(CONF_NOTIFY_HUMIDITY, False))
+    ] = selector.BooleanSelector()
     _add_optional(
         schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
         selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
@@ -179,6 +202,16 @@ def _hub_schema_dict(current: dict) -> dict:
     return schema_dict
 
 
+# Volitelne entity hubu, ktore sa daju vymazat prepinacom "Vymazat ..." (vymazanie
+# pola v UI sa niekedy neodosle a stara hodnota by ostala).
+HUB_CLEARABLE = (CONF_OUTDOOR_HUMIDITY, CONF_OUTDOOR_PRESSURE)
+
+
+def _apply_clears(user_input: dict) -> dict:
+    """Vrati vstup bez pomocnych prepinacov clear_* (do options sa neukladaju)."""
+    return {k: v for k, v in user_input.items() if not k.startswith("clear_")}
+
+
 class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Prvotne zalozenie hubu (jeden na instanciu HA)."""
 
@@ -189,7 +222,7 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return self.async_abort(reason="single_instance_allowed")
 
         if user_input is not None:
-            options = dict(user_input)
+            options = _apply_clears(user_input)
             options[OPT_ZONES] = {}
             return self.async_create_entry(title="Smart Heating", data={}, options=options)
 
@@ -224,7 +257,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         self._ensure_zones()
         if user_input is not None:
             options = dict(self.config_entry.options)
-            options.update(user_input)
+            options.update(_apply_clears(user_input))
+            for key in HUB_CLEARABLE:
+                if user_input.get(f"clear_{key}"):
+                    options.pop(key, None)
             options[OPT_ZONES] = self._zones
             return self.async_create_entry(title="", data=options)
 
@@ -353,6 +389,12 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
         )
         if zone.get(CONF_EXTERNAL_TEMP_ENTITY):
             schema_dict[vol.Optional("clear_external_temp_entity", default=False)] = selector.BooleanSelector()
+        _add_optional(
+            schema_dict, CONF_HUMIDITY_ENTITY, zone.get(CONF_HUMIDITY_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="humidity")),
+        )
+        if zone.get(CONF_HUMIDITY_ENTITY):
+            schema_dict[vol.Optional("clear_humidity_entity", default=False)] = selector.BooleanSelector()
         schema_dict[
             vol.Optional(CONF_PRESENCE_ENTITIES, default=zone.get(CONF_PRESENCE_ENTITIES, []))
         ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True))
@@ -414,6 +456,9 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             CONF_AC_ENTITY: user_input.get(CONF_AC_ENTITY),
             CONF_FLOOR_TEMP_ENTITY: floor_temp,
             CONF_EXTERNAL_TEMP_ENTITY: external_temp,
+            CONF_HUMIDITY_ENTITY: (
+                None if user_input.get("clear_humidity_entity") else user_input.get(CONF_HUMIDITY_ENTITY)
+            ),
             CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
             CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
             CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),

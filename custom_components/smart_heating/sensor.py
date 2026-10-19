@@ -10,7 +10,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
+    CONF_HUMIDITY_ENTITY,
     CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_OUTDOOR_HUMIDITY,
+    CONF_OUTDOOR_PRESSURE,
     CONF_OUTDOOR_SENSOR,
     CONF_PRESENCE_ENTITIES,
     CONF_PV_SURPLUS_ENTITY,
@@ -31,6 +34,8 @@ async def async_setup_entry(
         entities.append(ZoneTemperatureSensor(coordinator, zone_id, zone["name"]))
     entities.append(PvCascadeSensor(coordinator))
     entities.append(PvEnergySensor(coordinator))
+    for key in HOUSE_SOURCES:
+        entities.append(HouseEnergySensor(coordinator, key))
     async_add_entities(entities)
 
 
@@ -43,6 +48,7 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
         "zone_id", "config_entry_id", "zone_type", "radiator_entity", "floor_max",
         "power_entities", "energy_entities", "sources", "outdoor_entity", "tariff_entity",
         "pv_surplus_entity", "presence_entities", "manual_presence_entities",
+        "outdoor_humidity_entity", "outdoor_pressure_entity", "humidity_entity",
     })
 
     def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
@@ -109,6 +115,15 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "meter_problems": z.get("meter_problems", []),
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),
+            "outdoor_humidity_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_HUMIDITY),
+            "outdoor_pressure_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_PRESSURE),
+            # vlhkost - len sledovanie
+            "humidity_entity": zone_conf.get(CONF_HUMIDITY_ENTITY),
+            "humidity": z.get("humidity"),
+            "felt_temperature": z.get("felt_temperature"),
+            "dew_point": z.get("dew_point"),
+            "ventilation": z.get("ventilation"),
+            "humidity_alert": z.get("humidity_alert"),
             "tariff_entity": self.coordinator.entry.options.get(CONF_TARIFF_ENTITY),
             "pv_surplus_entity": self.coordinator.entry.options.get(CONF_PV_SURPLUS_ENTITY),
             "presence_entities": list(zone_conf.get(CONF_PRESENCE_ENTITIES, [])),
@@ -218,3 +233,46 @@ class PvEnergySensor(CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
     @property
     def native_value(self):
         return round(self.coordinator._pv_energy_kwh, 3)
+
+
+HOUSE_SOURCES = {
+    # kluc: (entity_id suffix, nazov, ikona)
+    "siet": ("energia_domu_zo_siete", "Smart Heating energia domu zo siete", "mdi:transmission-tower-import"),
+    "fve": ("energia_domu_z_fve", "Smart Heating energia domu z FVE", "mdi:solar-power"),
+    "bateria": ("energia_domu_z_baterie", "Smart Heating energia domu z batérie", "mdi:home-battery"),
+}
+
+
+class HouseEnergySensor(CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
+    """Spotreba domu podla zdroja (siet / FVE priamo / bateria), integrovana z
+    okamzitych tokov kazdych 30 s. Prehladova karta z ich hodinovych statistik
+    rozdeli spotrebu kurenia - funguje aj pre zdroje, ktore maju len merac energie
+    (napr. klima bez meraca prikonu)."""
+
+    _attr_device_class = SensorDeviceClass.ENERGY
+    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_native_unit_of_measurement = "kWh"
+    _attr_suggested_display_precision = 2
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, key: str) -> None:
+        super().__init__(coordinator)
+        suffix, name, icon = HOUSE_SOURCES[key]
+        self._key = key
+        self._attr_unique_id = f"{DOMAIN}_{coordinator.entry.entry_id}_{suffix}"
+        self.entity_id = f"sensor.smart_heating_{suffix}"
+        self._attr_name = name
+        self._attr_icon = icon
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_sensor_data()
+        if last is not None and last.native_value is not None:
+            try:
+                store = self.coordinator._house_energy_kwh
+                store[self._key] = max(store[self._key], float(last.native_value))
+            except (TypeError, ValueError):
+                pass
+
+    @property
+    def native_value(self):
+        return round(self.coordinator._house_energy_kwh[self._key], 3)

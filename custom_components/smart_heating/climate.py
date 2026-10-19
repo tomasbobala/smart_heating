@@ -78,6 +78,11 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         return self._zdata["current_temperature"]
 
     @property
+    def current_humidity(self):
+        # vlhkost v zone (ak je nastaveny senzor) - standardny atribut climate entity
+        return self._zdata.get("humidity")
+
+    @property
     def target_temperature(self):
         return self._zdata["target_temperature"]
 
@@ -123,6 +128,7 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
             "nudzova_ochrana": z["emergency_active"],
             "fve_prebytok_aktivny": z["pv_active"],
             "dovod": z["reason"],
+            "pocitova_teplota": z.get("felt_temperature"),
         }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.21.2";
+const CARD_VERSION = "0.22.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -155,7 +155,16 @@ const I18N = {
   st_7: { en: "7 days", sk: "7 dní" },
   st_30: { en: "30 days", sk: "30 dní" },
   st_total: { en: "Consumption", sk: "Spotreba" },
-  st_fve: { en: "From solar surplus", sk: "Z FVE prebytku" },
+  st_fve: { en: "From solar", sk: "Z FVE" },
+  st_fve_surplus: { en: "of which surplus {kwh}", sk: "z toho prebytok {kwh}" },
+  st_bat: { en: "From battery", sk: "Z batérie" },
+  st_unknown: { en: "unsplit {kwh} (before metering)", sk: "nerozdelené {kwh} (pred meraním)" },
+  st_no_compare: { en: "not enough data to compare", sk: "málo dát na porovnanie" },
+  st_leg_bat: { en: "battery", sk: "batéria" },
+  st_leg_unknown: { en: "unsplit", sk: "nerozdelené" },
+  st_hum: { en: "Humidity (average)", sk: "Vlhkosť (priemer)" },
+  st_hum_out: { en: "Outside", sk: "Vonku" },
+  st_tap_hint: { en: "Tap a bar for details", sk: "Ťuknite na stĺpec pre detail" },
   st_fve_none: { en: "no data yet", sk: "zatiaľ bez dát" },
   st_grid: { en: "From the grid", sk: "Zo siete" },
   st_eff: { en: "Per degree-day", sk: "Na 1 stupeňodeň" },
@@ -163,14 +172,20 @@ const I18N = {
   st_worse: { en: "{p} % worse than the previous period", sk: "o {p} % horšie ako predchádzajúce obdobie" },
   st_by_day: { en: "Consumption by day", sk: "Spotreba po dňoch" },
   st_by_hour: { en: "Consumption by hour", sk: "Spotreba po hodinách" },
-  st_leg_fve: { en: "from solar", sk: "z FVE" },
-  st_leg_grid: { en: "from grid", sk: "zo siete" },
+  st_leg_fve: { en: "solar", sk: "FVE" },
+  st_leg_grid: { en: "grid", sk: "sieť" },
   st_rank: { en: "Rooms", sk: "Poradie izieb" },
   st_meters: { en: "Meter check", sk: "Kontrola meračov" },
   st_meters_ok: { en: "All meters are fine", sk: "Všetky merače sú v poriadku" },
   st_no_meters: { en: "No energy meters are set for the zones (Edit zone).", sk: "Pri zónach nie sú nastavené merače energie (Upraviť zónu)." },
   st_error: { en: "Statistics could not be loaded.", sk: "Štatistiky sa nepodarilo načítať." },
-  st_fve_note: { en: "Solar share is estimated from the time rooms heated in the solar cascade.", sk: "Podiel z FVE je odhad z času, keď izby kúrila kaskáda FVE." },
+  st_fve_note: { en: "Split by source: in every hour heating gets the same grid / solar / battery mix as the whole house. Surplus = energy used while the solar cascade was heating.", sk: "Rozdelenie podľa zdroja: v každej hodine má kúrenie rovnaký pomer sieť / FVE / batéria ako celý dom. Prebytok = energia, keď kúrila kaskáda FVE." },
+  hum_felt: { en: "feels like", sk: "pocitovo" },
+  hum_dew: { en: "dew point", sk: "rosný bod" },
+  vent_helps: { en: "airing helps", sk: "vetranie pomôže" },
+  vent_worse: { en: "airing won't help", sk: "vetranie nepomôže" },
+  hum_alert_high: { en: "humid", sk: "vlhko" },
+  hum_alert_low: { en: "dry air", sk: "suchý vzduch" },
   cons_power: { en: "Power", sk: "Príkon" },
   ov_power_now: { en: "Heating power", sk: "Príkon kúrenia" },
   ov_energy_today: { en: "Consumption today", sk: "Spotreba dnes" },
@@ -221,6 +236,7 @@ const I18N = {
   of_notify_ac_backup: { en: "AC backup", sk: "AC záloha" },
   of_notify_cold_outdoor: { en: "Outdoor threshold", sk: "Vonkajšia hranica" },
   of_notify_diagnostics: { en: "Faults", sk: "Poruchy" },
+  of_notify_humidity: { en: "Humidity in rooms", sk: "Vlhkosť v izbách" },
   ov_heated_today: { en: "Heating today", sk: "Kúrenie dnes" },
   ov_cooled_today: { en: "Cooling today", sk: "Chladenie dnes" },
 };
@@ -328,22 +344,45 @@ const ENERGY_REFRESH_MS = 5 * 60 * 1000;
 
 /** Agregacia statistik pre panel Statistiky (cista funkcia - testovatelna). */
 function computeStats(res, o) {
+  // Kazdy riadok statistiky moze mat vlastnu dlzku (dur = podiel dna): predchadzajuce
+  // obdobie po dnoch, aktualne po hodinach, dnesok po 5 minutach.
   const keyOf = (ms) => {
     const d = new Date(ms);
     return o.hourly ? `${d.toDateString()} ${d.getHours()}` : d.toDateString();
   };
   const ts = (v) => (typeof v === "number" ? v : Date.parse(v));
+  const house = o.houseIds || {};
+  const houseOf = {};
+  for (const [k, id] of Object.entries(house)) if (id) houseOf[id] = k;
+  const energySet = new Set(o.energyIds);
+  const humIds = (o.humidity || []).map((h) => h.id);
   const sumBy = {};      // id -> bucket -> kWh
-  const tempBy = {};     // bucket -> [mean]
+  const tempBy = {};     // bucket -> [{t, dur}]
+  const humBy = {};      // id -> {sum, dur} (len aktualne obdobie)
+  const slots = {};      // start ms -> {h, siet, fve, bateria} (len aktualne obdobie)
   for (const id of Object.keys(res)) {
     for (const r of res[id] || []) {
-      const k = keyOf(ts(r.start));
+      const t0 = ts(r.start);
+      const k = keyOf(t0);
+      const dur = r.dur != null ? r.dur : (o.hourly ? 1 / 24 : 1);   // podiel dna, ktory riadok pokryva
       if (id === o.outdoorId) {
-        const dur = r.dur != null ? r.dur : (o.hourly ? 1 / 24 : 1);   // podiel dna, ktory riadok pokryva
         if (r.mean != null) (tempBy[k] = tempBy[k] || []).push({ t: Number(r.mean), dur });
-      } else if (r.change != null && !isNaN(Number(r.change))) {
-        sumBy[id] = sumBy[id] || {};
-        sumBy[id][k] = (sumBy[id][k] || 0) + Number(r.change);
+      }
+      if (humIds.includes(id)) {
+        if (r.mean != null && t0 >= o.start) {
+          const h = (humBy[id] = humBy[id] || { sum: 0, dur: 0 });
+          h.sum += Number(r.mean) * dur; h.dur += dur;
+        }
+        continue;
+      }
+      if (id === o.outdoorId || r.change == null || isNaN(Number(r.change))) continue;
+      const v = Number(r.change);
+      sumBy[id] = sumBy[id] || {};
+      sumBy[id][k] = (sumBy[id][k] || 0) + v;
+      if (t0 >= o.start && (energySet.has(id) || houseOf[id])) {
+        const sl = (slots[t0] = slots[t0] || { h: 0, siet: 0, fve: 0, bateria: 0 });
+        if (energySet.has(id)) sl.h += v;
+        if (houseOf[id]) sl[houseOf[id]] += Math.max(0, v);
       }
     }
   }
@@ -363,30 +402,122 @@ function computeStats(res, o) {
   const hddCur = hdd(curKeys), hddPrev = hdd(prevKeys);
   const eff = hddCur >= 1 ? cur / hddCur : null;
   const effPrev = hddPrev >= 1 ? prev / hddPrev : null;
-  const fve = o.fveId ? total(curKeys, [o.fveId]) : null;
+  // porovnanie len pri porovnatelnom obdobi: dost stupnodni a dat (inak napr. koniec
+  // leta vs. kurenie v oktobri dava "o 167 % horsie")
+  const prevCovered = prevKeys.filter((k) => o.energyIds.some((id) => (sumBy[id] || {})[k] != null)).length;
+  const comparable = effPrev != null && hddPrev >= 0.3 * hddCur && prevCovered >= 0.8 * prevKeys.length;
+  const surplus = o.fveId ? total(curKeys, [o.fveId]) : null;
+
+  // rozdelenie kurenia podla zdroja v kazdom useku podla mixu celeho domu
+  const split = {};      // bucket -> {siet, fve, bateria, unknown}
+  const hasHouse = Object.keys(houseOf).length > 0;
+  for (const [t0, sl] of Object.entries(slots)) {
+    const k = keyOf(Number(t0));
+    const b = (split[k] = split[k] || { siet: 0, fve: 0, bateria: 0, unknown: 0 });
+    const src = sl.siet + sl.fve + sl.bateria;
+    if (!hasHouse || src <= 0) { b.unknown += sl.h; continue; }
+    for (const key of ["siet", "fve", "bateria"]) b[key] += sl.h * (sl[key] / src);
+  }
+  const sumSplit = (key) => curKeys.reduce((a, k) => a + ((split[k] || {})[key] || 0), 0);
+
   const wd = { sk: ["Ne", "Po", "Ut", "St", "Št", "Pi", "So"], en: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] };
   const buckets = curKeys.map((k, i) => {
     const t = o.start + i * step;
     const d = new Date(t);
     const label = o.hourly ? String(d.getHours()) : (o.days <= 7 ? ((wd[o.lang] || wd.en)[d.getDay()]) : `${d.getDate()}.`);
-    return { label, total: total([k], o.energyIds), fve: o.fveId ? total([k], [o.fveId]) : 0 };
+    const sp = split[k] || { siet: 0, fve: 0, bateria: 0, unknown: 0 };
+    const tot = total([k], o.energyIds);
+    // rozdiel medzi suctom slotov a suctom bucketu (napr. zaokruhlenie) ide do "nerozdelene"
+    const known = sp.siet + sp.fve + sp.bateria;
+    return { t, label, total: tot, siet: sp.siet, fve: sp.fve, bateria: sp.bateria,
+      unknown: Math.max(0, tot - known), surplus: o.fveId ? total([k], [o.fveId]) : 0 };
   });
   const ranking = o.zones.map((z) => {
     const parts = z.srcs.map((s) => ({ key: s.key, kwh: total(curKeys, s.energy) }));
     return { name: z.name, total: parts.reduce((a, p) => a + p.kwh, 0), parts };
   }).filter((r) => r.parts.length).sort((a, b) => b.total - a.total);
+  const known = { siet: sumSplit("siet"), fve: sumSplit("fve"), bateria: sumSplit("bateria") };
+  const humidity = (o.humidity || []).map((h) => ({ name: h.name, value: humBy[h.id] && humBy[h.id].dur > 0 ? humBy[h.id].sum / humBy[h.id].dur : null }))
+    .filter((h) => h.value != null);
   return {
-    total: cur, prevTotal: prev, fve, eff, effPrev,
-    effDelta: eff != null && effPrev ? (eff - effPrev) / effPrev : null,
-    buckets, ranking, zones: o.zones, hourly: o.hourly,
+    total: cur, prevTotal: prev, eff, effPrev, comparable,
+    effDelta: comparable && eff != null ? (eff - effPrev) / effPrev : null,
+    surplus, fve: surplus,          // fve: spatna kompatibilita (prebytok z kaskady)
+    split: hasHouse ? { ...known, unknown: Math.max(0, cur - known.siet - known.fve - known.bateria) } : null,
+    buckets, ranking, zones: o.zones, hourly: o.hourly, humidity,
   };
+}
+
+/** "Pekny" krok osi: 1, 2, 2.5, 5 x 10^n tak, aby vyslo ~3-4 ciary. */
+function niceStep(max) {
+  const raw = Math.max(max, 0.1) / 3.5;
+  const p = 10 ** Math.floor(Math.log10(raw));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= raw) return m * p;
+  return 10 * p;
 }
 
 const HDD_BASE = 18;
 
+/** SVG graf spotreby po dnoch/hodinach: stlpce FVE / bateria / siet / nerozdelene,
+ * mriezka s osou kWh a hodnota nad stlpcom, ked sa zmesti. Kreslene v skutocnej
+ * sirke (bez preserveAspectRatio=none), takze text nie je natiahnuty. */
+function statsChartSvg(st, W, lang) {
+  const b = st.buckets;
+  const H = 220, top = 22, base = H - 26, left = 40, right = 8;
+  const n = Math.max(1, b.length);
+  const slot = (W - left - right) / n;
+  const bw = Math.max(3, Math.min(56, slot * 0.66));
+  const max = Math.max(0.1, ...b.map((x) => x.total));
+  const stepV = niceStep(max);
+  let axisMax = Math.ceil(max / stepV) * stepV;
+  if (axisMax - max < 0.1 * axisMax) axisMax += stepV;     // miesto na hodnotu nad najvyssim stlpcom
+  const sc = (v) => (v / axisMax) * (base - top);
+  const fmt = (v, d) => {
+    const t = (Math.round(v * 10 ** d) / 10 ** d).toFixed(d);
+    return lang === "sk" ? t.replace(".", ",") : t;
+  };
+  const stepDec = stepV < 1 ? (stepV < 0.5 ? 2 : 1) : 0;
+  let g = "";
+  for (let v = 0; v <= axisMax + 1e-9; v += stepV) {
+    const y = base - sc(v);
+    g += `<line x1="${left}" y1="${y.toFixed(1)}" x2="${W - right}" y2="${y.toFixed(1)}" class="${v === 0 ? "ax" : "gr"}"></line>`;
+    g += `<text x="${left - 6}" y="${(y + 3.5).toFixed(1)}" class="yl">${fmt(v, stepDec)}</text>`;
+  }
+  g += `<text x="${left - 6}" y="${top - 10}" class="yl">kWh</text>`;
+  // hodnoty nad vsetkymi stlpcami, ked je miesto; inak len maximum (detail tuknutim)
+  const valDec = max < 10 ? 1 : 0;
+  const labelAll = slot >= (max < 10 ? 26 : 22);
+  const maxIdx = b.reduce((m, x, i) => (x.total > b[m].total ? i : m), 0);
+  const order = st.split ? ["siet", "bateria", "fve", "unknown"] : ["unknown"];
+  const every = Math.max(1, Math.ceil(28 / slot));
+  b.forEach((x, i) => {
+    const xx = left + i * slot + (slot - bw) / 2;
+    let y = base;
+    const parts = st.split ? x : { unknown: x.total };
+    const segs = order.map((k) => [k, parts[k] || 0]).filter(([, v]) => v > 0);
+    segs.forEach(([k, v], si) => {
+      const h = sc(v);
+      if (h < 0.4) return;
+      y -= h;
+      const r = si === segs.length - 1 ? 3 : 0;    // zaoblenie len navrchu
+      g += `<rect x="${xx.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="${r}" class="${k}"></rect>`;
+    });
+    if (x.total > 0 && (labelAll || i === maxIdx)) {
+      g += `<text x="${(xx + bw / 2).toFixed(1)}" y="${(base - sc(x.total) - 5).toFixed(1)}" class="vl">${fmt(x.total, valDec)}</text>`;
+    }
+    if (i % every === 0 || i === b.length - 1) {
+      g += `<text x="${(xx + bw / 2).toFixed(1)}" y="${base + 16}" class="lb">${esc(x.label)}</text>`;
+    }
+    // neviditelna plocha cez cely stlpec - tuknutie / prejdenie mysou ukaze detail
+    g += `<rect x="${(left + i * slot).toFixed(1)}" y="${top}" width="${slot.toFixed(1)}" height="${base - top}" class="hit" data-bi="${i}"><title>${esc(x.label)}: ${fmt(x.total, 1)} kWh</title></rect>`;
+  });
+  return `<svg class="sho-chart" viewBox="0 0 ${W} ${H}" width="100%" height="${H}" role="img">${g}</svg>`;
+}
+
 
 
 const ICONS = {
+  drop: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2.5c-.3 0-.6.2-.8.4C9.6 5 5 10.6 5 14.5a7 7 0 0 0 14 0c0-3.9-4.6-9.5-6.2-11.6a1 1 0 0 0-.8-.4z"/></svg>`,
   flame: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2c3 4 6 6.5 6 11a6 6 0 0 1-12 0c0-2.6 1.4-4.6 3-6 .2 1.6 1 2.6 2 3 .3-3 1.2-5.6 1-8z"/></svg>`,
   pause: `<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1.2"/><rect x="14" y="5" width="4" height="14" rx="1.2"/></svg>`,
   snow: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 2v20M4.9 6l14.2 12M19.1 6 4.9 18M9 3.5l3 2.5 3-2.5M9 20.5l3-2.5 3 2.5"/></svg>`,
@@ -700,6 +831,8 @@ class SmartHeatingCard extends HTMLElement {
             </div>
           </div>
 
+          <div class="sh-feel" hidden></div>
+
           <div class="sh-row2">
             <span class="sh-delta"></span>
             <span class="sh-chip-floor"></span>
@@ -802,6 +935,15 @@ class SmartHeatingCard extends HTMLElement {
       .sh-lg-v { overflow: hidden; text-overflow: ellipsis; }
 
       .sh-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+      /* vlhkost: pevne jeden riadok (vyska karty sa nesmie menit) */
+      .sh-feel { display: flex; align-items: center; gap: 6px; height: 18px; margin-top: 8px; font-size: 12px; color: var(--sh-sub);
+        white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+      .sh-feel[hidden] { display: none; }
+      .sh-feel svg { width: 14px; height: 14px; flex-shrink: 0; color: #4fa3ff; }
+      .sh-feel b { color: var(--sh-txt); font-weight: 600; }
+      .sh-feel .t { overflow: hidden; text-overflow: ellipsis; }
+      .sh-feel.dry svg, .sh-feel .dry { color: var(--sh-warn, #e8a838); }
+      .sh-feel.wet svg, .sh-feel .wet { color: var(--sh-err, #e5484d); }
       .sh-delta { font-size: 12px; font-weight: 650; padding: 4px 9px; border-radius: 8px; white-space: nowrap; }
       .sh-delta:empty, .sh-chip-floor:empty { display: none; }
       .sh-cons { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--sh-sub, var(--secondary-text-color)); margin: 2px 0 6px; }
@@ -997,6 +1139,7 @@ class SmartHeatingCard extends HTMLElement {
     this._renderRow2(current, target, zAttrs, mode);
     this._renderModeSeg(mode);
     this._renderBadges(zAttrs);
+    this._renderHumidity(zAttrs);
     this.querySelector(".sh-why-t").textContent = stavSensor.state || "";
 
     const hasAc = !!hass.states[eid(zoneId, "select", "sezona")];
@@ -1105,6 +1248,34 @@ class SmartHeatingCard extends HTMLElement {
         });
       };
     });
+  }
+
+  /** Vlhkost v zone (len sledovanie): "💧 45 % · pocitovo 21,8° · rosný bod 11,1°".
+   * Riadok sa ukaze, len ked ma zona nastaveny senzor vlhkosti (nemeni sa za behu). */
+  _renderHumidity(zAttrs) {
+    const el = this.querySelector(".sh-feel");
+    if (!el) return;
+    if (!zAttrs.humidity_entity) { el.hidden = true; return; }
+    el.hidden = false;
+    const lang = this._lang;
+    const rh = num(zAttrs.humidity);
+    const lvl = rh == null ? "" : rh < 35 ? "dry" : rh > 60 ? "wet" : "";
+    el.className = `sh-feel ${lvl}`;
+    const parts = [rh == null ? "<b>–</b>" : `<b>${Math.round(rh)} %</b>`];
+    if (num(zAttrs.felt_temperature) != null) parts.push(`${esc(this._t("hum_felt"))} <b>${esc(fmtNum(zAttrs.felt_temperature, lang))}°</b>`);
+    const alert = zAttrs.humidity_alert === "high" ? "hum_alert_high" : zAttrs.humidity_alert === "low" ? "hum_alert_low" : null;
+    if (alert) {
+      let txt = this._t(alert);
+      if (zAttrs.humidity_alert === "high" && (zAttrs.ventilation === "helps" || zAttrs.ventilation === "worse")) {
+        txt += `, ${this._t(zAttrs.ventilation === "helps" ? "vent_helps" : "vent_worse")}`;
+      }
+      parts.push(`<span class="${zAttrs.humidity_alert === "high" ? "wet" : "dry"}">${esc(txt)}</span>`);
+    }
+    // rosny bod az na konci - pri uzkej karte sa oreze ako prvy
+    if (num(zAttrs.dew_point) != null) parts.push(`${esc(this._t("hum_dew"))} ${esc(fmtNum(zAttrs.dew_point, lang))}°`);
+    const html = `${ICONS.drop}<span class="t">${parts.join(" · ")}</span>`;
+    if (el.innerHTML !== html) el.innerHTML = html;
+    el.title = el.textContent;
   }
 
   _renderBadges(zAttrs) {
@@ -1562,6 +1733,11 @@ class SmartHeatingOverview extends HTMLElement {
         if (this._allCons("power_entities").some((id) => hass.states[id] !== prev.states[id]) && this.querySelector(".sho-sum")) {
           this._renderSummary(this._zoneData());
         }
+        // vonkajsia vlhkost / tlak - prekresli len blok Vonku
+        const outIds = [...this._zoneEntities("outdoor_humidity_entity"), ...this._zoneEntities("outdoor_pressure_entity")];
+        if (outIds.some((id) => hass.states[id] !== prev.states[id]) && this.querySelector(".sho-out")) {
+          this._renderOutdoor(this._zoneData());
+        }
         this._maybeFetchEnergyAll();
         return;
       }
@@ -1677,7 +1853,8 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-out .v { font-size: 34px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.05; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .sho-out .l { font-size: 12.5px; color: var(--sh-sub); margin-top: 2px; }
       .sho-out .tr { font-size: 12.5px; color: var(--sh-sub); margin-top: 8px; font-variant-numeric: tabular-nums; }
-      .sho-out .tr:empty { display: none; }
+      .sho-out .tr:empty, .sho-out .hp:empty { display: none; }
+      .sho-out .hp { font-size: 12.5px; color: var(--sh-sub); margin-top: 4px; font-variant-numeric: tabular-nums; white-space: nowrap; }
       .sho-blk .i svg, .sho-tile .i svg { width: 20px; height: 20px; display: block; }
       .sho-gear { display: inline-flex; align-items: center; gap: 6px; margin-top: 8px; padding: 4px 0; border: 0; background: none;
         color: var(--sh-sub); font: inherit; font-size: 12.5px; cursor: pointer; }
@@ -1697,7 +1874,7 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-pers { display: flex; gap: 2px; padding: 3px; border-radius: 10px; background: rgba(127,127,127,.12); }
       .sho-per { min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: none; color: var(--sh-sub); font: inherit; font-size: 13.5px; cursor: pointer; }
       .sho-per.on { background: var(--primary-color, #7c6cf0); color: var(--text-primary-color, #fff); font-weight: 600; }
-      .sho-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+      .sho-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
       .sho-kpi { background: rgba(127,127,127,.08); border-radius: 12px; padding: 14px 16px; }
       .sho-kpi .l { font-size: 12.5px; color: var(--sh-sub); }
       .sho-kpi .v { font-size: 26px; font-weight: 650; margin-top: 2px; font-variant-numeric: tabular-nums; }
@@ -1709,12 +1886,25 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-leg b { color: var(--sh-txt); font-size: 13px; }
       .sho-leg span { display: inline-flex; align-items: center; gap: 6px; }
       .sho-leg i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
-      .sho-leg i.f, .sho-chart .f { background: #f2b84b; fill: #f2b84b; }
-      .sho-leg i.g, .sho-chart .g { background: #5f5f68; fill: #5f5f68; }
-      .sho-chart { width: 100%; height: 200px; display: block; }
+      .sho-leg i.fve, .sho-chart .fve { background: #f2b84b; fill: #f2b84b; }
+      .sho-leg i.bateria, .sho-chart .bateria { background: #3fb68b; fill: #3fb68b; }
+      .sho-leg i.siet, .sho-chart .siet { background: #6b6f7a; fill: #6b6f7a; }
+      .sho-leg i.unknown { background: transparent; border: 1px dashed rgba(127,127,127,.8); box-sizing: border-box; }
+      .sho-chart .unknown { fill: rgba(127,127,127,.12); stroke: rgba(127,127,127,.75); stroke-width: 1; stroke-dasharray: 3 3; }
+      .sho-chart { width: 100%; height: 220px; display: block; overflow: visible; }
       .sho-chart .ax { stroke: var(--divider-color, #3a3a3f); }
+      .sho-chart .gr { stroke: var(--divider-color, #3a3a3f); stroke-dasharray: 3 4; opacity: .7; }
+      .sho-chart .yl { fill: var(--sh-sub); font-size: 10.5px; text-anchor: end; font-variant-numeric: tabular-nums; }
       .sho-chart .lb { fill: var(--sh-sub); font-size: 11px; text-anchor: middle; }
-      .sho-chart .vl { fill: var(--sh-txt); font-size: 11.5px; font-weight: 600; text-anchor: middle; }
+      .sho-chart .vl { fill: var(--sh-txt); font-size: 11px; font-weight: 600; text-anchor: middle; font-variant-numeric: tabular-nums; }
+      .sho-chart .hit { fill: transparent; cursor: pointer; }
+      .sho-chart .hit:hover, .sho-chart .hit.on { fill: rgba(127,127,127,.10); }
+      .sho-st-sel { font-size: 12.5px; color: var(--sh-sub); min-height: 1.5em; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sho-st-sel b { color: var(--sh-txt); font-weight: 600; }
+      .sho-kpi .v.bat { color: #3fb68b; }
+      .sho-hum-h { margin-top: 14px; }
+      .sho-hum { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: var(--sh-sub); }
+      .sho-hum b { color: var(--sh-txt); font-weight: 600; font-variant-numeric: tabular-nums; }
       .sho-st-low { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
       @container (max-width: 700px) { .sho-st-low { grid-template-columns: 1fr; } }
       .sho-rk { display: grid; grid-template-columns: 96px 1fr 76px; align-items: center; gap: 12px; font-size: 13.5px; padding: 5px 0; }
@@ -1794,7 +1984,7 @@ class SmartHeatingOverview extends HTMLElement {
     if (!this._hass) return;
     if (!this.querySelector(".sho-root")) {
       this.innerHTML = `<ha-card><style>${this._styles()}</style><div class="sho-root">
-        <div class="sho-blk sho-out"><div class="v"></div><div class="l">${this._t("ov_outside")}</div><div class="tr"></div></div>
+        <div class="sho-blk sho-out"><div class="v"></div><div class="l">${this._t("ov_outside")}</div><div class="tr"></div><div class="hp"></div></div>
         <div class="sho-blk sho-tiles"></div>
         <div class="sho-blk sho-sum"></div>
         <div class="sho-blk sho-set" hidden></div>
@@ -1808,6 +1998,14 @@ class SmartHeatingOverview extends HTMLElement {
       this.querySelector(".sho-stats").addEventListener("click", (e) => {
         const b = e.target.closest("[data-days]");
         if (b) this._loadStats(Number(b.dataset.days));
+        const bar = e.target.closest("[data-bi]");
+        if (bar && this._stats) {
+          const i = Number(bar.getAttribute("data-bi"));
+          this._statSel = this._statSel === i ? null : i;
+          const sel = this.querySelector(".sho-st-sel");
+          if (sel) sel.innerHTML = this._statSelText();
+          this.querySelectorAll(".sho-chart .hit").forEach((h) => h.classList.toggle("on", Number(h.getAttribute("data-bi")) === this._statSel));
+        }
       });
       this.querySelector(".sho-out").addEventListener("click", () => {
         const outdoor = this._outdoorEntity();
@@ -1873,6 +2071,26 @@ class SmartHeatingOverview extends HTMLElement {
       tr = parts.join(" · ");
     }
     this.querySelector(".sho-out .tr").textContent = tr;
+
+    // vonkajsia vlhkost a tlak (len ked su nastavene - riadok sa za behu neobjavuje/nestraca)
+    const hp = [];
+    const rhId = this._zoneEntities("outdoor_humidity_entity")[0];
+    const pId = this._zoneEntities("outdoor_pressure_entity")[0];
+    const val = (id) => (id && this._hass.states[id] ? num(this._hass.states[id].state) : null);
+    if (rhId) {
+      const rh = val(rhId);
+      hp.push(`💧 ${rh == null ? "–" : Math.round(rh)} %`);
+    }
+    if (pId) {
+      const p = val(pId);
+      let txt = `${p == null ? "–" : Math.round(p)} hPa`;
+      if (p != null && h && h.p3h != null) {
+        const d = Math.round(p - h.p3h);
+        txt += ` ${d >= 1 ? "▲" : d <= -1 ? "▼" : "▶"}${d ? " " + Math.abs(d) : ""}`;
+      }
+      hp.push(txt);
+    }
+    this.querySelector(".sho-out .hp").textContent = hp.join(" · ");
   }
 
   // ------------------------------------------------------------------ dlazdice
@@ -2125,8 +2343,18 @@ class SmartHeatingOverview extends HTMLElement {
       return;
     }
     panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("ov_loading"))}</div>`;
-    const fveId = this._hass.states["sensor.smart_heating_energia_z_fve"] ? "sensor.smart_heating_energia_z_fve" : null;
+    const has = (id) => (this._hass.states[id] ? id : null);
+    const fveId = has("sensor.smart_heating_energia_z_fve");
+    const houseIds = {
+      siet: has("sensor.smart_heating_energia_domu_zo_siete"),
+      fve: has("sensor.smart_heating_energia_domu_z_fve"),
+      bateria: has("sensor.smart_heating_energia_domu_z_baterie"),
+    };
     const outdoorId = this._outdoorEntity();
+    const humidity = zones.filter((z) => z.s.humidity_entity && this._hass.states[z.s.humidity_entity])
+      .map((z) => ({ name: z.name, id: z.s.humidity_entity }));
+    const outHum = this._zoneEntities("outdoor_humidity_entity")[0];
+    if (outHum && this._hass.states[outHum]) humidity.push({ name: this._t("st_hum_out"), id: outHum });
     const hourly = days === 1;
     const DAY = 86400000;
     const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
@@ -2134,29 +2362,41 @@ class SmartHeatingOverview extends HTMLElement {
     const prevStart = start - days * DAY;
     try {
       // Dlhodobe statistiky (hodina/den) vznikaju az po skonceni obdobia, preto
-      // dokoncene dni citame z nich a dnesok z 5-minutovych (tie su aktualne -
-      // rovnako ako riadok "Spotreba dnes" v suhrne).
+      // dokoncene useky citame z nich a dnesok z 5-minutovych (tie su aktualne -
+      // rovnako ako riadok "Spotreba dnes" v suhrne). Aktualne obdobie ide po
+      // hodinach: rozdelenie sieť / FVE / batéria sa robi v kazdej hodine zvlast.
+      const ids = [...energyIds, ...(fveId ? [fveId] : []), ...Object.values(houseIds).filter(Boolean),
+        ...(outdoorId ? [outdoorId] : []), ...humidity.map((h) => h.id)];
       const req = {
         type: "recorder/statistics_during_period",
-        statistic_ids: [...energyIds, ...(fveId ? [fveId] : []), ...(outdoorId ? [outdoorId] : [])],
+        statistic_ids: [...new Set(ids)],
         types: ["change", "mean"],
         units: { energy: "kWh", temperature: "°C" },
       };
-      const [past, today] = await Promise.all([
-        this._hass.callWS({ ...req, start_time: new Date(prevStart).toISOString(), end_time: midnight.toISOString(),
-          period: hourly ? "hour" : "day" }),
+      const iso = (t) => new Date(t).toISOString();
+      const jobs = [
+        // predchadzajuce obdobie (porovnanie): vcera po hodinach, inak po dnoch
+        this._hass.callWS({ ...req, start_time: iso(prevStart), end_time: iso(start), period: hourly ? "hour" : "day" }),
         this._hass.callWS({ ...req, start_time: midnight.toISOString(), end_time: new Date().toISOString(), period: "5minute" }),
-      ]);
+      ];
+      if (!hourly) {
+        jobs.push(this._hass.callWS({ ...req, start_time: iso(start), end_time: midnight.toISOString(), period: "hour" }));
+      }
+      const [prev, today, curPast] = await Promise.all(jobs);
       const res = {};
       const add = (src, dur) => {
         for (const [id, rows] of Object.entries(src || {})) {
           for (const r of rows || []) (res[id] = res[id] || []).push({ ...r, dur });
         }
       };
-      add(past, hourly ? 1 / 24 : 1);
+      add(prev, hourly ? 1 / 24 : 1);
+      add(curPast, 1 / 24);
       add(today, 1 / 288);
       if (this._statsDays !== days || !this._statsOpen) return;   // medzicasom prepnute
-      this._stats = computeStats(res || {}, { zones: zoneIds, energyIds, fveId, outdoorId, start, prevStart, hourly, days, lang: this._lang });
+      this._stats = computeStats(res, {
+        zones: zoneIds, energyIds, fveId, houseIds, outdoorId, humidity, start, prevStart, hourly, days, lang: this._lang,
+      });
+      this._statSel = null;
       this._renderStats();
     } catch (err) {
       panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("st_error"))}</div>`;
@@ -2176,6 +2416,10 @@ class SmartHeatingOverview extends HTMLElement {
     if (!st || !panel) return;
     const L = this._lang;
     const num = (v, dec = 1) => (v == null ? "–" : (Math.round(v * 10 ** dec) / 10 ** dec).toFixed(dec).replace(".", L === "sk" ? "," : "."));
+    const kwh = (v) => `${num(v)} kWh`;
+    // podiel z rozdelenej casti (nerozdelene obdobie pred meranim by podiely skreslilo)
+    const knownTotal = st.split ? st.split.fve + st.split.bateria + st.split.siet : 0;
+    const pct = (v) => (knownTotal > 0 && v != null ? `${Math.round((v / knownTotal) * 100)} %` : "");
     const kpi = (label, val, unit, sub, cls = "") =>
       `<div class="sho-kpi"><div class="l">${esc(label)}</div><div class="v ${cls}">${val}${unit ? ` <span>${esc(unit)}</span>` : ""}</div>${sub ? `<div class="s">${sub}</div>` : ""}</div>`;
     let effSub = "";
@@ -2184,40 +2428,29 @@ class SmartHeatingOverview extends HTMLElement {
       effSub = st.effDelta <= 0
         ? `<span class="good">${esc(this._t("st_better", { p }))}</span>`
         : `<span class="bad">${esc(this._t("st_worse", { p }))}</span>`;
+    } else if (st.eff != null) {
+      effSub = esc(this._t("st_no_compare"));
     }
-    const share = st.total > 0 && st.fve != null ? Math.min(1, st.fve / st.total) : null;
-    const kpis = kpi(this._t("st_total"), num(st.total), "kWh", "") +
-      kpi(this._t("st_fve"), share == null ? "–" : `${Math.round(share * 100)} %`, "", st.fve == null ? esc(this._t("st_fve_none")) : `${num(st.fve)} kWh`, "fve") +
-      kpi(this._t("st_grid"), num(st.fve == null ? null : Math.max(0, st.total - st.fve)), st.fve == null ? "" : "kWh", "") +
+    const sp = st.split;
+    const unknownSub = sp && sp.unknown > 0.05 ? esc(this._t("st_unknown", { kwh: kwh(sp.unknown) })) : "";
+    const surplusSub = st.surplus != null && st.surplus > 0.005 ? esc(this._t("st_fve_surplus", { kwh: kwh(st.surplus) })) : "";
+    const part = (v) => (sp ? num(v) : "–");
+    const kpis = kpi(this._t("st_total"), num(st.total), "kWh", unknownSub) +
+      kpi(this._t("st_fve"), part(sp && sp.fve), sp ? "kWh" : "", [pct(sp && sp.fve), surplusSub].filter(Boolean).join(" · "), "fve") +
+      kpi(this._t("st_bat"), part(sp && sp.bateria), sp ? "kWh" : "", pct(sp && sp.bateria), "bat") +
+      kpi(this._t("st_grid"), part(sp && sp.siet), sp ? "kWh" : "", pct(sp && sp.siet)) +
       kpi(this._t("st_eff"), num(st.eff, 2), st.eff == null ? "" : "kWh", effSub);
 
-    // graf po dnoch / hodinach
-    const b = st.buckets;
-    const W = 1000, H = 200, base = 170, left = 34;
-    const slot = (W - left - 10) / Math.max(1, b.length);
-    const bw = Math.max(4, Math.min(64, slot * 0.62));
-    const max = Math.max(0.1, ...b.map((x) => x.total));
-    const sc = (v) => (v / max) * (base - 22);
-    let bars = "";
-    b.forEach((x, i) => {
-      const xx = left + i * slot + (slot - bw) / 2;
-      const fve = Math.min(x.fve || 0, x.total);
-      const grid = x.total - fve;
-      const hg = sc(grid), hf = sc(fve);
-      bars += `<rect x="${xx.toFixed(1)}" y="${(base - hg).toFixed(1)}" width="${bw.toFixed(1)}" height="${hg.toFixed(1)}" rx="3" class="g"></rect>`;
-      if (hf > 0.5) bars += `<rect x="${xx.toFixed(1)}" y="${(base - hg - hf).toFixed(1)}" width="${bw.toFixed(1)}" height="${hf.toFixed(1)}" rx="3" class="f"></rect>`;
-      const every = b.length > 12 ? Math.ceil(b.length / 10) : 1;
-      if (i % every === 0 || i === b.length - 1) {
-        bars += `<text x="${(xx + bw / 2).toFixed(1)}" y="${base + 16}" class="lb">${esc(x.label)}</text>`;
-      }
-      if (b.length <= 10 && x.total > 0) {
-        bars += `<text x="${(xx + bw / 2).toFixed(1)}" y="${(base - hg - hf - 6).toFixed(1)}" class="vl">${num(x.total)}</text>`;
-      }
-    });
+    // graf: skutocna sirka panela (bez deformacie textu), mriezka, hodnoty nad stlpcami
+    const chartEl = panel.querySelector(".sho-st-chart");
+    const W = Math.max(280, Math.round((chartEl && chartEl.clientWidth) || panel.clientWidth || 900));
+    this._chartW = W;
+    const legKeys = sp ? ["fve", "bateria", "siet", ...(sp.unknown > 0.05 ? ["unknown"] : [])] : ["unknown"];
+    const legName = { fve: "st_leg_fve", bateria: "st_leg_bat", siet: "st_leg_grid", unknown: "st_leg_unknown" };
     const chart = `<div class="sho-leg"><b>${esc(this._t(st.hourly ? "st_by_hour" : "st_by_day"))}</b>
-        <span><i class="f"></i>${esc(this._t("st_leg_fve"))}</span><span><i class="g"></i>${esc(this._t("st_leg_grid"))}</span></div>
-      <svg class="sho-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="${esc(this._t("st_by_day"))}">
-        <line x1="${left}" y1="${base}" x2="${W - 10}" y2="${base}" class="ax"></line>${bars}</svg>`;
+        ${legKeys.map((k) => `<span><i class="${k}"></i>${esc(this._t(legName[k]))}</span>`).join("")}</div>
+      ${statsChartSvg(st, W, L)}
+      <div class="sho-st-sel">${this._statSelText()}</div>`;
 
     // poradie izieb
     const maxZone = Math.max(0.01, ...st.ranking.map((r) => r.total));
@@ -2234,15 +2467,50 @@ class SmartHeatingOverview extends HTMLElement {
     const meters = issues.length
       ? issues.map((x) => `<div class="sho-mt warn">${mdiSvg("alert") || ""}<span><b>${esc(x.zone)}</b><br>${esc(x.p)}</span></div>`).join("")
       : `<div class="sho-mt ok">${mdiSvg("check") || "✓"}<span>${esc(this._t("st_meters_ok"))}</span></div>`;
+    const hum = (st.humidity || []).length
+      ? `<div class="sho-leg sho-hum-h"><b>${esc(this._t("st_hum"))}</b></div>` +
+        st.humidity.map((h) => `<div class="sho-hum"><span>${esc(h.name)}</span><b>${Math.round(h.value)} %</b></div>`).join("")
+      : "";
 
     panel.innerHTML = this._statsHead() +
       `<div class="sho-kpis">${kpis}</div>
        <div class="sho-st-chart">${chart}</div>
        <div class="sho-st-low">
          <div><div class="sho-leg"><b>${esc(this._t("st_rank"))}</b>${rankLeg}</div>${rank}</div>
-         <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}
-           ${st.fve != null ? `<div class="sho-note">${esc(this._t("st_fve_note"))}</div>` : ""}</div>
+         <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}${hum}
+           <div class="sho-note">${esc(this._t("st_fve_note"))}</div></div>
        </div>`;
+    this._watchChartWidth();
+  }
+
+  /** Text pod grafom: detail zvoleneho stlpca (tuknutie) alebo napoveda. */
+  _statSelText() {
+    const st = this._stats;
+    const b = st && this._statSel != null ? st.buckets[this._statSel] : null;
+    if (!b) return esc(this._t("st_tap_hint"));
+    const L = this._lang;
+    const n = (v) => fmtNum(v, L);
+    const d = new Date(b.t);
+    const when = st.hourly ? `${d.getHours()}:00–${d.getHours() + 1}:00` : `${d.getDate()}. ${d.getMonth() + 1}.`;
+    const parts = [];
+    if (st.split) {
+      for (const [k, key] of [["fve", "st_leg_fve"], ["bateria", "st_leg_bat"], ["siet", "st_leg_grid"], ["unknown", "st_leg_unknown"]]) {
+        if (b[k] > 0.005) parts.push(`${esc(this._t(key))} ${n(b[k])}`);
+      }
+    }
+    return `<b>${esc(when)}: ${n(b.total)} kWh</b>${parts.length ? ` · ${parts.join(" · ")}` : ""}`;
+  }
+
+  /** Pri zmene sirky (otocenie mobilu, okno) graf prekresli v novej sirke. */
+  _watchChartWidth() {
+    if (this._chartRO || typeof ResizeObserver === "undefined") return;
+    this._chartRO = new ResizeObserver(() => {
+      const el = this.querySelector(".sho-st-chart");
+      if (!el || !this._statsOpen || !this._stats) return;
+      if (Math.abs(el.clientWidth - (this._chartW || 0)) > 40) this._renderStats();
+    });
+    const panel = this.querySelector(".sho-stats");
+    if (panel) this._chartRO.observe(panel);
   }
 
   _entryId() {
@@ -2407,14 +2675,16 @@ class SmartHeatingOverview extends HTMLElement {
     midnight.setHours(0, 0, 0, 0);
 
     const outdoor = this._outdoorEntity();
+    const pressure = this._zoneEntities("outdoor_pressure_entity")[0];
     if (outdoor && hass.states[outdoor] && now - this._outdoorFetchedAt > OVERVIEW_REFRESH_MS) {
       const start = Math.min(midnight.getTime(), now - 3 * 3600 * 1000);
+      const histIds = [outdoor, ...(pressure && hass.states[pressure] ? [pressure] : [])];
       jobs.push(
         hass.callWS({
           type: "history/history_during_period",
           start_time: new Date(start).toISOString(),
           end_time: new Date(now).toISOString(),
-          entity_ids: [outdoor],
+          entity_ids: histIds,
           minimal_response: true,
           no_attributes: true,
           significant_changes_only: false,
@@ -2425,7 +2695,12 @@ class SmartHeatingOverview extends HTMLElement {
             .filter(([t, v]) => !isNaN(t) && v != null);
           const today = series.filter(([t]) => t >= midnight.getTime()).map(([, v]) => v);
           if (series.length && series[0][0] < midnight.getTime()) today.push(lastBefore(series, midnight.getTime()));
+          const pRows = (pressure && res && res[pressure]) || [];
+          const pSeries = pRows
+            .map((r) => [tsOf(r.lu ?? r.last_updated ?? r.lc ?? r.last_changed), num(r.s ?? r.state)])
+            .filter(([t, v]) => !isNaN(t) && v != null);
           this._outdoorHist = {
+            p3h: pSeries.length ? lastBefore(pSeries, now - 3 * 3600 * 1000) : null,
             ago3h: lastBefore(series, now - 3 * 3600 * 1000),
             min: today.length ? Math.min(...today) : null,
             max: today.length ? Math.max(...today) : null,
