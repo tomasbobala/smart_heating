@@ -1,23 +1,37 @@
-name: Release consistency check
+name: Release
 
-# HACS pre integracie nepotrebuje build krok - stahuje priamo zipball repozitara
-# na danom git tagu. Tento workflow len chyta najcastejsiu chybu: zabudnutu
-# aktualizaciu verzie v manifest.json pred vytvorenim GitHub Release.
+# Pri publikovani releasu:
+#  1. over, ze verzia v manifest.json sedi s tagom,
+#  2. zabali custom_components/smart_heating do smart_heating.zip
+#     (manifest.json v koreni archivu) a prilozi ho k releasu.
+# HACS (zip_release v hacs.json) stahuje tento ZIP, takze GitHub pocita stiahnutia.
+# Rucne spustenie (workflow_dispatch) prilozi ZIP k uz existujucemu releasu.
 
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existujuci release tag (napr. v0.24.1)"
+        required: true
+
+permissions:
+  contents: write
 
 jobs:
-  check-version:
+  release:
     runs-on: ubuntu-latest
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.TAG_NAME }}
 
       - name: Verify manifest.json version matches release tag
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          TAG="${TAG#v}"
+          TAG="${TAG_NAME#v}"
           MANIFEST_VERSION=$(python3 -c "import json; print(json.load(open('custom_components/smart_heating/manifest.json'))['version'])")
           echo "Git tag version: $TAG"
           echo "manifest.json version: $MANIFEST_VERSION"
@@ -29,11 +43,24 @@ jobs:
 
       - name: Verify package.json version matches release tag (card)
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          TAG="${TAG#v}"
+          TAG="${TAG_NAME#v}"
           PKG_VERSION=$(python3 -c "import json; print(json.load(open('package.json'))['version'])")
           if [ "$TAG" != "$PKG_VERSION" ]; then
             echo "::warning::package.json version ($PKG_VERSION) does not match release tag ($TAG) - update if the card itself changed in this release."
           else
             echo "OK - package.json matches"
           fi
+
+      - name: Build smart_heating.zip
+        run: |
+          cd custom_components/smart_heating
+          zip -rq ../../smart_heating.zip . -x "*__pycache__*" -x "*.pyc" -x "*.DS_Store"
+          cd ../..
+          unzip -l smart_heating.zip | grep -q " manifest.json$" || { echo "::error::manifest.json nie je v koreni ZIP-u"; exit 1; }
+          unzip -l smart_heating.zip
+
+      - name: Upload ZIP to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: gh release upload "$TAG_NAME" smart_heating.zip --clobber
