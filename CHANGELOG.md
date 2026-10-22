@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.24.2
+- Fixed: after the solar surplus ended a zone kept heating to the raised
+  storage temperature (e.g. bedroom 24.5 °C instead of 21 °C). The storage
+  target was written into the **day temperature**: during storage the zone card
+  showed the raised target and −/+ (and any client sending the target back,
+  e.g. HomeKit / voice assistant) saved it via `climate.set_temperature` into
+  `number.*_teplota_den`. Now during storage the card's control shows and changes
+  the normal day temperature ("day 21°"), and the climate entity ignores a
+  request equal to the current storage target.
+
 ## 0.24.1
 - Fixed: in the solar cascade panel the countdown text and bar were moved to
   the bottom, with a dashed frame and a huge bar. The card has no shadow DOM and

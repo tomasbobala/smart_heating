@@ -209,3 +209,38 @@ async def test_accumulation_entities_exist_after_setup(hass):
     assert hass.states.get("number.smart_heating_z1_fve_max_teplota").state == "24.0"
     assert hass.states.get("switch.smart_heating_z1_fve_akumulacia").state == "on"
     assert "fve_akumulacia_ciel" in hass.states.get("sensor.smart_heating_z1_stav").attributes
+
+
+async def test_echo_of_accumulation_target_is_not_written_to_day_temperature(hass):
+    from homeassistant.components.climate import DOMAIN as CLIMATE
+    from pytest_homeassistant_custom_component.common import async_mock_service
+    hass.states.async_set("climate.floor", "heat", {"current_temperature": 22, "temperature": 21})
+    entry = MockConfigEntry(domain=DOMAIN, version=2, data={}, options={"zones": {Z: {
+        "name": "Spalna", "zone_type": "floor", "climate_entity": "climate.floor"}},
+        "pv_surplus_entity": "input_boolean.pv"})
+    hass.states.async_set("input_boolean.pv", "on")
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    coord = hass.data[DOMAIN][entry.entry_id]
+    zd = coord.data["zones"][Z]
+    assert zd["pv_active"] and zd["pv_acc_target"] is not None
+    calls = async_mock_service(hass, "number", "set_value")
+    await hass.services.async_call(CLIMATE, "set_temperature",
+                                   {"entity_id": "climate.smart_heating_z1", "temperature": zd["pv_acc_target"]}, blocking=True)
+    assert calls == []
+    await hass.services.async_call(CLIMATE, "set_temperature",
+                                   {"entity_id": "climate.smart_heating_z1", "temperature": 21.5}, blocking=True)
+    assert len(calls) == 1 and calls[0].data["value"] == 21.5
+
+
+async def test_after_surplus_target_returns_to_day_temperature(hass):
+    _states(hass, air=30.0, den="21", max_t="25")
+    c = _coord(hass)
+    for _ in range(5):
+        _z(c); _age(c)
+    assert _z(c)["target_temperature"] == 25
+    _states(hass, air=24.5, den="21", max_t="25", pv="off")
+    hass.states.async_set("select.smart_heating_z1_rezim", "Den")
+    z = _z(c)
+    assert not z["pv_active"] and z["target_temperature"] == 21

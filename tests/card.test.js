@@ -1699,3 +1699,39 @@ test("cascade panel: no bare .add / .shed classes (HA grid section styles .add w
   assert.strictEqual(card.querySelectorAll(".sho-pv .add, .sho-pv .shed").length, 0);
   assert.ok(card.querySelector(".sho-pvmsg.is-add") && card.querySelector(".sho-pvbar.is-add"));
 });
+
+test("zone card: during solar storage −/+ changes the normal day temperature, not the raised target", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass({ climateAttrs: { temperature: 24.5, current_temperature: 24.5 },
+    stavAttrs: { pv_active: true, fve_akumulacia_ciel: 24.5, fve_akumulacia_max: 25 } });
+  hass.states[`number.smart_heating_${ZONE_ID}_teplota_den`] = { state: "21", attributes: { min: 15, max: 26, step: 0.5 } };
+  const calls = [];
+  hass.callService = (d, s, data) => { calls.push([d, s, data]); return Promise.resolve(); };
+  card.hass = hass;
+  document.body.appendChild(card);
+  const tv = card.querySelector(".sh-tgt-v").textContent.replace(/\s+/g, " ");
+  assert.match(tv, /deň 21°/);
+  assert.match(card.querySelector(".sh-delta").textContent, /v cieli/);       // voci zvysenemu cielu 24,5
+  card.querySelector('.sh-tgt button[data-tgt="1"]').click();
+  assert.match(card.querySelector(".sh-tgt-v").textContent, /21,5°/);
+  await new Promise((r) => setTimeout(r, 800));
+  assert.strictEqual(JSON.stringify(calls.pop()), JSON.stringify(["number", "set_value", { entity_id: `number.smart_heating_${ZONE_ID}_teplota_den`, value: 21.5 }]));
+});
+
+test("zone card: without solar storage −/+ sets the climate target as before", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass();
+  const calls = [];
+  hass.callService = (d, s, data) => { calls.push([d, s, data]); return Promise.resolve(); };
+  card.hass = hass;
+  document.body.appendChild(card);
+  assert.match(card.querySelector(".sh-tgt-v").textContent, /cieľ/);
+  card.querySelector('.sh-tgt button[data-tgt="-1"]').click();
+  await new Promise((r) => setTimeout(r, 800));
+  const [d, s] = calls.pop();
+  assert.strictEqual(`${d}.${s}`, "climate.set_temperature");
+});

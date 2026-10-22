@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.24.1";
+const CARD_VERSION = "0.24.2";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -53,6 +53,8 @@ const I18N = {
   section_boost: { en: "Boost", sk: "Boost" },
 
   target: { en: "target", sk: "cieľ" },
+  target_day: { en: "day", sk: "deň" },
+  target_day_hint: { en: "Solar storage is running – this changes the normal day temperature", sk: "Beží akumulácia z FVE – mení sa normálna denná teplota" },
   floor: { en: "Floor", sk: "Podlaha" },
   source: { en: "Source", sk: "Zdroj" },
   h24: { en: "24 h", sk: "24 h" },
@@ -1173,10 +1175,16 @@ class SmartHeatingCard extends HTMLElement {
     const current = num(attrs.current_temperature);
     const mode = attrs.rezim || "Auto";
 
-    if (this._pendingTarget != null && num(attrs.temperature) === this._pendingTarget && !this._targetTimer) {
+    // Pocas akumulacie z FVE je ciel zony docasne zvyseny. −/+ na karte vtedy meni
+    // normalnu dennu teplotu (nie zvyseny ciel) - inak by sa zvysena hodnota
+    // zapisala do dennej teploty a po skonceni prebytku by sa kurilo dalej na nu.
+    const accDay = this._accDayTemp(zAttrs);
+    const ctlValue = accDay != null ? accDay : num(attrs.temperature);
+    if (this._pendingTarget != null && ctlValue === this._pendingTarget && !this._targetTimer) {
       this._pendingTarget = null;
     }
-    const target = this._pendingTarget != null ? this._pendingTarget : num(attrs.temperature);
+    const target = num(attrs.temperature);
+    this._ctlValue = this._pendingTarget != null ? this._pendingTarget : ctlValue;
 
     this.querySelector(".sh-title").textContent = this._config.name || attrs.friendly_name || zoneId;
     this.querySelector(".sh-subtitle").textContent = zAttrs.zdroj_kurenia ? `${this._t("source")}: ${zAttrs.zdroj_kurenia}` : "";
@@ -1242,29 +1250,47 @@ class SmartHeatingCard extends HTMLElement {
       : `${ICONS.floor}<span class="lbl">${this._t("floor")} </span><b>${fmtNum(floor, lang)}°</b>`;
 
     const tgt = this.querySelector(".sh-tgt");
-    tgt.querySelector("b").textContent = target != null ? `${fmtShort(target, lang)}°` : "–";
+    const acc = this._accDayTemp(zAttrs) != null;
+    const shown = this._ctlValue != null ? this._ctlValue : target;
+    tgt.querySelector("b").textContent = shown != null ? `${fmtShort(shown, lang)}°` : "–";
+    const lbl = tgt.querySelector(".lbl");
+    if (lbl) lbl.textContent = `${this._t(acc ? "target_day" : "target")} `;
+    tgt.querySelector(".sh-tgt-v").title = acc ? this._t("target_day_hint") : this._t("target");
     tgt.classList.toggle("pending", this._pendingTarget != null);
-    const disabled = mode === "Vypnute" || target == null;
+    const disabled = mode === "Vypnute" || shown == null;
     tgt.querySelectorAll("button").forEach((b) => { b.disabled = disabled; });
+  }
+
+  /** Denna teplota zony, ked prave bezi akumulacia z FVE (inak null). */
+  _accDayTemp(zAttrs) {
+    if (!zAttrs || !zAttrs.pv_active || num(zAttrs.fve_akumulacia_ciel) == null) return null;
+    const st = this._hass && this._hass.states[eid(this._zoneId, "number", "teplota_den")];
+    return st ? num(st.state) : null;
   }
 
   _stepTarget(dir) {
     const climate = this._hass && this._hass.states[eid(this._zoneId, "climate")];
     if (!climate) return;
     const a = climate.attributes;
-    const base = this._pendingTarget != null ? this._pendingTarget : num(a.temperature);
+    const stav = this._hass.states[eid(this._zoneId, "sensor", "stav")];
+    const accDay = this._accDayTemp(stav && stav.attributes);
+    const dayNum = this._hass.states[eid(this._zoneId, "number", "teplota_den")];
+    const base = this._pendingTarget != null ? this._pendingTarget : accDay != null ? accDay : num(a.temperature);
     if (base == null) return;
     const step = num(a.target_temp_step) || 0.5;
     let next = Math.round((base + dir * step) * 10) / 10;
-    if (num(a.min_temp) != null) next = Math.max(num(a.min_temp), next);
-    if (num(a.max_temp) != null) next = Math.min(num(a.max_temp), next);
+    const lim = accDay != null && dayNum ? dayNum.attributes || {} : { min: a.min_temp, max: a.max_temp };
+    if (num(lim.min) != null) next = Math.max(num(lim.min), next);
+    if (num(lim.max) != null) next = Math.min(num(lim.max), next);
+    this._pendingAcc = accDay != null;
     this._pendingTarget = next;
     clearTimeout(this._targetTimer);
     this._targetTimer = setTimeout(() => {
       this._targetTimer = null;
       const value = this._pendingTarget;
-      Promise.resolve(
-        this._hass.callService("climate", "set_temperature", { entity_id: eid(this._zoneId, "climate"), temperature: value })
+      Promise.resolve(this._pendingAcc
+        ? this._hass.callService("number", "set_value", { entity_id: eid(this._zoneId, "number", "teplota_den"), value })
+        : this._hass.callService("climate", "set_temperature", { entity_id: eid(this._zoneId, "climate"), temperature: value })
       ).catch(() => { this._pendingTarget = null; this._updateContent(); });
       setTimeout(() => {
         if (this._pendingTarget === value && !this._targetTimer) {
@@ -1451,7 +1477,7 @@ class SmartHeatingCard extends HTMLElement {
     const lang = this._lang;
     const climate = this._hass.states[eid(this._zoneId, "climate")];
     const current = num(climate && climate.attributes.current_temperature);
-    const target = this._pendingTarget != null ? this._pendingTarget : num(climate && climate.attributes.temperature);
+    const target = this._pendingTarget != null && !this._pendingAcc ? this._pendingTarget : num(climate && climate.attributes.temperature);
     const st = this._stats || {};
 
     const lg = this.querySelector(".sh-lg-v");

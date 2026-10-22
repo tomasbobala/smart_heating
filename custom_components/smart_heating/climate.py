@@ -160,6 +160,12 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         temperature = kwargs.get("temperature")
         if temperature is None:
             return
+        # Pocas akumulacie z FVE je ciel docasne zvyseny. Ak niekto (HomeKit, hlasovy
+        # asistent, starsia karta) posle spat presne tento zvyseny ciel, nezapisujeme
+        # ho do dennej teploty - po skonceni prebytku by sa na nu kurilo dalej.
+        acc = self._zdata.get("pv_acc_target")
+        if self._zdata.get("pv_active") and acc is not None and abs(float(temperature) - float(acc)) < 0.01:
+            return
         if self._zdata["season"] == SEASON_CHLADENIE:
             key = "teplota_chladenie"
         else:
