@@ -2,6 +2,11 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.25.2
+- Tests: the card test for the "Warm-ups" tab no longer depends on the time
+  zone of the machine (it failed on GitHub Actions, which runs in UTC).
+  No change to the integration or the card.
+
 ## 0.25.0
 - **AC meter thresholds.** An air conditioner draws power in standby
   (electronics, Wi-Fi, compressor crankcase heater - Daikin ~25 W, more in frost),
