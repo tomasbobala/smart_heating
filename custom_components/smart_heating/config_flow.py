@@ -38,6 +38,7 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_GRID_EXPORT_NEGATIVE,
     CONF_BATTERY_CHARGE_POSITIVE,
+    HUB_EXTRA_NUMBERS,
     PV_ENGINE_NUMBERS,
     CONF_USE_FLOOR_MIN,
     CONF_POWER_ENTITIES,
@@ -191,7 +192,7 @@ def _hub_schema_dict(current: dict) -> dict:
     schema_dict[
         vol.Optional(CONF_BATTERY_CHARGE_POSITIVE, default=current.get(CONF_BATTERY_CHARGE_POSITIVE, True))
     ] = selector.BooleanSelector()
-    for key, (lo, hi, step, unit, default) in PV_ENGINE_NUMBERS.items():
+    for key, (lo, hi, step, unit, default) in {**PV_ENGINE_NUMBERS, **HUB_EXTRA_NUMBERS}.items():
         schema_dict[vol.Optional(key, default=current.get(key, default))] = selector.NumberSelector(
             selector.NumberSelectorConfig(min=lo, max=hi, step=step, mode="box", unit_of_measurement=unit)
         )

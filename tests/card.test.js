@@ -1735,3 +1735,143 @@ test("zone card: without solar storage −/+ sets the climate target as before",
   const [d, s] = calls.pop();
   assert.strictEqual(`${d}.${s}`, "climate.set_temperature");
 });
+
+// ------------------------------------------------------------------ 0.25.0 nabehy, standby klimy
+
+function wuHass({ ready = true, swOn = false, dyn = {} } = {}) {
+  const hass = overviewHass();
+  const a = hass.states["sensor.smart_heating_aaa11111_stav"].attributes;
+  a.nabehy = {
+    spolu: 30, pouzitelne: ready ? 13 : 4, potrebne: 6, pripravene: ready, min_na_c: ready ? 12.5 : null,
+    zaklad: "near", zaklad_n: 7,
+    pasma: [
+      { od: null, do: 0, n: 0, min_na_c: null }, { od: 0, do: 5, n: 7, min_na_c: 12.5 },
+      { od: 5, do: 10, n: 4, min_na_c: 9 }, { od: 10, do: 15, n: 2, min_na_c: 7 }, { od: 15, do: null, n: 0, min_na_c: null },
+    ],
+    posledne: [
+      { start: "2026-10-28T05:00:00+01:00", min: 13.4, z: 22, na: 23, vonku: 1.1, typ: "rano", dyn: false, pouzity: true },
+      { start: "2026-10-27T11:45:00+01:00", min: 10.3, z: 24.5, na: 25, vonku: 13.1, typ: "stare", dyn: false, pouzity: false },
+    ],
+  };
+  a.dynamicke_predkurenie = Object.assign({ enabled: swOn, ready, rate: 12.5, lead: 35, day_early: false, preheat_early: false, start_day: "05:25", start_preheat: "14:25" }, dyn);
+  hass.states["switch.smart_heating_aaa11111_dynamicke_predkurenie"] = { state: swOn ? "on" : "off", attributes: {} };
+  const calls = [];
+  hass.callService = (domain, service, data) => { calls.push({ domain, service, data }); return Promise.resolve(); };
+  return { hass, calls };
+}
+
+test("overview: Warm-ups tab shows learned rate, bands, last runs and plan", () => {
+  const { hass } = wuHass({ swOn: true });
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  const panel = card.querySelector(".sho-wu");
+  assert.strictEqual(panel.hidden, false);
+  const text = panel.textContent.replace(/\s+/g, " ");
+  assert.match(text, /Nábehy a dynamické predkúrenie/);
+  assert.match(text, /Alpha\s*Pripravené/);
+  assert.match(text, /12,5 min na 1 °C/);
+  assert.match(text, /pri podobnej vonkajšej teplote \(7 nábehov\)/);
+  assert.match(text, /Deň začne o 05:25 \(o 35 min skôr\)/);
+  assert.match(text, /Predkúrenie začne o 14:25/);
+  assert.match(text, /28\. 10\. 05:00 · 22→23° · 13 min · 1,1° · ráno/);
+  assert.match(text, /staršie · nepoužité/);
+  // aktualne pasmo (vonku 7,5 °C) je zvyraznene
+  const cur = panel.querySelector(".sho-wub .cur");
+  assert.ok(cur && /5–10°/.test(cur.textContent));
+  assert.strictEqual(card.querySelector(".sho-wubtn").getAttribute("aria-expanded"), "true");
+});
+
+test("overview: Warm-ups switch toggles the zone dynamic preheat switch", () => {
+  const { hass, calls } = wuHass({ swOn: false });
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  const sw = card.querySelector('[data-wu-sw="switch.smart_heating_aaa11111_dynamicke_predkurenie"]');
+  assert.strictEqual(sw.getAttribute("aria-checked"), "false");
+  assert.match(card.querySelector(".sho-wu").textContent, /Vypnuté – dát je dosť/);
+  sw.click();
+  assert.strictEqual(JSON.stringify(calls), JSON.stringify([
+    { domain: "switch", service: "turn_on", data: { entity_id: "switch.smart_heating_aaa11111_dynamicke_predkurenie" } },
+  ]));
+  assert.strictEqual(sw.getAttribute("aria-checked"), "true");
+});
+
+test("overview: Warm-ups shows collecting state and running dynamic preheat", () => {
+  let { hass } = wuHass({ ready: false, swOn: true });
+  let card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  let text = card.querySelector(".sho-wu").textContent;
+  assert.match(text, /Zbiera dáta 4\/6/);
+  assert.match(text, /zatiaľ nenaučené/);
+  assert.match(text, /čaká na dosť dát/);
+  ({ hass } = wuHass({ swOn: true, dyn: { day_early: true, lead: 40 } }));
+  card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  assert.match(card.querySelector(".sho-wu").textContent, /Práve beží – začalo o 40 min skôr/);
+});
+
+test("overview: opening Warm-ups closes Statistics and vice versa", async () => {
+  const { hass } = wuHass();
+  hass.callWS = async () => ({});
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(card.querySelector(".sho-stats").hidden, false);
+  card.querySelector(".sho-wubtn").click();
+  assert.strictEqual(card.querySelector(".sho-stats").hidden, true);
+  assert.strictEqual(card.querySelector(".sho-wu").hidden, false);
+  card.querySelector(".sho-statsbtn").click();
+  await new Promise((r) => setTimeout(r, 10));
+  assert.strictEqual(card.querySelector(".sho-wu").hidden, true);
+  card.querySelector(".sho-statsbtn").click();
+  card.querySelector(".sho-wubtn").click();
+  card.querySelector(".sho-wubtn").click();
+  assert.strictEqual(card.querySelector(".sho-wu").hidden, true);
+});
+
+test("zone card: AC below its threshold is shown as standby with today's standby kWh", async () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const { hass } = consHass();
+  const a = hass.states[`sensor.smart_heating_${ZONE_ID}_stav`].attributes;
+  hass.states["sensor.daikin_power"] = { state: "25", attributes: { unit_of_measurement: "W" } };
+  a.sources = [
+    { key: "floor", power: ["sensor.podlaha_power"], energy: [], on: true, on_w: 20 },
+    { key: "ac", power: ["sensor.daikin_power"], energy: [], on: false, on_w: 150, standby_kwh_dnes: 0.41 },
+  ];
+  card.hass = hass;
+  document.body.appendChild(card);
+  await new Promise((r) => setTimeout(r, 15));
+  const p = card.querySelector(".sh-cons-p").textContent.replace(/\s+/g, " ");
+  assert.match(p, /Klíma\s*25 W\s*pohot\./);
+  assert.match(card.querySelector(".sh-sb").getAttribute("title"), /klíma v pohotovosti 0,41 kWh/);
+  // bezi -> bez "pohotovost"
+  const sid = `sensor.smart_heating_${ZONE_ID}_stav`;
+  const sources = [a.sources[0], { ...a.sources[1], on: true }];
+  const states = { ...hass.states, [sid]: { ...hass.states[sid], attributes: { ...a, sources } },
+    "sensor.daikin_power": { state: "577", attributes: { unit_of_measurement: "W" } } };
+  card.hass = { ...hass, states };
+  await new Promise((r) => setTimeout(r, 15));
+  assert.doesNotMatch(card.querySelector(".sh-cons-p").textContent, /pohot\./);
+});
+
+test("overview settings: meter and preheat fields get their own groups", async () => {
+  const { hass } = settingsHass();
+  const orig = hass.callApi;
+  hass.callApi = async (method, p, data) => {
+    const r = await orig(method, p, data);
+    if (r.step_id === "global") {
+      r.data_schema.push(
+        { name: "meter_ac_on_w", selector: { number: { min: 20, max: 2000, step: 10, unit_of_measurement: "W" } }, default: 150 },
+        { name: "preheat_max_lead", selector: { number: { min: 15, max: 240, step: 15, unit_of_measurement: "min" } }, default: 120 },
+      );
+    }
+    return r;
+  };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  const groups = Array.from(card.querySelectorAll(".sho-grp")).map((g) => g.textContent.replace(/\s+/g, " "));
+  assert.ok(groups.some((g) => /Merače/.test(g) && /Klíma beží nad/.test(g) && /150 W/.test(g)));
+  assert.ok(groups.some((g) => /Dynamické predkúrenie/.test(g) && /120 min/.test(g)));
+});

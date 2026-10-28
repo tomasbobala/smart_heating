@@ -49,6 +49,7 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
         "power_entities", "energy_entities", "sources", "outdoor_entity", "tariff_entity",
         "pv_surplus_entity", "presence_entities", "manual_presence_entities",
         "outdoor_humidity_entity", "outdoor_pressure_entity", "humidity_entity",
+        "nabehy", "dynamicke_predkurenie",
     })
 
     def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
@@ -69,6 +70,18 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
     @property
     def native_value(self):
         return self.coordinator.data["zones"][self._zone_id]["reason"]
+
+    def _source_info(self, src: dict) -> dict:
+        """Zdroj zony pre kartu: merace + ci podla prikonu bezi (klima: pod prahom = pohotovost)."""
+        c = self.coordinator
+        info = {"key": src["key"], "power": src["power"], "energy": src["energy"]}
+        if src["power"] and src["key"] != "other":
+            info["on"] = c._meter_on(src["power"])
+            info["on_w"] = c._meter_thresholds(src["key"])[0]
+        if src["key"] == "ac" and src["power"]:
+            kwh = c.standby_kwh_today(self._zone_id)
+            info["standby_kwh_dnes"] = round(kwh, 3) if kwh is not None else None
+        return info
 
     @property
     def extra_state_attributes(self):
@@ -107,16 +120,17 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             # logovanie nabehov - median minut na 1 °C a pocet zaznamenanych nabehov
             "nabeh_min_na_stupen": z.get("warmup_rate"),
             "nabehy_pocet": z.get("warmup_count", 0),
+            # statistika nabehov a dynamicke predkurenie (zalozka Nabehy na prehladovej karte)
+            "nabehy": self.coordinator.warmup_stats(self._zone_id, z.get("outdoor_temperature")),
+            "dynamicke_predkurenie": z.get("dyn_preheat"),
             # pre prehladovu kartu (nastavenia integracie cez options flow)
             "config_entry_id": self.coordinator.entry.entry_id,
             # spotreba zony: karty z nich citaju prikon a statistiky energie
             # vsetky merace zony (zdroje + ostatne, bez duplicit) a rozpad po zdrojoch
             "power_entities": self._all_meters("power"),
             "energy_entities": self._all_meters("energy"),
-            "sources": [
-                {"key": src["key"], "power": src["power"], "energy": src["energy"]}
-                for src in self.coordinator._zone_sources(self.coordinator.zones.get(self._zone_id, {}))
-            ],
+            "sources": [self._source_info(src)
+                        for src in self.coordinator._zone_sources(self.coordinator.zones.get(self._zone_id, {}))],
             "meter_problems": z.get("meter_problems", []),
             # pre prehladovu kartu - aby nepotrebovala vlastnu konfiguraciu
             "outdoor_entity": self.coordinator.entry.options.get(CONF_OUTDOOR_SENSOR),

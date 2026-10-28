@@ -93,7 +93,11 @@
           "notify_humidity": "Notify: high / low humidity in a room",
           "pv_acc_step": "Solar storage: raise target by (°C) once reached",
           "pv_acc_minutes": "Solar storage: at most every (min)",
-          "pv_max_heat_power": "Solar: max. heating power (W, reserve for the house; 0 = no limit)"
+          "pv_max_heat_power": "Solar: max. heating power (W, reserve for the house; 0 = no limit)",
+          "meter_ac_on_w": "AC meter: running above (W; below = standby)",
+          "meter_ac_stuck_w": "AC meter: stuck above (W, when it should be off)",
+          "preheat_max_lead": "Dynamic preheat: at most earlier by (min)",
+          "preheat_margin": "Dynamic preheat: margin (min)"
         },
         "description": "Smart Heating version {version}"
       },

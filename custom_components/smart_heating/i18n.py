@@ -17,6 +17,10 @@ TEXTS: dict[str, dict[str, str]] = {
     },
     "reason_auto_holiday": {"en": "Auto: holiday/away -> Min", "sk": "Auto: dovolenka/neprítomnosť -> Min"},
     "reason_auto_presence": {"en": "Auto: someone is home -> {mode}", "sk": "Auto: prítomnosť doma -> {mode}"},
+    "reason_auto_dyn_preheat": {
+        "en": "Auto: dynamic pre-heat – {lead} min ahead of {start}",
+        "sk": "Auto: dynamické predkúrenie – o {lead} min skôr pred {start}",
+    },
     "reason_auto_preheat": {
         "en": "Auto: pre-heating before arrival -> {mode}",
         "sk": "Auto: predkúrenie pred príchodom -> {mode}",

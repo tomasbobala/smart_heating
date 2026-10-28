@@ -93,7 +93,11 @@
           "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe",
           "pv_acc_step": "FVE akumulácia: zvýšiť cieľ o (°C) po jeho dosiahnutí",
           "pv_acc_minutes": "FVE akumulácia: najskôr každých (min)",
-          "pv_max_heat_power": "FVE: max. príkon kúrenia (W, rezerva pre dom; 0 = bez limitu)"
+          "pv_max_heat_power": "FVE: max. príkon kúrenia (W, rezerva pre dom; 0 = bez limitu)",
+          "meter_ac_on_w": "Merač klímy: beží nad (W; pod tým je pohotovosť)",
+          "meter_ac_stuck_w": "Merač klímy: zaseknutá nad (W, keď má byť vypnutá)",
+          "preheat_max_lead": "Dynamické predkúrenie: najviac skôr o (min)",
+          "preheat_margin": "Dynamické predkúrenie: rezerva (min)"
         },
         "description": "Smart Heating verzia {version}"
       },

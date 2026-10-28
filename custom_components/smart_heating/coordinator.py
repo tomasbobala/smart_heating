@@ -58,6 +58,7 @@ from .const import (
     CONF_BATTERY_POWER_ENTITY,
     CONF_GRID_EXPORT_NEGATIVE,
     CONF_BATTERY_CHARGE_POSITIVE,
+    HUB_EXTRA_NUMBERS,
     PV_ENGINE_NUMBERS,
     SOURCE_METERS,
     METER_ON_W,
@@ -109,7 +110,11 @@ FLOOR_SENSOR_GRACE = timedelta(minutes=10)      # senzor podlahy nedostupny tak 
 # Logovanie nabehov (zaklad pre buduce adaptivne predkurenie)
 WARMUP_MIN_GAP = 0.5        # nabeh sa zacne logovat, ked chyba aspon tolko °C
 WARMUP_MIN_MINUTES = 5      # kratsie nabehy su sum
-WARMUP_KEEP = 30            # poslednych N nabehov na zonu
+WARMUP_KEEP = 200           # poslednych N nabehov na zonu
+WARMUP_READY = 6            # tolko pouzitelnych nabehov treba na dynamicke predkurenie
+WARMUP_NEAR_OUTDOOR = 4.0   # nabehy pri podobnej vonkajsej teplote (± °C) maju prednost
+WARMUP_NEAR_MIN = 3
+WARMUP_BANDS = ((None, 0), (0, 5), (5, 10), (10, 15), (15, None))  # pasma vonkajsej teploty
 WARMUP_STORE_VERSION = 1
 
 # Kaskada FVE prebytku
@@ -144,6 +149,11 @@ def switch_entity_id(zone_id: str, key: str) -> str:
     return f"switch.smart_heating_{zone_id}_{key}"
 
 
+def _minutes_since(now_t: dt_time, start_t: dt_time) -> int:
+    """Minuty od start_t do now_t v ramci dna (zaporne = este nenastal)."""
+    return (now_t.hour * 60 + now_t.minute) - (start_t.hour * 60 + start_t.minute)
+
+
 def _time_in_range(now_t: dt_time, start_t: dt_time, end_t: dt_time) -> bool:
     """True ak now_t lezi v intervale <start_t, end_t), s podporou prechodu cez polnoc."""
     if start_t <= end_t:
@@ -176,6 +186,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._lang = "en"
         self._warmup_store = Store(hass, WARMUP_STORE_VERSION, f"{DOMAIN}.warmup.{entry.entry_id}")
         self._warmup_data: dict[str, list] = {}
+        # spotreba klimy v pohotovosti (prikon pod prahom "bezi"): zona -> {"day", "kwh"}
+        self._standby_store = Store(hass, 1, f"{DOMAIN}.standby.{entry.entry_id}")
+        self._standby: dict[str, dict] = {}
+        self._standby_at: datetime | None = None
 
     @property
     def zones(self) -> dict:
@@ -196,6 +210,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         except Exception:  # noqa: BLE001 - poskodeny subor nesmie zastavit kurenie
             _LOGGER.warning("Nepodarilo sa nacitat historiu nabehov, zacina sa odznova")
             self._warmup_data = {}
+        try:
+            self._standby = await self._standby_store.async_load() or {}
+        except Exception:  # noqa: BLE001
+            self._standby = {}
         self.data = self._compute()
         self._track_entities()
         self._unsub_interval = async_track_time_interval(
@@ -571,6 +589,21 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         preheat_active = (
             predkurenie_povolene and weekday < 5 and _time_in_range(now_t, predkurenie_od, predkurenie_do)
         )
+        # Dynamicke predkurenie: zaciatok dna (ked je niekto doma) a predkurenia pred prichodom
+        # sa posunu skor o naucenu dobu nabehu - aby bolo teplo uz v case zaciatku.
+        dyn = self._dynamic_preheat(
+            zone_id, current_temp, den, outdoor, den_od, predkurenie_od,
+            predkurenie_povolene and weekday < 5, presence,
+        )
+        if dyn["day_early"] and not is_day:
+            is_day, comfort_target, comfort_mode = True, den, MODE_DEN
+        if dyn["preheat_early"]:
+            preheat_active = True
+        warmup_ctx = (
+            "predkurenie" if preheat_active and not presence
+            else "rano" if dyn["day_early"] or (is_day and 0 <= _minutes_since(now_t, den_od) < 180)
+            else "ine"
+        )
 
         vonkajsia_hranica = self._state_float(
             number_entity_id(zone_id, "vonkajsia_hranica"), NUMBER_DEFS["vonkajsia_hranica"][4]
@@ -589,6 +622,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             mode, den, noc, min_temp, mraz, comfort_target, comfort_mode,
             presence, preheat_active, cold_outdoor_active, holiday_active, boost_active,
         )
+
+        if (dyn["day_early"] or dyn["preheat_early"]) and mode == MODE_AUTO and not boost_active and not holiday_active:
+            reason = self._t(
+                "reason_auto_dyn_preheat", lead=dyn["lead"],
+                start=(den_od if dyn["day_early"] else predkurenie_od).strftime("%H:%M"),
+            )
 
         # --- 1: TARIFA ---
         tariff_blocked = False
@@ -710,6 +749,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "floor_guard": floor_guard,
             "floor_hysterezia": floor_hyst,
             "pv_target": comfort_target,
+            "dyn_preheat": dyn,
+            "warmup_ctx": warmup_ctx,
             "radiator_entity": zone.get(CONF_RADIATOR_ENTITY),
             "mode": mode,
             "effective_mode": effective_mode,
@@ -1276,10 +1317,12 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         )
 
     def _pv_param(self, key: str) -> float:
+        """Globalny ciselny parameter z options (kaskada FVE, prahy meracov, predkurenie)."""
+        defs = PV_ENGINE_NUMBERS if key in PV_ENGINE_NUMBERS else HUB_EXTRA_NUMBERS
         try:
-            return float(self.entry.options.get(key, PV_ENGINE_NUMBERS[key][4]))
+            return float(self.entry.options.get(key, defs[key][4]))
         except (TypeError, ValueError):
-            return float(PV_ENGINE_NUMBERS[key][4])
+            return float(defs[key][4])
 
     def _pv_engine_step(self) -> int:
         """Jeden krok kaskady podla vykonu. Vrati novu aktivnu prioritu (0 = nic).
@@ -1517,12 +1560,30 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     return src["power"]
         return None
 
+    def _meter_source_key(self, power_entity) -> str | None:
+        """Ku ktoremu zdroju (floor/ac/radiator/other) patri merac prikonu."""
+        for zone in self.zones.values():
+            for src in self._zone_sources(zone):
+                if power_entity in src["power"]:
+                    return src["key"]
+        return None
+
+    def _meter_thresholds(self, key) -> tuple[float, float]:
+        """(bezi nad W, zaseknute nad W) pre zdroj. Klima ma vlastne prahy - v pohotovosti
+        taha desiatky W (Daikin ~25 W), podlaha a radiator su pri vypnutom rele na nule."""
+        if key == "ac":
+            on_w = self._pv_param("meter_ac_on_w")
+            return on_w, max(on_w, self._pv_param("meter_ac_stuck_w"))
+        return float(METER_ON_W), float(METER_STUCK_W)
+
     def _meter_on(self, power_entities):
-        """True/False podla prikonu (> METER_ON_W), None ked merac nie je alebo nic nehlasi."""
+        """True/False podla prikonu (nad prahom zdroja), None ked merac nie je alebo nic nehlasi."""
         if not power_entities:
             return None
-        values = [w for w in (self._power_w(e) for e in power_entities) if w is not None]
-        return any(w > METER_ON_W for w in values) if values else None
+        values = [(e, w) for e, w in ((e, self._power_w(e)) for e in power_entities) if w is not None]
+        if not values:
+            return None
+        return any(w > self._meter_thresholds(self._meter_source_key(e))[0] for e, w in values)
 
     def _meter_check(self, zone_id: str, zdata: dict) -> list[tuple[str, str]]:
         """Rozpor medzi zariadenim a meracom dlhsie ako 10 min: hlasi kurenie, ale taha 0 W
@@ -1541,12 +1602,20 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             if not values:
                 continue
             power = sum(values)
+            on_w, stuck_w = self._meter_thresholds(key)
             reported = self._device_action(src["device"])
-            expect_on = cmd[key] if key == "radiator" else (reported in ("heating", "cooling") if reported else None)
+            if key == "radiator":
+                expect_on = cmd[key]
+            elif key == "ac":
+                # Daikin hlasi "heating" po cely cas rezimu kurenia, aj ked kompresor stoji
+                # (dosiahol teplotu) - merac je tu pravda, "nekuri" sa z toho hlasit neda.
+                expect_on = None
+            else:
+                expect_on = reported in ("heating", "cooling") if reported else None
             issue = None
-            if expect_on and power <= METER_ON_W:
+            if expect_on and power <= on_w:
                 issue = ("nopower", self._t("diag_meter_no_power", source=self._t(f"src_{key}")))
-            elif cmd[key] is False and power > METER_STUCK_W:
+            elif cmd[key] is False and power > stuck_w:
                 issue = ("stuck", self._t("diag_meter_stuck", source=self._t(f"src_{key}"), power=round(power)))
             if issue:
                 pkey = f"meter:{key}:{issue[0]}"
@@ -1564,6 +1633,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         await self._pv_engine_tick()
         self._accumulate_pv_energy()
         self._accumulate_house_energy()
+        self._accumulate_standby()
         meters = {}
         for zone in self.zones.values():
             for src in self._zone_sources(zone):
@@ -1594,6 +1664,41 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             for src in self._zone_sources(self.zones.get(zone_id, {})):
                 watts += sum(w for w in (self._power_w(e) for e in src["power"]) if w is not None)
         self._pv_energy_kwh += watts * hours / 1000
+
+    def _accumulate_standby(self) -> None:
+        """Energia klimy v pohotovosti (prikon pod prahom meter_ac_on_w) za dnesny den."""
+        now = dt_util.now()
+        last, self._standby_at = self._standby_at, now
+        if last is None:
+            return
+        hours = (now - last).total_seconds() / 3600
+        if hours <= 0 or hours > 0.25:
+            return
+        day = now.date().isoformat()
+        on_w = self._meter_thresholds("ac")[0]
+        changed = False
+        for zone_id, zone in self.zones.items():
+            for src in self._zone_sources(zone):
+                if src["key"] != "ac" or not src["power"]:
+                    continue
+                values = [w for w in (self._power_w(e) for e in src["power"]) if w is not None]
+                if not values:
+                    continue
+                rec = self._standby.get(zone_id)
+                if not rec or rec.get("day") != day:
+                    rec = self._standby[zone_id] = {"day": day, "kwh": 0.0}
+                watts = sum(values)
+                if watts <= on_w:
+                    rec["kwh"] = round(rec["kwh"] + watts * hours / 1000, 5)
+                    changed = True
+        if changed:
+            self._standby_store.async_delay_save(lambda: self._standby, 300)
+
+    def standby_kwh_today(self, zone_id: str) -> float | None:
+        rec = self._standby.get(zone_id)
+        if not rec:
+            return None
+        return rec["kwh"] if rec.get("day") == dt_util.now().date().isoformat() else 0.0
 
     def _house_flows(self) -> dict | None:
         """Okamzite toky domu vo W: zdroje (FVE, odber zo siete, vybijanie baterie)
@@ -1815,14 +1920,22 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             if (
                 zdata.get("actual_action") == "heating" and cur is not None and tgt is not None
                 and tgt - cur >= WARMUP_MIN_GAP
+                # kroky akumulacie FVE (+1 °C cez obed) nie su nabeh z vychladnutej izby
+                and not zdata.get("pv_active")
             ):
+                dyn = zdata.get("dyn_preheat") or {}
                 rt["warmup"] = {
                     "start": now, "from": cur, "target": tgt,
                     "outdoor": zdata.get("outdoor_temperature"), "source": zdata.get("heat_source"),
+                    "kind": zdata.get("warmup_ctx") or "ine",
+                    "dyn": bool(dyn.get("day_early") or dyn.get("preheat_early")),
                 }
             return
-        if tgt is None or abs(tgt - run["target"]) > 0.01 or not zdata.get("heating_allowed"):
-            rt["warmup"] = None  # zmena ciela alebo stop - nabeh sa nepocita
+        if (
+            tgt is None or abs(tgt - run["target"]) > 0.01 or not zdata.get("heating_allowed")
+            or zdata.get("pv_active")
+        ):
+            rt["warmup"] = None  # zmena ciela, stop alebo prebytok FVE - nabeh sa nepocita
             return
         if cur is not None and cur >= run["target"]:
             minutes = (now - run["start"]).total_seconds() / 60
@@ -1831,6 +1944,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     "start": run["start"].isoformat(), "minutes": round(minutes, 1),
                     "from": run["from"], "to": run["target"],
                     "outdoor": run["outdoor"], "source": run["source"],
+                    "kind": run.get("kind", "ine"), "dyn": run.get("dyn", False),
                 }
                 runs = self._warmup_data.setdefault(zone_id, [])
                 runs.append(record)
@@ -1838,19 +1952,128 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 self._warmup_store.async_delay_save(lambda: self._warmup_data, 60)
             rt["warmup"] = None
 
-    def _warmup_summary(self, zone_id: str):
-        """(median minut na 1 °C, pocet nabehov) z ulozenych nabehov zony."""
-        rates = []
+    @staticmethod
+    def _median(values: list):
+        if not values:
+            return None
+        v = sorted(values)
+        mid = len(v) // 2
+        return v[mid] if len(v) % 2 else (v[mid - 1] + v[mid]) / 2
+
+    @staticmethod
+    def _warmup_usable(r: dict) -> bool:
+        """Nabeh vhodny na ucenie. Stare zaznamy (pred 0.25, bez 'kind') obsahuju aj kroky
+        akumulacie FVE cez den - beru sa len tie, co zacali rano (4:00-8:59)."""
+        delta = (r.get("to") or 0) - (r.get("from") or 0)
+        if delta < WARMUP_MIN_GAP or not r.get("minutes"):
+            return False
+        kind = r.get("kind")
+        if kind == "fve":
+            return False
+        if kind is None:
+            start = dt_util.parse_datetime(str(r.get("start") or ""))
+            return start is not None and 4 <= dt_util.as_local(start).hour <= 8
+        return True
+
+    def _warmup_rates(self, zone_id: str) -> list[tuple[float, float | None]]:
+        """[(minut na 1 °C, vonkajsia teplota)] z pouzitelnych nabehov zony."""
+        out = []
         for r in self._warmup_data.get(zone_id, []):
-            delta = (r.get("to") or 0) - (r.get("from") or 0)
-            if delta >= WARMUP_MIN_GAP and r.get("minutes"):
-                rates.append(r["minutes"] / delta)
-        if not rates:
-            return None, len(self._warmup_data.get(zone_id, []))
-        rates.sort()
-        mid = len(rates) // 2
-        median = rates[mid] if len(rates) % 2 else (rates[mid - 1] + rates[mid]) / 2
-        return round(median), len(self._warmup_data.get(zone_id, []))
+            if self._warmup_usable(r):
+                out.append((r["minutes"] / (r["to"] - r["from"]), r.get("outdoor")))
+        return out
+
+    def _warmup_model(self, zone_id: str, outdoor) -> dict:
+        """Naucena rychlost nabehu (min/°C) pre aktualnu vonkajsiu teplotu."""
+        rates = self._warmup_rates(zone_id)
+        basis = "all"
+        pick = [x for x, _ in rates]
+        if outdoor is not None:
+            near = [x for x, o in rates if o is not None and abs(o - outdoor) <= WARMUP_NEAR_OUTDOOR]
+            if len(near) >= WARMUP_NEAR_MIN:
+                pick, basis = near, "near"
+        rate = self._median(pick)
+        return {
+            "rate": round(rate, 1) if rate is not None else None,
+            "n": len(pick), "usable": len(rates), "basis": basis,
+            "ready": len(rates) >= WARMUP_READY and rate is not None,
+        }
+
+    def _warmup_summary(self, zone_id: str):
+        """(median minut na 1 °C z pouzitelnych nabehov, pocet vsetkych zaznamov)."""
+        rate = self._median([x for x, _ in self._warmup_rates(zone_id)])
+        return (round(rate) if rate is not None else None), len(self._warmup_data.get(zone_id, []))
+
+    def warmup_stats(self, zone_id: str, outdoor) -> dict:
+        """Statistika nabehov pre kartu: pasma vonkajsej teploty, posledne nabehy, stav ucenia."""
+        rates = self._warmup_rates(zone_id)
+        bands = []
+        for lo, hi in WARMUP_BANDS:
+            sel = [x for x, o in rates if o is not None and (lo is None or o >= lo) and (hi is None or o < hi)]
+            med = self._median(sel)
+            bands.append({"od": lo, "do": hi, "n": len(sel), "min_na_c": round(med, 1) if med is not None else None})
+        last = []
+        for r in reversed(self._warmup_data.get(zone_id, [])[-8:]):
+            last.append({
+                "start": r.get("start"), "min": r.get("minutes"), "z": r.get("from"), "na": r.get("to"),
+                "vonku": r.get("outdoor"), "typ": r.get("kind") or "stare", "dyn": bool(r.get("dyn")),
+                "pouzity": self._warmup_usable(r),
+            })
+        model = self._warmup_model(zone_id, outdoor)
+        return {
+            "spolu": len(self._warmup_data.get(zone_id, [])), "pouzitelne": model["usable"],
+            "potrebne": WARMUP_READY, "pripravene": model["ready"],
+            "min_na_c": model["rate"], "zaklad": model["basis"], "zaklad_n": model["n"],
+            "pasma": bands, "posledne": last,
+        }
+
+    def _dynamic_preheat(
+        self, zone_id: str, current, den, outdoor, den_od, preheat_od, preheat_allowed: bool, presence: bool,
+    ) -> dict:
+        """Posun zaciatku dna / predkurenia skor o odhad nabehu:
+        predstih = (denna - aktualna) x naucene min/°C + rezerva, najviac preheat_max_lead.
+        Ked raz zacne, drzi sa do riadneho zaciatku (inak by s rastucou teplotou
+        predstih klesal a kurenie by preskakovalo)."""
+        rt = self._rt(zone_id)
+        enabled = self._state_bool(switch_entity_id(zone_id, "dynamicke_predkurenie"), False)
+        model = self._warmup_model(zone_id, outdoor)
+        info = {
+            "enabled": enabled, "ready": model["ready"], "rate": model["rate"], "lead": None,
+            "day_early": False, "preheat_early": False, "start_day": None, "start_preheat": None,
+        }
+        latch = rt.setdefault("dyn_latch", {})
+        if not enabled or not model["ready"] or current is None or den is None:
+            latch.clear()
+            return info
+        deficit = den - current
+        lead = 0
+        if deficit >= WARMUP_MIN_GAP:
+            lead = int(min(self._pv_param("preheat_max_lead"),
+                           round(deficit * model["rate"] + self._pv_param("preheat_margin"))))
+        info["lead"] = lead
+        now = dt_util.now()
+        today = now.date().isoformat()
+
+        def early(kind: str, start_t, allowed: bool) -> bool:
+            start = now.replace(hour=start_t.hour, minute=start_t.minute, second=0, microsecond=0)
+            if lead:
+                info[f"start_{kind}"] = (start - timedelta(minutes=lead)).strftime("%H:%M")
+            if not allowed or now >= start:
+                if latch.get(kind) == today and now >= start:
+                    latch.pop(kind, None)
+                if not allowed:
+                    latch.pop(kind, None)
+                return False
+            if latch.get(kind) == today:
+                return True
+            if lead and start - timedelta(minutes=lead) <= now:
+                latch[kind] = today
+                return True
+            return False
+
+        info["day_early"] = early("day", den_od, presence)
+        info["preheat_early"] = early("preheat", preheat_od, preheat_allowed and not presence)
+        return info
 
     def async_unsub(self) -> None:
         if self._unsub_tracking:

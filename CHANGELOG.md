@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.25.0
+- **AC meter thresholds.** An air conditioner draws power in standby
+  (electronics, Wi-Fi, compressor crankcase heater - Daikin ~25 W, more in frost),
+  so with the shared 20 W threshold it counted as heating while idle. The AC now
+  has its own thresholds: running above `meter_ac_on_w` (default 150 W), stuck
+  above `meter_ac_stuck_w` (default 300 W); floor and radiator stay at 20 / 50 W.
+  Both are in the global settings and in the overview card settings ("Meters").
+- **AC state from its meter.** Daikin reports `heating` for the whole heat mode
+  even with the compressor stopped, so the "heats but draws 0 W" fault is no
+  longer raised for the AC - its meter decides whether it runs.
+- **AC standby energy.** Energy drawn below the running threshold is summed per
+  day (persisted). The zone card shows "standby" next to the AC power (today's
+  kWh in the tooltip), Statistics → Meter check shows it per zone. The `sources`
+  attribute has `on`, `on_w` and `standby_kwh_dnes`.
+- **Warm-up logging fixed.** Solar storage steps (+1 °C at midday) are no
+  longer logged as warm-ups and a running warm-up is dropped when surplus starts.
+  Each warm-up records its kind (morning / preheat / other) and whether dynamic
+  preheat started it. Keeps the last 200 per zone (was 30). Older records are
+  used only when they started in the morning (4:00-8:59).
+- **Dynamic preheat** (per zone switch `dynamicke_predkurenie`, off by default).
+  The day start (when someone is home) and preheating before arrival begin
+  earlier by `deficit × learned min/°C + margin`, at most `preheat_max_lead`
+  (default 120 min, margin 10 min). The learned rate prefers warm-ups at a
+  similar outdoor temperature (±4 °C). Needs at least 6 usable warm-ups, until
+  then the fixed times apply. Once started it holds until the normal start.
+- **"Warm-ups" tab in the overview card** - per zone: learned rate, data state,
+  the on/off switch, planned earlier start, rates by outdoor temperature band and
+  the latest warm-ups. New attributes `nabehy` and `dynamicke_predkurenie`.
+
 ## 0.24.2
 - Fixed: after the solar surplus ended a zone kept heating to the raised
   storage temperature (e.g. bedroom 24.5 °C instead of 21 °C). The storage

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.24.2";
+const CARD_VERSION = "0.25.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -183,6 +183,7 @@ const I18N = {
   st_rank: { en: "Rooms", sk: "Poradie izieb" },
   st_meters: { en: "Meter check", sk: "Kontrola meračov" },
   st_meters_ok: { en: "All meters are fine", sk: "Všetky merače sú v poriadku" },
+  st_standby: { en: "{zone}: AC standby today", sk: "{zone}: klíma v pohotovosti dnes" },
   st_no_meters: { en: "No energy meters are set for the zones (Edit zone).", sk: "Pri zónach nie sú nastavené merače energie (Upraviť zónu)." },
   st_error: { en: "Statistics could not be loaded.", sk: "Štatistiky sa nepodarilo načítať." },
   st_fve_note: { en: "Split by source: in every hour heating gets the same grid / solar / battery mix as the whole house. Surplus = energy used while the solar cascade was heating.", sk: "Rozdelenie podľa zdroja: v každej hodine má kúrenie rovnaký pomer sieť / FVE / batéria ako celý dom. Prebytok = energia, keď kúrila kaskáda FVE." },
@@ -287,6 +288,42 @@ const I18N = {
   of_notify_diagnostics: { en: "Faults", sk: "Poruchy" },
   of_notify_humidity: { en: "Humidity in rooms", sk: "Vlhkosť v izbách" },
   ov_heated_today: { en: "Heating today", sk: "Kúrenie dnes" },
+  of_meter_ac_on_w: { en: "AC running above", sk: "Klíma beží nad" },
+  of_meter_ac_stuck_w: { en: "AC stuck above", sk: "Klíma zaseknutá nad" },
+  of_preheat_max_lead: { en: "Dynamic preheat: at most", sk: "Dynamické predkúrenie: najviac" },
+  of_preheat_margin: { en: "…margin", sk: "…rezerva" },
+  ov_grp_meters: { en: "Meters", sk: "Merače" },
+  ov_grp_preheat: { en: "Dynamic preheat", sk: "Dynamické predkúrenie" },
+  cons_standby: { en: "standby", sk: "pohot." },
+  cons_standby_today: { en: "AC standby {kwh}", sk: "klíma v pohotovosti {kwh}" },
+  wu_btn: { en: "Warm-ups", sk: "Nábehy" },
+  wu_title: { en: "Warm-ups and dynamic preheat", sk: "Nábehy a dynamické predkúrenie" },
+  wu_intro: { en: "The integration learns how fast each room warms up. With dynamic preheat on, the day start (when someone is home) and preheating before arrival begin earlier by the learned time, so the room is warm on time.",
+    sk: "Integrácia sa učí, ako rýchlo sa každá izba nahreje. So zapnutým dynamickým predkúrením začne deň (keď je niekto doma) aj predkúrenie pred príchodom o naučený čas skôr, aby bolo teplo načas." },
+  wu_switch: { en: "Dynamic preheat", sk: "Dynamické predkúrenie" },
+  wu_ready: { en: "Ready", sk: "Pripravené" },
+  wu_collecting: { en: "Collecting data {n}/{need}", sk: "Zbiera dáta {n}/{need}" },
+  wu_rate: { en: "{v} min per 1 °C", sk: "{v} min na 1 °C" },
+  wu_rate_none: { en: "not learned yet", sk: "zatiaľ nenaučené" },
+  wu_basis_near: { en: "at similar outdoor temperature ({n} warm-ups)", sk: "pri podobnej vonkajšej teplote ({n} nábehov)" },
+  wu_basis_all: { en: "median of all warm-ups ({n})", sk: "medián všetkých nábehov ({n})" },
+  wu_plan_day: { en: "Day starts at {t} ({lead} min earlier)", sk: "Deň začne o {t} (o {lead} min skôr)" },
+  wu_plan_preheat: { en: "Preheat starts at {t} ({lead} min earlier)", sk: "Predkúrenie začne o {t} (o {lead} min skôr)" },
+  wu_plan_none: { en: "Room is warm – no earlier start needed", sk: "Izba je teplá – skorší štart netreba" },
+  wu_active: { en: "Running now – started {lead} min earlier", sk: "Práve beží – začalo o {lead} min skôr" },
+  wu_off_ready: { en: "Off – enough data, can be switched on", sk: "Vypnuté – dát je dosť, môžeš zapnúť" },
+  wu_waiting: { en: "On – waits for enough data, until then fixed times apply", sk: "Zapnuté – čaká na dosť dát, dovtedy platia pevné časy" },
+  wu_bands: { en: "By outdoor temperature", sk: "Podľa vonkajšej teploty" },
+  wu_last: { en: "Latest warm-ups", sk: "Posledné nábehy" },
+  wu_none: { en: "No warm-up recorded yet.", sk: "Zatiaľ žiadny zaznamenaný nábeh." },
+  wu_kind_rano: { en: "morning", sk: "ráno" },
+  wu_kind_predkurenie: { en: "preheat", sk: "predkúrenie" },
+  wu_kind_ine: { en: "other", sk: "iné" },
+  wu_kind_stare: { en: "older", sk: "staršie" },
+  wu_unused: { en: "not used", sk: "nepoužité" },
+  wu_dyn: { en: "dynamic", sk: "dynamicky" },
+  wu_note: { en: "Measured by the thermostat sensor, so warm-ups may look faster than the real room. Solar surplus storage steps are not counted. Max. lead and margin are in Integration settings.",
+    sk: "Meria sa senzor termostatu, nábehy preto môžu vyzerať rýchlejšie než v skutočnej izbe. Kroky akumulácie FVE sa nezapočítavajú. Max. predstih a rezerva sú v Nastaveniach integrácie." },
   ov_cooled_today: { en: "Cooling today", sk: "Chladenie dnes" },
 };
 
@@ -313,6 +350,7 @@ const MDI = {
   "heat-wave": "M8.5 4.5L5.4 9.5L8.5 14.7L5.2 20.5L3.4 19.6L6.1 14.7L3 9.5L6.7 3.6L8.5 4.5M14.7 4.4L11.6 9.5L14.7 14.5L11.4 20.3L9.6 19.4L12.3 14.5L9.2 9.5L12.9 3.5L14.7 4.4M21 4.4L17.9 9.5L21 14.5L17.7 20.3L15.9 19.4L18.6 14.5L15.5 9.5L19.2 3.5L21 4.4",
   "help-circle-outline": "M11,18H13V16H11V18M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,6A4,4 0 0,0 8,10H10A2,2 0 0,1 12,8A2,2 0 0,1 14,10C14,12 11,11.75 11,15H13C13,12.75 16,12.5 16,10A4,4 0 0,0 12,6Z",
   "home-account": "M12,3L2,12H5V20H19V12H22L12,3M12,8.75A2.25,2.25 0 0,1 14.25,11A2.25,2.25 0 0,1 12,13.25A2.25,2.25 0 0,1 9.75,11A2.25,2.25 0 0,1 12,8.75M12,15C13.5,15 16.5,15.75 16.5,17.25V18H7.5V17.25C7.5,15.75 10.5,15 12,15Z",
+  "home-thermometer": "M17 15.13V5C17 3.34 15.66 2 14 2S11 3.34 11 5V15.13C9.79 16.04 9 17.43 9 19C9 21.76 11.24 24 14 24S19 21.76 19 19C19 17.43 18.21 16.04 17 15.13M14 4C14.55 4 15 4.45 15 5V8H13V5C13 4.45 13.45 4 14 4M0 10V20H7V18H2V11.28L6 8.06L8 9.67V7.07L6 5.4L0 10Z",
   "information-outline": "M11,9H13V7H11M12,20C7.59,20 4,16.41 4,12C4,7.59 7.59,4 12,4C16.41,4 20,7.59 20,12C20,16.41 16.41,20 12,20M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M11,17H13V11H11V17Z",
   "open-in-new": "M14,3V5H17.59L7.76,14.83L9.17,16.24L19,6.41V10H21V3M19,19H5V5H12V3H5C3.89,3 3,3.9 3,5V19A2,2 0 0,0 5,21H19A2,2 0 0,0 21,19V12H19V19Z",
   "radiator": "M7.95,3L6.53,5.19L7.95,7.4H7.94L5.95,10.5L4.22,9.6L5.64,7.39L4.22,5.19L6.22,2.09L7.95,3M13.95,2.89L12.53,5.1L13.95,7.3L13.94,7.31L11.95,10.4L10.22,9.5L11.64,7.3L10.22,5.1L12.22,2L13.95,2.89M20,2.89L18.56,5.1L20,7.3V7.31L18,10.4L16.25,9.5L17.67,7.3L16.25,5.1L18.25,2L20,2.89M2,22V14A2,2 0 0,1 4,12H20A2,2 0 0,1 22,14V22H20V20H4V22H2M6,14A1,1 0 0,0 5,15V17A1,1 0 0,0 6,18A1,1 0 0,0 7,17V15A1,1 0 0,0 6,14M10,14A1,1 0 0,0 9,15V17A1,1 0 0,0 10,18A1,1 0 0,0 11,17V15A1,1 0 0,0 10,14M14,14A1,1 0 0,0 13,15V17A1,1 0 0,0 14,18A1,1 0 0,0 15,17V15A1,1 0 0,0 14,14M18,14A1,1 0 0,0 17,15V17A1,1 0 0,0 18,18A1,1 0 0,0 19,17V15A1,1 0 0,0 18,14Z",
@@ -768,14 +806,25 @@ class SmartHeatingCard extends HTMLElement {
     if (srcs.length >= 2) {
       // viac zdrojov: rozpad, napr. Podlaha 0,8 kW · Klima 1,2 kW
       lbl.hidden = true;
-      pEl.innerHTML = srcs.map((x) =>
-        `<span class="sh-src"><i class="seg ${esc(x.key)}"></i>${esc(this._t("src_" + x.key))} <b>${esc(fmtPower(sumPowerW(this._hass, x.power), this._lang))}</b></span>`).join("");
+      pEl.innerHTML = srcs.map((x) => {
+        const w = sumPowerW(this._hass, x.power);
+        const sbKwh = x.standby_kwh_dnes != null ? fmtKwh(x.standby_kwh_dnes, this._lang) : "–";
+        const sb = x.key === "ac" && x.on === false && w > 0
+          ? ` <em class="sh-sb" title="${esc(this._t("cons_standby_today", { kwh: sbKwh }))}">${esc(this._t("cons_standby"))}</em>` : "";
+        return `<span class="sh-src"><i class="seg ${esc(x.key)}"></i>${esc(this._t("src_" + x.key))} <b>${esc(fmtPower(w, this._lang))}</b>${sb}</span>`;
+      }).join("");
     } else {
       lbl.hidden = false;
-      pEl.textContent = pIds.length ? fmtPower(sumPowerW(this._hass, pIds), this._lang) : "";
+      const w = pIds.length ? sumPowerW(this._hass, pIds) : null;
+      const ac = srcs.length === 1 && srcs[0].key === "ac" && srcs[0].on === false && w > 0;
+      pEl.textContent = pIds.length ? fmtPower(w, this._lang) + (ac ? ` · ${this._t("cons_standby")}` : "") : "";
     }
-    wrap.querySelector(".sh-cons-e").textContent = eIds.length && this._energyToday != null
-      ? `${this._t("cons_today")} ${fmtKwh(this._energyToday, this._lang)}` : "";
+    const acSrc = srcs.find((x) => x.key === "ac" && x.standby_kwh_dnes != null);
+    const eTxt = eIds.length && this._energyToday != null ? `${this._t("cons_today")} ${fmtKwh(this._energyToday, this._lang)}` : "";
+    const sbTxt = acSrc && acSrc.standby_kwh_dnes > 0.005 ? this._t("cons_standby_today", { kwh: fmtKwh(acSrc.standby_kwh_dnes, this._lang) }) : "";
+    const eEl = wrap.querySelector(".sh-cons-e");
+    eEl.textContent = eTxt;
+    eEl.title = sbTxt;
   }
 
   _maybeFetchEnergy() {
@@ -1006,12 +1055,15 @@ class SmartHeatingCard extends HTMLElement {
       .sh-cons[hidden] { display: none; }
       .sh-cons-i { display: inline-flex; color: var(--sh-warn, #e8a838); }
       .sh-cons-i svg { width: 15px; height: 15px; display: block; }
-      .sh-cons-p { font-weight: 650; color: var(--sh-txt, var(--primary-text-color)); font-variant-numeric: tabular-nums; }
-      .sh-cons-e { font-variant-numeric: tabular-nums; }
-      .sh-cons { flex-wrap: wrap; }
-      .sh-src { display: inline-flex; align-items: center; gap: 5px; margin-right: 10px; font-weight: 400; color: var(--sh-sub, var(--secondary-text-color)); }
+      .sh-cons-p { font-weight: 650; color: var(--sh-txt, var(--primary-text-color)); font-variant-numeric: tabular-nums;
+        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sh-cons-e { font-variant-numeric: tabular-nums; flex-shrink: 0; white-space: nowrap; }
+      .sh-cons { flex-wrap: nowrap; min-width: 0; }   /* vzdy 1 riadok - karta nemeni vysku */
+      .sh-cons-i, .sh-cons-lbl { flex-shrink: 0; }
+      .sh-sb { font-style: normal; font-size: 11.5px; opacity: .8; white-space: nowrap; }
+      .sh-src { display: inline; margin-right: 8px; white-space: nowrap; font-weight: 400; color: var(--sh-sub, var(--secondary-text-color)); }
       .sh-src b { color: var(--sh-txt, var(--primary-text-color)); font-weight: 650; }
-      .sh-src i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+      .sh-src i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: 1px; }
       .sh-src .seg.floor { background: #f0883e; } .sh-src .seg.ac { background: #4fa3ff; }
       .sh-src .seg.radiator { background: #2fa98a; } .sh-src .seg.other { background: #9a9aa2; }
       .sh-cons-e:not(:empty)::before { content: "·"; margin: 0 6px 0 2px; opacity: .6; }
@@ -1904,7 +1956,7 @@ class SmartHeatingOverview extends HTMLElement {
 
   _watched() {
     const ids = [];
-    for (const z of this._zones()) ids.push(eid(z, "climate"), eid(z, "sensor", "stav"));
+    for (const z of this._zones()) ids.push(eid(z, "climate"), eid(z, "sensor", "stav"), eid(z, "switch", "dynamicke_predkurenie"));
     const outdoor = this._outdoorEntity();
     if (outdoor) ids.push(outdoor);
     ids.push("sensor.smart_heating_fve_kaskada");
@@ -1963,6 +2015,37 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-statsbtn svg { width: 17px; height: 17px; }
       .sho-statsbtn[aria-expanded="true"] { background: rgba(124,108,240,.22); border-color: var(--primary-color, #7c6cf0); }
       .sho-stats { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 18px; }
+      .sho-btnrow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+      .sho-btnrow .sho-statsbtn { margin-top: 0; }
+      .sho-wubtn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 40px;
+        border-radius: 10px; border: 1px solid var(--divider-color, #333); background: none; color: var(--sh-txt); font: inherit; font-size: 13.5px;
+        font-weight: 600; cursor: pointer; width: 100%; }
+      .sho-wubtn svg { width: 17px; height: 17px; }
+      .sho-wubtn[aria-expanded="true"] { background: rgba(124,108,240,.22); border-color: var(--primary-color, #7c6cf0); }
+      .sho-wu { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; }
+      .sho-wu[hidden] { display: none; }
+      .sho-wu-h { display: flex; align-items: center; gap: 8px; font-weight: 650; font-size: 15px; }
+      .sho-wu-h svg { width: 18px; height: 18px; }
+      .sho-wu-intro, .sho-wu-note { font-size: 12.5px; color: var(--sh-sub); line-height: 1.45; }
+      .sho-wu-zs { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 10px; }
+      .sho-wuz { border: 1px solid var(--divider-color, #333); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+      .sho-wuz-t { display: flex; align-items: center; gap: 8px; }
+      .sho-wuz-t b { font-size: 14.5px; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .sho-wuchip { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; white-space: nowrap; background: rgba(245,166,35,.16); color: var(--sh-warn, #f5a623); }
+      .sho-wuchip.ok { background: rgba(48,164,108,.16); color: var(--sh-ok, #30a46c); }
+      .sho-wuz-sw { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; }
+      .sho-wuz-r { font-size: 13px; }
+      .sho-wuz-r b { font-size: 16px; font-variant-numeric: tabular-nums; }
+      .sho-wuz-s { font-size: 12px; color: var(--sh-sub); }
+      .sho-wuz-plan { font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: rgba(124,108,240,.10); }
+      .sho-wuz-plan.run { background: rgba(48,164,108,.14); }
+      .sho-wub { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+      .sho-wub div { text-align: center; padding: 4px 2px; border-radius: 6px; background: rgba(127,127,127,.08); font-size: 11px; color: var(--sh-sub); font-variant-numeric: tabular-nums; }
+      .sho-wub div b { display: block; font-size: 12.5px; color: var(--sh-txt); }
+      .sho-wub div.cur { outline: 1px solid var(--primary-color, #7c6cf0); }
+      .sho-wul { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--sh-sub); font-variant-numeric: tabular-nums; }
+      .sho-wul span.x { opacity: .55; text-decoration: line-through; }
+      .sho-wuk { font-size: 11px; color: var(--sh-sub); text-transform: uppercase; letter-spacing: .04em; }
       .sho-pv { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; }
       .sho-pv[hidden] { display: none; }
       .sho-pvst { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--sh-sub); flex-wrap: wrap; }
@@ -2101,10 +2184,11 @@ class SmartHeatingOverview extends HTMLElement {
       @container (max-width: 760px) {
         .sho-root { grid-template-columns: 1fr 1fr; }
         .sho-tiles { grid-column: 1 / -1; order: 3; }
-        .sho-set, .sho-stats, .sho-pv { order: 4; }   /* panely pod dlazdicami (FVE panel sa otvara z dlazdice) */
+        .sho-set, .sho-stats, .sho-pv, .sho-wu { order: 4; }   /* panely pod dlazdicami (FVE panel sa otvara z dlazdice) */
       }
       @container (max-width: 560px) {
         .sho-tiles { grid-template-columns: 1fr 1fr; }
+        .sho-btnrow { grid-template-columns: 1fr; }
       }
       @container (max-width: 420px) {
         .sho-tiles { padding: 10px; gap: 8px; }
@@ -2123,10 +2207,16 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-set" hidden></div>
         <div class="sho-blk sho-stats" hidden></div>
         <div class="sho-blk sho-pv" hidden></div>
+        <div class="sho-blk sho-wu" hidden></div>
       </div></ha-card>`;
       this.querySelector(".sho-sum").addEventListener("click", (e) => {
-        if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); if (this._pvOpen) this._togglePv(); this._toggleSettings(); }
-        if (e.target.closest(".sho-statsbtn")) { if (this._pvOpen) this._togglePv(); this._toggleStats(); }
+        if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); if (this._pvOpen) this._togglePv(); if (this._wuOpen) this._toggleWu(); this._toggleSettings(); }
+        if (e.target.closest(".sho-statsbtn")) { if (this._pvOpen) this._togglePv(); if (this._wuOpen) this._toggleWu(); this._toggleStats(); }
+        if (e.target.closest(".sho-wubtn")) this._toggleWu();
+      });
+      this.querySelector(".sho-wu").addEventListener("click", (e) => {
+        const sw = e.target.closest("[data-wu-sw]");
+        if (sw) this._toggleDynPreheat(sw);
       });
       this.querySelector(".sho-set").addEventListener("click", (e) => this._onSettingsClick(e));
       this.querySelector(".sho-stats").addEventListener("click", (e) => {
@@ -2172,6 +2262,7 @@ class SmartHeatingOverview extends HTMLElement {
     this._renderOutdoor(zones);
     this._renderTiles(zones);
     this._renderSummary(zones);
+    if (this._wuOpen) this._renderWu(zones);
     this._maybeFetch(zones);
     if (this._pvOpen) this._renderPv();
   }
@@ -2437,7 +2528,8 @@ class SmartHeatingOverview extends HTMLElement {
         ? row("", this._t("ov_power_now"), fmtPower(sumPowerW(this._hass, this._allCons("power_entities")), this._lang)) : "") +
       (this._allCons("energy_entities").length
         ? row("", this._t("ov_energy_today"), fmtKwh(this._energyToday, this._lang)) : "") +
-      `<button type="button" class="sho-statsbtn" aria-expanded="${this._statsOpen ? "true" : "false"}">${mdiSvg("chart-bar")}<span>${esc(this._t("st_btn"))}</span></button>` +
+      `<div class="sho-btnrow"><button type="button" class="sho-statsbtn" aria-expanded="${this._statsOpen ? "true" : "false"}">${mdiSvg("chart-bar")}<span>${esc(this._t("st_btn"))}</span></button>` +
+      `<button type="button" class="sho-wubtn" aria-expanded="${this._wuOpen ? "true" : "false"}">${mdiSvg("home-thermometer")}<span>${esc(this._t("wu_btn"))}</span></button></div>` +
       `<button type="button" class="sho-gear" aria-expanded="${this._setOpen ? "true" : "false"}">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></button>`;
   }
 
@@ -2448,6 +2540,97 @@ class SmartHeatingOverview extends HTMLElement {
 
   // -------------------------------------------------- panel kaskady FVE
 
+  // -------------------------------------------------- nabehy a dynamicke predkurenie
+
+  _toggleWu() {
+    const panel = this.querySelector(".sho-wu");
+    if (!panel) return;
+    this._wuOpen = !this._wuOpen;
+    if (!this._wuOpen) { panel.hidden = true; panel.innerHTML = ""; panel._html = ""; this._renderSummary(this._zoneData()); return; }
+    if (this._statsOpen) this._toggleStats();
+    if (this._setOpen) this._closeSettings(true);
+    if (this._pvOpen) this._togglePv();
+    panel.hidden = false;
+    this._renderSummary(this._zoneData());
+    this._renderWu(this._zoneData());
+  }
+
+  _toggleDynPreheat(el) {
+    const id = el.dataset.wuSw;
+    if (!this._hass || !id) return;
+    const on = el.getAttribute("aria-checked") === "true";
+    el.classList.toggle("on", !on);
+    el.setAttribute("aria-checked", String(!on));
+    Promise.resolve(this._hass.callService("switch", on ? "turn_off" : "turn_on", { entity_id: id })).catch(() => {});
+  }
+
+  _wuZoneHtml(z) {
+    const st = z.s.nabehy || {};
+    const dyn = z.s.dynamicke_predkurenie || {};
+    const swId = eid(z.id, "switch", "dynamicke_predkurenie");
+    const sw = this._hass.states[swId];
+    const on = sw ? sw.state === "on" : !!dyn.enabled;
+    const dec = (v) => (v == null ? "–" : String(Math.round(Number(v) * 10) / 10).replace(".", this._lang === "sk" ? "," : "."));
+    const ready = !!st.pripravene;
+    const chip = ready
+      ? `<span class="sho-wuchip ok">${esc(this._t("wu_ready"))}</span>`
+      : `<span class="sho-wuchip">${esc(this._t("wu_collecting", { n: st.pouzitelne || 0, need: st.potrebne || 6 }))}</span>`;
+    const rate = st.min_na_c != null
+      ? `<div class="sho-wuz-r"><b>${esc(this._t("wu_rate", { v: dec(st.min_na_c) }))}</b></div>
+         <div class="sho-wuz-s">${esc(this._t(st.zaklad === "near" ? "wu_basis_near" : "wu_basis_all", { n: st.zaklad_n || 0 }))}</div>`
+      : `<div class="sho-wuz-r"><b>${esc(this._t("wu_rate_none"))}</b></div>`;
+    let plan = "";
+    if (on && ready) {
+      if (dyn.day_early || dyn.preheat_early) {
+        plan = `<div class="sho-wuz-plan run">${esc(this._t("wu_active", { lead: dyn.lead || 0 }))}</div>`;
+      } else if (dyn.lead) {
+        const rows = [];
+        if (dyn.start_day) rows.push(this._t("wu_plan_day", { t: dyn.start_day, lead: dyn.lead }));
+        if (dyn.start_preheat) rows.push(this._t("wu_plan_preheat", { t: dyn.start_preheat, lead: dyn.lead }));
+        plan = rows.length ? `<div class="sho-wuz-plan">${rows.map(esc).join("<br>")}</div>` : "";
+      } else {
+        plan = `<div class="sho-wuz-plan">${esc(this._t("wu_plan_none"))}</div>`;
+      }
+    } else if (on) {
+      plan = `<div class="sho-wuz-plan">${esc(this._t("wu_waiting"))}</div>`;
+    } else if (ready) {
+      plan = `<div class="sho-wuz-s">${esc(this._t("wu_off_ready"))}</div>`;
+    }
+    const out = num(z.s.outdoor_temperature);
+    const bands = (st.pasma || []).map((b) => {
+      const lbl = b.od == null ? `< ${b.do}°` : b.do == null ? `≥ ${b.od}°` : `${b.od}–${b.do}°`;
+      const cur = out != null && (b.od == null || out >= b.od) && (b.do == null || out < b.do);
+      return `<div class="${cur ? "cur" : ""}"><b>${b.min_na_c != null ? esc(dec(b.min_na_c)) : "–"}</b>${esc(lbl)}<br>${b.n}×</div>`;
+    }).join("");
+    const last = (st.posledne || []).slice(0, 4).map((r) => {
+      const d = new Date(r.start);
+      const when = isNaN(d) ? "" : `${d.getDate()}. ${d.getMonth() + 1}. ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const kind = this._t(`wu_kind_${r.typ || "ine"}`);
+      const txt = `${when} · ${dec(r.z)}→${dec(r.na)}° · ${Math.round(Number(r.min) || 0)} min · ${r.vonku != null ? `${dec(r.vonku)}° ` : ""}· ${kind}${r.dyn ? ` · ${this._t("wu_dyn")}` : ""}${r.pouzity ? "" : ` · ${this._t("wu_unused")}`}`;
+      return `<span class="${r.pouzity ? "" : "x"}">${esc(txt)}</span>`;
+    }).join("");
+    return `<div class="sho-wuz">
+      <div class="sho-wuz-t"><b>${esc(z.name)}</b>${chip}</div>
+      <div class="sho-wuz-sw"><span>${esc(this._t("wu_switch"))}</span>
+        <button type="button" class="sho-sw ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-wu-sw="${esc(swId)}"${sw ? "" : " disabled"}><i></i></button></div>
+      ${rate}${plan}
+      ${bands ? `<div class="sho-wuk">${esc(this._t("wu_bands"))}</div><div class="sho-wub">${bands}</div>` : ""}
+      <div class="sho-wuk">${esc(this._t("wu_last"))}</div>
+      <div class="sho-wul">${last || esc(this._t("wu_none"))}</div>
+    </div>`;
+  }
+
+  _renderWu(zones) {
+    const panel = this.querySelector(".sho-wu");
+    if (!panel || panel.hidden) return;
+    const heating = zones.filter((z) => (z.s.season || z.c.sezona) !== "Chladenie" || z.s.nabehy);
+    const html = `<div class="sho-wu-h">${mdiSvg("home-thermometer")}<span>${esc(this._t("wu_title"))}</span></div>
+      <div class="sho-wu-intro">${esc(this._t("wu_intro"))}</div>
+      <div class="sho-wu-zs">${heating.map((z) => this._wuZoneHtml(z)).join("")}</div>
+      <div class="sho-wu-note">${esc(this._t("wu_note"))}</div>`;
+    if (panel._html !== html) { panel.innerHTML = html; panel._html = html; }
+  }
+
   _togglePv() {
     const panel = this.querySelector(".sho-pv");
     if (!panel) return;
@@ -2455,6 +2638,7 @@ class SmartHeatingOverview extends HTMLElement {
     if (!this._pvOpen) { panel.hidden = true; panel.innerHTML = ""; return; }
     if (this._statsOpen) this._toggleStats();
     if (this._setOpen) this._closeSettings(true);
+    if (this._wuOpen) this._toggleWu();
     panel.hidden = false;
     this._renderPv();
     this._fetchPvHistory();
@@ -2627,6 +2811,7 @@ class SmartHeatingOverview extends HTMLElement {
     }
     if (this._setOpen) this._closeSettings(true);
     if (this._pvOpen) this._togglePv();
+    if (this._wuOpen) this._toggleWu();
     this._statsOpen = true;
     panel.hidden = false;
     this._renderSummary(this._zoneData());
@@ -2773,6 +2958,10 @@ class SmartHeatingOverview extends HTMLElement {
     const meters = issues.length
       ? issues.map((x) => `<div class="sho-mt warn">${mdiSvg("alert") || ""}<span><b>${esc(x.zone)}</b><br>${esc(x.p)}</span></div>`).join("")
       : `<div class="sho-mt ok">${mdiSvg("check") || "✓"}<span>${esc(this._t("st_meters_ok"))}</span></div>`;
+    const standby = this._zoneData().map((z) => {
+      const ac = (z.s.sources || []).find((x) => x.key === "ac" && x.standby_kwh_dnes != null);
+      return ac ? `<div class="sho-hum"><span>${esc(this._t("st_standby", { zone: z.name }))}</span><b>${esc(fmtKwh(ac.standby_kwh_dnes, this._lang))}</b></div>` : "";
+    }).join("");
     const hum = (st.humidity || []).length
       ? `<div class="sho-leg sho-hum-h"><b>${esc(this._t("st_hum"))}</b></div>` +
         st.humidity.map((h) => `<div class="sho-hum"><span>${esc(h.name)}</span><b>${Math.round(h.value)} %</b></div>`).join("")
@@ -2783,7 +2972,7 @@ class SmartHeatingOverview extends HTMLElement {
        <div class="sho-st-chart">${chart}</div>
        <div class="sho-st-low">
          <div><div class="sho-leg"><b>${esc(this._t("st_rank"))}</b>${rankLeg}</div>${rank}</div>
-         <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}${hum}
+         <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}${standby}${hum}
            <div class="sho-note">${esc(this._t("st_fve_note"))}</div></div>
        </div>`;
     this._watchChartWidth();
@@ -2881,7 +3070,9 @@ class SmartHeatingOverview extends HTMLElement {
     const panel = this.querySelector(".sho-set");
     const fields = this._settingsFields();
     const isPv = (f) => f.name.startsWith("pv_") || f.name === "grid_export_negative" || f.name === "battery_charge_positive";
-    const general = fields.filter((f) => !f.name.startsWith("notify_") && !isPv(f));
+    const meters = fields.filter((f) => f.name.startsWith("meter_"));
+    const preheat = fields.filter((f) => f.name.startsWith("preheat_"));
+    const general = fields.filter((f) => !f.name.startsWith("notify_") && !isPv(f) && !f.name.startsWith("meter_") && !f.name.startsWith("preheat_"));
     const notify = fields.filter((f) => f.name.startsWith("notify_"));
     const pv = fields.filter(isPv);
     const fieldHtml = (f) => {
@@ -2897,7 +3088,7 @@ class SmartHeatingOverview extends HTMLElement {
     };
     const group = (title, list) => (list.length ? `<div class="sho-grp"><div class="h">${esc(this._t(title))}</div>${list.map(fieldHtml).join("")}</div>` : "");
     panel.innerHTML = `<div class="sho-set-h">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></div>
-      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_pv", pv)}${group("ov_grp_notify", notify)}</div>
+      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_pv", pv)}${group("ov_grp_meters", meters)}${group("ov_grp_preheat", preheat)}${group("ov_grp_notify", notify)}</div>
       ${this._settingsFooter(true)}`;
   }
 

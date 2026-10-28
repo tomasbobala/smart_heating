@@ -55,8 +55,21 @@ SOURCE_METERS = {
     "ac": ("ac_power_entities", "ac_energy_entities"),
     "radiator": ("radiator_power_entities", "radiator_energy_entities"),
 }
-METER_ON_W = 20          # zdroj kuri, ked taha viac
+METER_ON_W = 20          # zdroj kuri, ked taha viac (podlaha, radiator)
 METER_STUCK_W = 50       # vypnuty zdroj, ktory taha viac = zaseknute rele
+# Klima ma vlastnu spotrebu v pohotovosti (elektronika, WiFi, ohrev kompresora v zime -
+# Daikin ~25 W, v mraze aj 40-60 W) -> vlastne prahy, nastavitelne v globalnych nastaveniach.
+# key -> (min, max, step, unit, default)
+METER_NUMBERS = {
+    "meter_ac_on_w": (20, 2000, 10, "W", 150),       # klima bezi (kompresor), ked taha viac
+    "meter_ac_stuck_w": (20, 3000, 10, "W", 300),    # klima ma byt vypnuta, ale taha viac
+}
+# Dynamicke predkurenie: zaciatok dna / predkurenia sa posunie skor podla nauceneho nabehu
+PREHEAT_NUMBERS = {
+    "preheat_max_lead": (15, 240, 15, "min", 120),   # najviac o tolko skor
+    "preheat_margin": (0, 60, 5, "min", 10),         # rezerva navyse
+}
+HUB_EXTRA_NUMBERS = {**METER_NUMBERS, **PREHEAT_NUMBERS}
 HDD_BASE_TEMP = 18.0     # zaklad stupnodni (°C)
 # Vlhkost (len sledovanie, regulacia zatial nie)
 HUMIDITY_HIGH = 65.0     # % - dlhsie nad = riziko plesne / rosenia
@@ -238,6 +251,8 @@ SWITCH_DEFS = {
     # Podlaha nabehne pod floor_min aj ked je vzduch dost teply. Predvolene vypnute,
     # pri zone radiator_floor zapnute (CONF_USE_FLOOR_MIN).
     "udrzat_min_podlahy": ("Udrzat min. teplotu podlahy", "mdi:heat-wave", False),
+    # Dynamicke predkurenie: zacne skor podla nauceneho nabehu (len ked je dost dat)
+    "dynamicke_predkurenie": ("Dynamicke predkurenie podla nabehu", "mdi:home-thermometer", False),
 }
 AC_SWITCH_DEFS = {
     "pouzit_pevny_ac_setpoint": (
