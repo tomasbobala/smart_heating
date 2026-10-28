@@ -1749,8 +1749,8 @@ function wuHass({ ready = true, swOn = false, dyn = {} } = {}) {
       { od: 5, do: 10, n: 4, min_na_c: 9 }, { od: 10, do: 15, n: 2, min_na_c: 7 }, { od: 15, do: null, n: 0, min_na_c: null },
     ],
     posledne: [
-      { start: "2026-10-28T05:00:00+01:00", min: 13.4, z: 22, na: 23, vonku: 1.1, typ: "rano", dyn: false, pouzity: true },
-      { start: "2026-10-27T11:45:00+01:00", min: 10.3, z: 24.5, na: 25, vonku: 13.1, typ: "stare", dyn: false, pouzity: false },
+      { start: "2026-10-28T05:00:00", min: 13.4, z: 22, na: 23, vonku: 1.1, typ: "rano", dyn: false, pouzity: true },
+      { start: "2026-10-27T11:45:00", min: 10.3, z: 24.5, na: 25, vonku: 13.1, typ: "stare", dyn: false, pouzity: false },
     ],
   };
   a.dynamicke_predkurenie = Object.assign({ enabled: swOn, ready, rate: 12.5, lead: 35, day_early: false, preheat_early: false, start_day: "05:25", start_preheat: "14:25" }, dyn);
