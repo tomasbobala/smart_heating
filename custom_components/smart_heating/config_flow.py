@@ -1,0 +1,488 @@
+"""Config flow pre Smart Heating v2."""
+from __future__ import annotations
+
+import uuid
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant import config_entries
+from homeassistant.core import callback
+from homeassistant.helpers import selector
+from homeassistant.loader import async_get_integration
+
+from .const import (
+    AC_NUMBER_DEFS,
+    ALL_NUMBER_DEFS,
+    CONF_AC_ENTITY,
+    CONF_BATTERY_SOC_ENTITY,
+    CONF_CLIMATE_ENTITY,
+    CONF_EXTERNAL_TEMP_ENTITY,
+    CONF_FIREPLACE_TEMP_ENTITY,
+    CONF_FLOOR_TEMP_ENTITY,
+    CONF_KRB_THRESHOLD,
+    CONF_LANGUAGE,
+    CONF_MANUAL_PRESENCE_ENTITIES,
+    CONF_NOTIFY_AC_BACKUP,
+    CONF_NOTIFY_BOOST,
+    CONF_NOTIFY_COLD_OUTDOOR,
+    CONF_NOTIFY_DIAGNOSTICS,
+    CONF_NOTIFY_HUMIDITY,
+    CONF_OUTDOOR_HUMIDITY,
+    CONF_OUTDOOR_PRESSURE,
+    CONF_HUMIDITY_ENTITY,
+    CONF_RADIATOR_ENTITY,
+    CONF_PV_AUTO,
+    CONF_PV_POWER_ENTITY,
+    CONF_GRID_POWER_ENTITY,
+    CONF_BATTERY_POWER_ENTITY,
+    CONF_GRID_EXPORT_NEGATIVE,
+    CONF_BATTERY_CHARGE_POSITIVE,
+    HUB_EXTRA_NUMBERS,
+    PV_ENGINE_NUMBERS,
+    CONF_USE_FLOOR_MIN,
+    CONF_POWER_ENTITIES,
+    CONF_ENERGY_ENTITIES,
+    SOURCE_METERS,
+    RADIATOR_NUMBER_DEFS,
+    ZONE_TYPE_RADIATOR_FLOOR,
+    CONF_NOTIFY_COOLING,
+    CONF_NOTIFY_EMERGENCY,
+    CONF_NOTIFY_ENTITY,
+    CONF_NOTIFY_FLOOR,
+    CONF_NOTIFY_HOLIDAY,
+    CONF_NOTIFY_KRB,
+    CONF_NOTIFY_PREHEAT,
+    CONF_NOTIFY_TARIFF,
+    CONF_NUDZOVA_TEPLOTA,
+    CONF_OUTDOOR_SENSOR,
+    CONF_HOLIDAY_ACTIVE,
+    CONF_PRESENCE_ENTITIES,
+    CONF_PV_SURPLUS_ENTITY,
+    CONF_TARIFF_ENTITY,
+    CONF_USE_FIREPLACE_GUARD,
+    CONF_USE_FIXED_AC_SETPOINT,
+    CONF_ZONE_NAME,
+    CONF_ZONE_TYPE,
+    DEFAULT_EMERGENCY_TEMP,
+    DEFAULT_FIREPLACE_THRESHOLD,
+    DOMAIN,
+    NUMBER_DEFS,
+    OPT_NUMBER_RANGES,
+    OPT_ZONES,
+    TIME_DEFS,
+    ZONE_TYPE_FLOOR,
+    ZONE_TYPE_FLOOR_AC,
+    resolve_number_range,
+)
+
+
+def _add_optional(schema_dict: dict, key: str, value, ent_selector) -> None:
+    """Prida volitelne pole - default sa nastavi LEN ak existuje realna hodnota,
+    inak by EntitySelector dostal 'None' a zhavaroval by."""
+    if value:
+        schema_dict[vol.Optional(key, default=value)] = ent_selector
+    else:
+        schema_dict[vol.Optional(key)] = ent_selector
+
+
+def _number_ranges_schema_dict(options: dict) -> dict:
+    """Min/max polia pre kazdu number entitu (teploty, minuty, hodiny, %...),
+    zoradene abecedne podla kluca pre stabilne poradie vo formulari."""
+    schema_dict: dict = {}
+    for key in sorted(ALL_NUMBER_DEFS.keys()):
+        _label, default_lo, default_hi, _icon, _default = ALL_NUMBER_DEFS[key]
+        lo, hi = resolve_number_range(options, key, default_lo, default_hi)
+        schema_dict[vol.Optional(f"{key}__min", default=lo)] = selector.NumberSelector(
+            selector.NumberSelectorConfig(mode="box", step=0.1)
+        )
+        schema_dict[vol.Optional(f"{key}__max", default=hi)] = selector.NumberSelector(
+            selector.NumberSelectorConfig(mode="box", step=0.1)
+        )
+    return schema_dict
+
+
+def _hub_schema_dict(current: dict) -> dict:
+    schema_dict: dict = {}
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_SENSOR, current.get(CONF_OUTDOOR_SENSOR),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+    )
+    # vonkajsia vlhkost a tlak - len sledovanie (prehlad, odporucanie vetrania)
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_HUMIDITY, current.get(CONF_OUTDOOR_HUMIDITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="humidity")),
+    )
+    if current.get(CONF_OUTDOOR_HUMIDITY):
+        schema_dict[vol.Optional("clear_outdoor_humidity_sensor", default=False)] = selector.BooleanSelector()
+    _add_optional(
+        schema_dict, CONF_OUTDOOR_PRESSURE, current.get(CONF_OUTDOOR_PRESSURE),
+        selector.EntitySelector(
+            selector.EntitySelectorConfig(domain="sensor", device_class=["pressure", "atmospheric_pressure"])
+        ),
+    )
+    if current.get(CONF_OUTDOOR_PRESSURE):
+        schema_dict[vol.Optional("clear_outdoor_pressure_sensor", default=False)] = selector.BooleanSelector()
+    _add_optional(
+        schema_dict, CONF_TARIFF_ENTITY, current.get(CONF_TARIFF_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain=["input_boolean", "switch", "binary_sensor"])),
+    )
+    _add_optional(
+        schema_dict, CONF_FIREPLACE_TEMP_ENTITY, current.get(CONF_FIREPLACE_TEMP_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+    )
+    schema_dict[
+        vol.Optional(
+            CONF_KRB_THRESHOLD, default=current.get(CONF_KRB_THRESHOLD, DEFAULT_FIREPLACE_THRESHOLD)
+        )
+    ] = selector.NumberSelector(
+        selector.NumberSelectorConfig(min=15, max=60, step=0.5, mode="box", unit_of_measurement="°C")
+    )
+    schema_dict[
+        vol.Optional(
+            CONF_NUDZOVA_TEPLOTA, default=current.get(CONF_NUDZOVA_TEPLOTA, DEFAULT_EMERGENCY_TEMP)
+        )
+    ] = selector.NumberSelector(
+        selector.NumberSelectorConfig(min=3, max=15, step=0.5, mode="box", unit_of_measurement="°C")
+    )
+    schema_dict[
+        vol.Optional(CONF_HOLIDAY_ACTIVE, default=current.get(CONF_HOLIDAY_ACTIVE, False))
+    ] = selector.BooleanSelector()
+    schema_dict[
+        vol.Optional(CONF_LANGUAGE, default=current.get(CONF_LANGUAGE, "auto"))
+    ] = selector.SelectSelector(
+        selector.SelectSelectorConfig(
+            options=[
+                {"value": "auto", "label": "Auto (follow Home Assistant)"},
+                {"value": "en", "label": "English"},
+                {"value": "sk", "label": "Slovenčina"},
+            ]
+        )
+    )
+    existing_notify = current.get(CONF_NOTIFY_ENTITY, [])
+    if isinstance(existing_notify, str):
+        existing_notify = [existing_notify] if existing_notify else []
+    schema_dict[
+        vol.Optional(CONF_NOTIFY_ENTITY, default=existing_notify)
+    ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="notify", multiple=True))
+    for key in (
+        CONF_NOTIFY_TARIFF, CONF_NOTIFY_FLOOR, CONF_NOTIFY_KRB, CONF_NOTIFY_EMERGENCY,
+        CONF_NOTIFY_BOOST, CONF_NOTIFY_COOLING, CONF_NOTIFY_HOLIDAY, CONF_NOTIFY_PREHEAT,
+        CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR, CONF_NOTIFY_DIAGNOSTICS,
+    ):
+        schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
+    # vlhkost je nove a len informativne - upozornenia predvolene vypnute
+    schema_dict[
+        vol.Optional(CONF_NOTIFY_HUMIDITY, default=current.get(CONF_NOTIFY_HUMIDITY, False))
+    ] = selector.BooleanSelector()
+    _add_optional(
+        schema_dict, CONF_PV_SURPLUS_ENTITY, current.get(CONF_PV_SURPLUS_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain=["binary_sensor", "input_boolean", "switch"])),
+    )
+    # --- FVE prebytok podla vykonu (kaskada priorit s hysterezou) ---
+    schema_dict[vol.Optional(CONF_PV_AUTO, default=current.get(CONF_PV_AUTO, False))] = selector.BooleanSelector()
+    for key in (CONF_PV_POWER_ENTITY, CONF_GRID_POWER_ENTITY, CONF_BATTERY_POWER_ENTITY):
+        _add_optional(
+            schema_dict, key, current.get(key),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="power")),
+        )
+    schema_dict[
+        vol.Optional(CONF_GRID_EXPORT_NEGATIVE, default=current.get(CONF_GRID_EXPORT_NEGATIVE, True))
+    ] = selector.BooleanSelector()
+    schema_dict[
+        vol.Optional(CONF_BATTERY_CHARGE_POSITIVE, default=current.get(CONF_BATTERY_CHARGE_POSITIVE, True))
+    ] = selector.BooleanSelector()
+    for key, (lo, hi, step, unit, default) in {**PV_ENGINE_NUMBERS, **HUB_EXTRA_NUMBERS}.items():
+        schema_dict[vol.Optional(key, default=current.get(key, default))] = selector.NumberSelector(
+            selector.NumberSelectorConfig(min=lo, max=hi, step=step, mode="box", unit_of_measurement=unit)
+        )
+    _add_optional(
+        schema_dict, CONF_BATTERY_SOC_ENTITY, current.get(CONF_BATTERY_SOC_ENTITY),
+        selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="battery")),
+    )
+    return schema_dict
+
+
+# Volitelne entity hubu, ktore sa daju vymazat prepinacom "Vymazat ..." (vymazanie
+# pola v UI sa niekedy neodosle a stara hodnota by ostala).
+HUB_CLEARABLE = (CONF_OUTDOOR_HUMIDITY, CONF_OUTDOOR_PRESSURE)
+
+
+def _apply_clears(user_input: dict) -> dict:
+    """Vrati vstup bez pomocnych prepinacov clear_* (do options sa neukladaju)."""
+    return {k: v for k, v in user_input.items() if not k.startswith("clear_")}
+
+
+class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Prvotne zalozenie hubu (jeden na instanciu HA)."""
+
+    VERSION = 2
+
+    async def async_step_user(self, user_input: dict[str, Any] | None = None):
+        if self._async_current_entries():
+            return self.async_abort(reason="single_instance_allowed")
+
+        if user_input is not None:
+            options = _apply_clears(user_input)
+            options[OPT_ZONES] = {}
+            return self.async_create_entry(title="Smart Heating", data={}, options=options)
+
+        schema = vol.Schema(_hub_schema_dict({}))
+        return self.async_show_form(step_id="user", data_schema=schema)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+        return SmartHeatingOptionsFlow()
+
+
+class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
+    """Menu pre spravu globalnych nastaveni a zon."""
+
+    def __init__(self) -> None:
+        self._zones: dict[str, Any] | None = None
+        self._editing_zone_id: str | None = None
+
+    def _ensure_zones(self) -> None:
+        if self._zones is None:
+            self._zones = dict(self.config_entry.options.get(OPT_ZONES, {}))
+
+    async def async_step_init(self, user_input=None):
+        self._ensure_zones()
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["global", "number_ranges", "add_zone", "edit_zone", "remove_zone"],
+        )
+
+    async def async_step_global(self, user_input=None):
+        self._ensure_zones()
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            options.update(_apply_clears(user_input))
+            for key in HUB_CLEARABLE:
+                if user_input.get(f"clear_{key}"):
+                    options.pop(key, None)
+            options[OPT_ZONES] = self._zones
+            return self.async_create_entry(title="", data=options)
+
+        schema = vol.Schema(_hub_schema_dict(self.config_entry.options))
+        try:
+            integration = await async_get_integration(self.hass, DOMAIN)
+            version = str(integration.version)
+        except Exception:  # noqa: BLE001
+            version = "?"
+        return self.async_show_form(
+            step_id="global", data_schema=schema, description_placeholders={"version": version}
+        )
+
+    async def async_step_number_ranges(self, user_input=None):
+        self._ensure_zones()
+        errors: dict = {}
+        if user_input is not None:
+            ranges: dict = {}
+            for key in ALL_NUMBER_DEFS:
+                lo = user_input.get(f"{key}__min")
+                hi = user_input.get(f"{key}__max")
+                if lo is not None and hi is not None:
+                    if lo >= hi:
+                        errors["base"] = "invalid_range"
+                        break
+                    ranges[key] = [lo, hi]
+            if not errors:
+                options = dict(self.config_entry.options)
+                options[OPT_NUMBER_RANGES] = ranges
+                options[OPT_ZONES] = self._zones
+                return self.async_create_entry(title="", data=options)
+
+        schema = vol.Schema(_number_ranges_schema_dict(self.config_entry.options))
+        return self.async_show_form(step_id="number_ranges", data_schema=schema, errors=errors)
+
+    async def async_step_add_zone(self, user_input=None):
+        self._ensure_zones()
+        if user_input is not None:
+            zone = self._zone_from_input(user_input)
+            errors = self._validate_zone(zone)
+            if errors:
+                return self.async_show_form(
+                    step_id="add_zone", data_schema=self._zone_schema(zone), errors=errors
+                )
+            zone_id = uuid.uuid4().hex[:8]
+            self._zones[zone_id] = zone
+            return self._save()
+
+        return self.async_show_form(step_id="add_zone", data_schema=self._zone_schema())
+
+    async def async_step_edit_zone(self, user_input=None):
+        self._ensure_zones()
+        if not self._zones:
+            return self.async_abort(reason="no_zones")
+
+        if self._editing_zone_id is None:
+            if user_input is not None:
+                self._editing_zone_id = user_input["zone_id"]
+                zone = self._zones[self._editing_zone_id]
+                return self.async_show_form(step_id="edit_zone", data_schema=self._zone_schema(zone))
+            options = {zid: z[CONF_ZONE_NAME] for zid, z in self._zones.items()}
+            schema = vol.Schema({vol.Required("zone_id"): vol.In(options)})
+            return self.async_show_form(step_id="edit_zone", data_schema=schema)
+
+        old_zone = self._zones[self._editing_zone_id]
+        updated = self._zone_from_input(user_input)
+        errors = self._validate_zone(updated)
+        if errors:
+            return self.async_show_form(
+                step_id="edit_zone", data_schema=self._zone_schema(updated), errors=errors
+            )
+        updated = self._merge_tunables(old_zone, updated)
+        self._zones[self._editing_zone_id] = updated
+        self._editing_zone_id = None
+        return self._save()
+
+    async def async_step_remove_zone(self, user_input=None):
+        self._ensure_zones()
+        if not self._zones:
+            return self.async_abort(reason="no_zones")
+
+        if user_input is not None:
+            self._zones.pop(user_input["zone_id"], None)
+            return self._save()
+
+        options = {zid: z[CONF_ZONE_NAME] for zid, z in self._zones.items()}
+        schema = vol.Schema({vol.Required("zone_id"): vol.In(options)})
+        return self.async_show_form(step_id="remove_zone", data_schema=schema)
+
+    def _zone_schema(self, zone: dict | None = None) -> vol.Schema:
+        zone = zone or {}
+        schema_dict: dict = {
+            vol.Required(CONF_ZONE_NAME, default=zone.get(CONF_ZONE_NAME, "")): str,
+            vol.Required(
+                CONF_ZONE_TYPE, default=zone.get(CONF_ZONE_TYPE, ZONE_TYPE_FLOOR)
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        {"value": ZONE_TYPE_FLOOR, "label": "Len podlaha"},
+                        {"value": ZONE_TYPE_FLOOR_AC, "label": "Klima prioritne + podlaha ako zaloha"},
+                        {"value": ZONE_TYPE_RADIATOR_FLOOR, "label": "Radiator (vzduch) + podlaha (nezavisle)"},
+                    ]
+                )
+            ),
+            vol.Required(
+                CONF_CLIMATE_ENTITY, default=zone.get(CONF_CLIMATE_ENTITY)
+            ): selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
+        }
+        _add_optional(
+            schema_dict, CONF_AC_ENTITY, zone.get(CONF_AC_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="climate")),
+        )
+        _add_optional(
+            schema_dict, CONF_RADIATOR_ENTITY, zone.get(CONF_RADIATOR_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain=["switch", "input_boolean", "light"])),
+        )
+        _add_optional(
+            schema_dict, CONF_FLOOR_TEMP_ENTITY, zone.get(CONF_FLOOR_TEMP_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+        )
+        if zone.get(CONF_FLOOR_TEMP_ENTITY):
+            schema_dict[vol.Optional("clear_floor_temp_entity", default=False)] = selector.BooleanSelector()
+        _add_optional(
+            schema_dict, CONF_EXTERNAL_TEMP_ENTITY, zone.get(CONF_EXTERNAL_TEMP_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="temperature")),
+        )
+        if zone.get(CONF_EXTERNAL_TEMP_ENTITY):
+            schema_dict[vol.Optional("clear_external_temp_entity", default=False)] = selector.BooleanSelector()
+        _add_optional(
+            schema_dict, CONF_HUMIDITY_ENTITY, zone.get(CONF_HUMIDITY_ENTITY),
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="humidity")),
+        )
+        if zone.get(CONF_HUMIDITY_ENTITY):
+            schema_dict[vol.Optional("clear_humidity_entity", default=False)] = selector.BooleanSelector()
+        schema_dict[
+            vol.Optional(CONF_PRESENCE_ENTITIES, default=zone.get(CONF_PRESENCE_ENTITIES, []))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True))
+        schema_dict[
+            vol.Optional(CONF_MANUAL_PRESENCE_ENTITIES, default=zone.get(CONF_MANUAL_PRESENCE_ENTITIES, []))
+        ] = selector.EntitySelector(
+            selector.EntitySelectorConfig(domain=["input_boolean", "switch"], multiple=True)
+        )
+        schema_dict[
+            vol.Optional(CONF_USE_FIREPLACE_GUARD, default=zone.get(CONF_USE_FIREPLACE_GUARD, False))
+        ] = selector.BooleanSelector()
+        schema_dict[
+            vol.Optional(CONF_USE_FIXED_AC_SETPOINT, default=zone.get(CONF_USE_FIXED_AC_SETPOINT, False))
+        ] = selector.BooleanSelector()
+        for power_key, energy_key in SOURCE_METERS.values():
+            schema_dict[vol.Optional(power_key, default=zone.get(power_key, []))] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="power", multiple=True)
+            )
+            schema_dict[vol.Optional(energy_key, default=zone.get(energy_key, []))] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="sensor", device_class="energy", multiple=True)
+            )
+        schema_dict[
+            vol.Optional(CONF_POWER_ENTITIES, default=zone.get(CONF_POWER_ENTITIES, []))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="power", multiple=True))
+        schema_dict[
+            vol.Optional(CONF_ENERGY_ENTITIES, default=zone.get(CONF_ENERGY_ENTITIES, []))
+        ] = selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor", device_class="energy", multiple=True))
+        schema_dict[
+            vol.Optional(
+                CONF_USE_FLOOR_MIN,
+                # nova zona: zapnute (floor_min je predvolene 5 °C, kym ho nezvysis, nic nerobi);
+                # existujuce zony bez tohto kluca: povodne spravanie (vypnute, okrem radiator_floor)
+                default=zone.get(
+                    CONF_USE_FLOOR_MIN, (not zone) or zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
+                ),
+            )
+        ] = selector.BooleanSelector()
+        return vol.Schema(schema_dict)
+
+    @staticmethod
+    def _validate_zone(zone: dict) -> dict:
+        """Radiator + podlaha potrebuje rele radiatora a teplomer VZDUCHU
+        (externy teplomer) - bez nich by radiator nemal podla coho regulovat."""
+        if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR and not (
+            zone.get(CONF_RADIATOR_ENTITY) and zone.get(CONF_EXTERNAL_TEMP_ENTITY)
+        ):
+            return {"base": "radiator_requirements"}
+        return {}
+
+    def _zone_from_input(self, user_input: dict) -> dict:
+        floor_temp = None if user_input.get("clear_floor_temp_entity") else user_input.get(CONF_FLOOR_TEMP_ENTITY)
+        external_temp = (
+            None if user_input.get("clear_external_temp_entity") else user_input.get(CONF_EXTERNAL_TEMP_ENTITY)
+        )
+        return {
+            CONF_ZONE_NAME: user_input[CONF_ZONE_NAME],
+            CONF_ZONE_TYPE: user_input.get(CONF_ZONE_TYPE, ZONE_TYPE_FLOOR),
+            CONF_CLIMATE_ENTITY: user_input[CONF_CLIMATE_ENTITY],
+            CONF_AC_ENTITY: user_input.get(CONF_AC_ENTITY),
+            CONF_FLOOR_TEMP_ENTITY: floor_temp,
+            CONF_EXTERNAL_TEMP_ENTITY: external_temp,
+            CONF_HUMIDITY_ENTITY: (
+                None if user_input.get("clear_humidity_entity") else user_input.get(CONF_HUMIDITY_ENTITY)
+            ),
+            CONF_PRESENCE_ENTITIES: user_input.get(CONF_PRESENCE_ENTITIES, []),
+            CONF_MANUAL_PRESENCE_ENTITIES: user_input.get(CONF_MANUAL_PRESENCE_ENTITIES, []),
+            CONF_USE_FIREPLACE_GUARD: user_input.get(CONF_USE_FIREPLACE_GUARD, False),
+            CONF_USE_FIXED_AC_SETPOINT: user_input.get(CONF_USE_FIXED_AC_SETPOINT, False),
+            CONF_RADIATOR_ENTITY: user_input.get(CONF_RADIATOR_ENTITY),
+            CONF_POWER_ENTITIES: user_input.get(CONF_POWER_ENTITIES, []),
+            CONF_ENERGY_ENTITIES: user_input.get(CONF_ENERGY_ENTITIES, []),
+            **{k: user_input.get(k, []) for pair in SOURCE_METERS.values() for k in pair},
+            CONF_USE_FLOOR_MIN: user_input.get(
+                CONF_USE_FLOOR_MIN, user_input.get(CONF_ZONE_TYPE) == ZONE_TYPE_RADIATOR_FLOOR
+            ),
+        }
+
+    @staticmethod
+    def _merge_tunables(old_zone: dict, new_zone: dict) -> dict:
+        """Zachova hodnoty ladiacich cisiel/casov pri uprave strukturalnych poli zony."""
+        for key, (_, _, _, _, default) in {**NUMBER_DEFS, **AC_NUMBER_DEFS, **RADIATOR_NUMBER_DEFS}.items():
+            new_zone[key] = old_zone.get(key, default)
+        for key, (_, default) in TIME_DEFS.items():
+            new_zone[key] = old_zone.get(key, default)
+        return new_zone
+
+    def _save(self):
+        options = dict(self.config_entry.options)
+        options[OPT_ZONES] = self._zones
+        return self.async_create_entry(title="", data=options)

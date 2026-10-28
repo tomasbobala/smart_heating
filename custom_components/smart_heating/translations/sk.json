@@ -1,0 +1,219 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Heating - globálne nastavenia",
+        "description": "Zóny pridáš neskôr cez Nastavenia integrácie.",
+        "data": {
+          "outdoor_sensor": "Senzor vonkajšej teploty",
+          "tariff_entity": "Entita tarify / povolenie kúrenia (on = povolené)",
+          "fireplace_temp_entity": "Krb - senzor teploty (voliteľné)",
+          "notify_entity": "Notifikačné entity (môžeš vybrať viacero)",
+          "pv_surplus_entity": "FVE prebytok / môže sa kúriť zadarmo (voliteľné)",
+          "battery_soc_entity": "Batéria FVE - stav nabitia (%) pre jednoduché chladenie",
+          "krb_threshold": "Krb - prahová teplota (°C), nad ktorou sa vypne kúrenie",
+          "nudzova_teplota": "Núdzová protimrazová ochrana (°C) - preráža aj tarifu",
+          "holiday_active": "Dovolenka / Neprítomnosť (všetky zóny na Min)",
+          "notify_tariff": "Notifikácia: tarifa blokuje kúrenie",
+          "notify_floor": "Notifikácia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikácia: krb vypol kúrenie",
+          "notify_emergency": "Notifikácia: núdzová protimrazová ochrana",
+          "notify_boost": "Notifikácia: Boost aktivovaný",
+          "notify_cooling": "Notifikácia: chladenie spustené/zastavené",
+          "notify_holiday": "Notifikácia: Dovolenka aktivovaná/ukončená",
+          "notify_preheat": "Notifikácia: predkúrenie spustené/ukončené",
+          "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
+          "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
+          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)",
+          "outdoor_humidity_sensor": "Senzor vonkajšej vlhkosti (voliteľné, len sledovanie)",
+          "clear_outdoor_humidity_sensor": "Vymazať senzor vonkajšej vlhkosti",
+          "outdoor_pressure_sensor": "Senzor vonkajšieho tlaku (voliteľné, len sledovanie)",
+          "clear_outdoor_pressure_sensor": "Vymazať senzor vonkajšieho tlaku",
+          "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Smart Heating už je nastavený. Zóny spravuj cez Nastavenia integrácie."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating - správa",
+        "menu_options": {
+          "global": "Globálne nastavenia",
+          "add_zone": "Pridať zónu",
+          "edit_zone": "Upraviť zónu",
+          "remove_zone": "Zmazať zónu",
+          "number_ranges": "Rozsahy hodnôt"
+        }
+      },
+      "global": {
+        "title": "Globálne nastavenia",
+        "data": {
+          "outdoor_sensor": "Senzor vonkajšej teploty",
+          "tariff_entity": "Entita tarify / povolenie kúrenia (on = povolené)",
+          "fireplace_temp_entity": "Krb - senzor teploty (voliteľné)",
+          "notify_entity": "Notifikačné entity (môžeš vybrať viacero)",
+          "pv_surplus_entity": "FVE prebytok / môže sa kúriť zadarmo (voliteľné)",
+          "battery_soc_entity": "Batéria FVE - stav nabitia (%) pre jednoduché chladenie",
+          "krb_threshold": "Krb - prahová teplota (°C), nad ktorou sa vypne kúrenie",
+          "nudzova_teplota": "Núdzová protimrazová ochrana (°C) - preráža aj tarifu",
+          "holiday_active": "Dovolenka / Neprítomnosť (všetky zóny na Min)",
+          "notify_tariff": "Notifikácia: tarifa blokuje kúrenie",
+          "notify_floor": "Notifikácia: podlaha dosiahla max. teplotu",
+          "notify_krb": "Notifikácia: krb vypol kúrenie",
+          "notify_emergency": "Notifikácia: núdzová protimrazová ochrana",
+          "notify_boost": "Notifikácia: Boost aktivovaný",
+          "notify_cooling": "Notifikácia: chladenie spustené/zastavené",
+          "notify_holiday": "Notifikácia: Dovolenka aktivovaná/ukončená",
+          "notify_preheat": "Notifikácia: predkúrenie spustené/ukončené",
+          "notify_ac_backup": "Notifikácia: podlaha zapojená ako záloha AC",
+          "notify_cold_outdoor": "Notifikácia: vynútené kúrenie kvôli nízkej vonkajšej teplote",
+          "language": "Jazyk (texty generované backendom: dôvody, notifikácie)",
+          "notify_diagnostics": "Notifikácia: poruchy (nedostupné zariadenie, nezmyselná hodnota, zóna sa nevie dohriať)",
+          "pv_auto": "Riadiť FVE prebytok podľa výkonu (nahrádza prepínač prebytku)",
+          "pv_power_entity": "Výkon výroby FVE",
+          "grid_power_entity": "Výkon siete",
+          "battery_power_entity": "Výkon batérie",
+          "grid_export_negative": "Export do siete je záporné číslo",
+          "battery_charge_positive": "Nabíjanie batérie je kladné číslo",
+          "pv_add_power": "Pridať prioritu pri prebytku aspoň (W)",
+          "pv_add_minutes": "...trvajúcom (min)",
+          "pv_shed_power": "Odobrať prioritu pri vybíjaní batérie / odbere zo siete nad (W)",
+          "pv_shed_minutes": "...trvajúcom (min), ďalšiu po rovnakom čase",
+          "pv_min_power": "Nedostatočná výroba pod (W)",
+          "pv_start_soc": "Nabíjanie batérie sa ráta ako prebytok od SOC (%)",
+          "pv_stop_soc": "Vypnúť všetko pri batérii pod (%)",
+          "outdoor_humidity_sensor": "Senzor vonkajšej vlhkosti (voliteľné, len sledovanie)",
+          "clear_outdoor_humidity_sensor": "Vymazať senzor vonkajšej vlhkosti",
+          "outdoor_pressure_sensor": "Senzor vonkajšieho tlaku (voliteľné, len sledovanie)",
+          "clear_outdoor_pressure_sensor": "Vymazať senzor vonkajšieho tlaku",
+          "notify_humidity": "Notifikácia: vysoká / nízka vlhkosť v izbe",
+          "pv_acc_step": "FVE akumulácia: zvýšiť cieľ o (°C) po jeho dosiahnutí",
+          "pv_acc_minutes": "FVE akumulácia: najskôr každých (min)",
+          "pv_max_heat_power": "FVE: max. príkon kúrenia (W, rezerva pre dom; 0 = bez limitu)",
+          "meter_ac_on_w": "Merač klímy: beží nad (W; pod tým je pohotovosť)",
+          "meter_ac_stuck_w": "Merač klímy: zaseknutá nad (W, keď má byť vypnutá)",
+          "preheat_max_lead": "Dynamické predkúrenie: najviac skôr o (min)",
+          "preheat_margin": "Dynamické predkúrenie: rezerva (min)"
+        },
+        "description": "Smart Heating verzia {version}"
+      },
+      "add_zone": {
+        "title": "Nová zóna",
+        "data": {
+          "name": "Názov zóny",
+          "zone_type": "Typ zóny",
+          "climate_entity": "Podlahový termostat (climate)",
+          "ac_entity": "Klimatizácia (climate) - len pre typ 'Klíma + podlaha'",
+          "floor_temp_entity": "Senzor teploty podlahy (voliteľné)",
+          "presence_entities": "Osoby sledované cez GPS (person)",
+          "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
+          "use_fireplace_guard": "Reaguj na krb",
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
+          "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny",
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
+          "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
+          "power_entities": "Ostatné senzory príkonu (W) – sčítajú sa",
+          "energy_entities": "Ostatné senzory energie (kWh) – sčítajú sa",
+          "floor_power_entities": "Podlaha – merač príkonu (W)",
+          "floor_energy_entities": "Podlaha – merač energie (kWh)",
+          "ac_power_entities": "Klíma – merač príkonu (W)",
+          "ac_energy_entities": "Klíma – merač energie (kWh)",
+          "radiator_power_entities": "Radiátor – merač príkonu (W)",
+          "radiator_energy_entities": "Radiátor – merač energie (kWh)",
+          "humidity_entity": "Senzor vlhkosti (voliteľné, len sledovanie)",
+          "clear_humidity_entity": "Vymazať senzor vlhkosti"
+        }
+      },
+      "edit_zone": {
+        "title": "Upraviť zónu",
+        "data": {
+          "zone_id": "Zóna",
+          "name": "Názov zóny",
+          "zone_type": "Typ zóny",
+          "climate_entity": "Podlahový termostat (climate)",
+          "ac_entity": "Klimatizácia (climate) - len pre typ 'Klíma + podlaha'",
+          "floor_temp_entity": "Senzor teploty podlahy (voliteľné)",
+          "presence_entities": "Osoby sledované cez GPS (person)",
+          "manual_presence_entities": "Manuálny presence override (napr. návšteva)",
+          "use_fireplace_guard": "Reaguj na krb",
+          "external_temp_entity": "Externý teplomer zóny (nahradí vstavaný senzor AC/podlahovky vo výpočtoch)",
+          "clear_floor_temp_entity": "Vymazať senzor teploty podlahy",
+          "clear_external_temp_entity": "Vymazať externý teplomer zóny",
+          "use_fixed_ac_setpoint": "Použiť pevný AC setpoint aj bez externého teplomera (len pre typ 'Klíma + podlaha')",
+          "radiator_entity": "Relé radiátora (switch) - len pre typ 'Radiátor + podlaha'",
+          "use_floor_min": "Udržiavať min. teplotu podlahy (podlaha kúri aj keď je vzduch teplý)",
+          "power_entities": "Ostatné senzory príkonu (W) – sčítajú sa",
+          "energy_entities": "Ostatné senzory energie (kWh) – sčítajú sa",
+          "floor_power_entities": "Podlaha – merač príkonu (W)",
+          "floor_energy_entities": "Podlaha – merač energie (kWh)",
+          "ac_power_entities": "Klíma – merač príkonu (W)",
+          "ac_energy_entities": "Klíma – merač energie (kWh)",
+          "radiator_power_entities": "Radiátor – merač príkonu (W)",
+          "radiator_energy_entities": "Radiátor – merač energie (kWh)",
+          "humidity_entity": "Senzor vlhkosti (voliteľné, len sledovanie)",
+          "clear_humidity_entity": "Vymazať senzor vlhkosti"
+        }
+      },
+      "remove_zone": {
+        "title": "Zmazať zónu",
+        "data": {
+          "zone_id": "Zóna"
+        }
+      },
+      "number_ranges": {
+        "title": "Rozsahy hodnôt (min/max)",
+        "data": {
+          "teplota_den__min": "Teplota - den - min",
+          "teplota_den__max": "Teplota - den - max",
+          "teplota_noc__min": "Teplota - noc - min",
+          "teplota_noc__max": "Teplota - noc - max",
+          "teplota_min__min": "Teplota - minimalna (baseline) - min",
+          "teplota_min__max": "Teplota - minimalna (baseline) - max",
+          "teplota_mraz__min": "Teplota - protimrazova - min",
+          "teplota_mraz__max": "Teplota - protimrazova - max",
+          "floor_min__min": "Min. teplota podlahy - min",
+          "floor_min__max": "Min. teplota podlahy - max",
+          "floor_max__min": "Max. teplota podlahy - min",
+          "floor_max__max": "Max. teplota podlahy - max",
+          "boost_hodiny__min": "Boost - trvanie (h) - min",
+          "boost_hodiny__max": "Boost - trvanie (h) - max",
+          "vonkajsia_hranica__min": "Vonkajsia teplota - hranica pre vynutene kurenie (°C) - min",
+          "vonkajsia_hranica__max": "Vonkajsia teplota - hranica pre vynutene kurenie (°C) - max",
+          "ac_priorita_rozdiel__min": "AC priorita - rozdiel teploty (°C) po ktorom nastupi podlaha - min",
+          "ac_priorita_rozdiel__max": "AC priorita - rozdiel teploty (°C) po ktorom nastupi podlaha - max",
+          "ac_priorita_minuty__min": "AC priorita - cas nez dokuri podlaha (min) - min",
+          "ac_priorita_minuty__max": "AC priorita - cas nez dokuri podlaha (min) - max",
+          "ac_setpoint_teplota__min": "AC - fyzicky setpoint pri kureni (°C, nezavisle od cielovej teploty) - min",
+          "ac_setpoint_teplota__max": "AC - fyzicky setpoint pri kureni (°C, nezavisle od cielovej teploty) - max",
+          "ac_hysterezia__min": "AC - hysterezia pre zapnutie/vypnutie (°C, podla externeho teplomera) - min",
+          "ac_hysterezia__max": "AC - hysterezia pre zapnutie/vypnutie (°C, podla externeho teplomera) - max",
+          "vonkajsia_hranica_chladenie__min": "Chladenie - vonkajsia hranica pre Auto-sezonu (°C) - min",
+          "vonkajsia_hranica_chladenie__max": "Chladenie - vonkajsia hranica pre Auto-sezonu (°C) - max",
+          "teplota_chladenie__min": "Chladenie - cielova teplota (°C) - min",
+          "teplota_chladenie__max": "Chladenie - cielova teplota (°C) - max",
+          "bateria_hranica_chladenie__min": "Chladenie - min. nabitie baterie FVE (%) - min",
+          "bateria_hranica_chladenie__max": "Chladenie - min. nabitie baterie FVE (%) - max",
+          "floor_hysterezia__min": "Hysteréza podlahy - min",
+          "floor_hysterezia__max": "Hysteréza podlahy - max",
+          "radiator_hysterezia__min": "Hysteréza radiátora - min",
+          "radiator_hysterezia__max": "Hysteréza radiátora - max",
+          "fve_max_teplota__min": "FVE akumulácia max. teplota - minimum",
+          "fve_max_teplota__max": "FVE akumulácia max. teplota - maximum"
+        }
+      }
+    },
+    "abort": {
+      "no_zones": "Zatiaľ nie je vytvorená žiadna zóna."
+    },
+    "error": {
+      "invalid_range": "Minimum musí byť menšie ako maximum.",
+      "radiator_requirements": "Typ 'Radiátor + podlaha' potrebuje relé radiátora a externý teplomer (vzduch)."
+    }
+  }
+}

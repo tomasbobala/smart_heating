@@ -1,0 +1,219 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Smart Heating - global settings",
+        "description": "Add zones later via the integration's Configure options.",
+        "data": {
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "tariff_entity": "Tariff / heating allowed entity (on = allowed)",
+          "fireplace_temp_entity": "Fireplace - temperature sensor (optional)",
+          "notify_entity": "Notification targets (you can select multiple)",
+          "pv_surplus_entity": "Solar surplus / free heating entity (optional)",
+          "battery_soc_entity": "Solar battery - state of charge (%) for simple cooling",
+          "krb_threshold": "Fireplace - threshold temperature (°C) above which heating turns off",
+          "nudzova_teplota": "Emergency frost protection (°C) - overrides tariff block",
+          "holiday_active": "Holiday / Away (all zones to Min)",
+          "notify_tariff": "Notification: tariff is blocking heating",
+          "notify_floor": "Notification: floor reached max temperature",
+          "notify_krb": "Notification: fireplace turned off heating",
+          "notify_emergency": "Notification: emergency frost protection",
+          "notify_boost": "Notification: Boost activated",
+          "notify_cooling": "Notification: cooling started/stopped",
+          "notify_holiday": "Notification: Holiday mode activated/ended",
+          "notify_preheat": "Notification: pre-heating started/ended",
+          "notify_ac_backup": "Notification: floor engaged as AC backup",
+          "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
+          "language": "Language (backend-generated texts: reasons, notifications)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (optional, monitoring only)",
+          "clear_outdoor_humidity_sensor": "Clear outdoor humidity sensor",
+          "outdoor_pressure_sensor": "Outdoor pressure sensor (optional, monitoring only)",
+          "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
+          "notify_humidity": "Notify: high / low humidity in a room"
+        }
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Smart Heating is already set up. Manage zones via the integration's Configure options."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating - manage",
+        "menu_options": {
+          "global": "Global settings",
+          "add_zone": "Add zone",
+          "edit_zone": "Edit zone",
+          "remove_zone": "Remove zone",
+          "number_ranges": "Number ranges"
+        }
+      },
+      "global": {
+        "title": "Global settings",
+        "data": {
+          "outdoor_sensor": "Outdoor temperature sensor",
+          "tariff_entity": "Tariff / heating allowed entity (on = allowed)",
+          "fireplace_temp_entity": "Fireplace - temperature sensor (optional)",
+          "notify_entity": "Notification targets (you can select multiple)",
+          "pv_surplus_entity": "Solar surplus / free heating entity (optional)",
+          "battery_soc_entity": "Solar battery - state of charge (%) for simple cooling",
+          "krb_threshold": "Fireplace - threshold temperature (°C) above which heating turns off",
+          "nudzova_teplota": "Emergency frost protection (°C) - overrides tariff block",
+          "holiday_active": "Holiday / Away (all zones to Min)",
+          "notify_tariff": "Notification: tariff is blocking heating",
+          "notify_floor": "Notification: floor reached max temperature",
+          "notify_krb": "Notification: fireplace turned off heating",
+          "notify_emergency": "Notification: emergency frost protection",
+          "notify_boost": "Notification: Boost activated",
+          "notify_cooling": "Notification: cooling started/stopped",
+          "notify_holiday": "Notification: Holiday mode activated/ended",
+          "notify_preheat": "Notification: pre-heating started/ended",
+          "notify_ac_backup": "Notification: floor engaged as AC backup",
+          "notify_cold_outdoor": "Notification: forced heating due to cold outdoor temperature",
+          "language": "Language (backend-generated texts: reasons, notifications)",
+          "notify_diagnostics": "Notification: faults (device unavailable, implausible value, zone not reaching target)",
+          "pv_auto": "Control solar surplus by power (replaces the surplus switch)",
+          "pv_power_entity": "Solar production power",
+          "grid_power_entity": "Grid power",
+          "battery_power_entity": "Battery power",
+          "grid_export_negative": "Export to grid is a negative number",
+          "battery_charge_positive": "Battery charging is a positive number",
+          "pv_add_power": "Add a priority at surplus of at least (W)",
+          "pv_add_minutes": "...lasting (min)",
+          "pv_shed_power": "Remove a priority at battery discharge / grid import over (W)",
+          "pv_shed_minutes": "...lasting (min), then the next one after the same time",
+          "pv_min_power": "Insufficient production below (W)",
+          "pv_start_soc": "Battery charging counts as surplus from SOC (%)",
+          "pv_stop_soc": "Switch everything off below battery SOC (%)",
+          "outdoor_humidity_sensor": "Outdoor humidity sensor (optional, monitoring only)",
+          "clear_outdoor_humidity_sensor": "Clear outdoor humidity sensor",
+          "outdoor_pressure_sensor": "Outdoor pressure sensor (optional, monitoring only)",
+          "clear_outdoor_pressure_sensor": "Clear outdoor pressure sensor",
+          "notify_humidity": "Notify: high / low humidity in a room",
+          "pv_acc_step": "Solar storage: raise target by (°C) once reached",
+          "pv_acc_minutes": "Solar storage: at most every (min)",
+          "pv_max_heat_power": "Solar: max. heating power (W, reserve for the house; 0 = no limit)",
+          "meter_ac_on_w": "AC meter: running above (W; below = standby)",
+          "meter_ac_stuck_w": "AC meter: stuck above (W, when it should be off)",
+          "preheat_max_lead": "Dynamic preheat: at most earlier by (min)",
+          "preheat_margin": "Dynamic preheat: margin (min)"
+        },
+        "description": "Smart Heating version {version}"
+      },
+      "add_zone": {
+        "title": "New zone",
+        "data": {
+          "name": "Zone name",
+          "zone_type": "Zone type",
+          "climate_entity": "Floor thermostat (climate)",
+          "ac_entity": "Air conditioning (climate) - only for 'AC + floor' type",
+          "floor_temp_entity": "Floor temperature sensor (optional)",
+          "presence_entities": "People tracked via GPS (person)",
+          "manual_presence_entities": "Manual presence override (e.g. guest)",
+          "use_fireplace_guard": "React to fireplace",
+          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
+          "clear_floor_temp_entity": "Clear floor temperature sensor",
+          "clear_external_temp_entity": "Clear external zone thermometer",
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
+          "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
+          "power_entities": "Other power sensors (W) - summed",
+          "energy_entities": "Other energy sensors (kWh) - summed",
+          "floor_power_entities": "Floor - power meter (W)",
+          "floor_energy_entities": "Floor - energy meter (kWh)",
+          "ac_power_entities": "AC - power meter (W)",
+          "ac_energy_entities": "AC - energy meter (kWh)",
+          "radiator_power_entities": "Radiator - power meter (W)",
+          "radiator_energy_entities": "Radiator - energy meter (kWh)",
+          "humidity_entity": "Humidity sensor (optional, monitoring only)",
+          "clear_humidity_entity": "Clear humidity sensor"
+        }
+      },
+      "edit_zone": {
+        "title": "Edit zone",
+        "data": {
+          "zone_id": "Zone",
+          "name": "Zone name",
+          "zone_type": "Zone type",
+          "climate_entity": "Floor thermostat (climate)",
+          "ac_entity": "Air conditioning (climate) - only for 'AC + floor' type",
+          "floor_temp_entity": "Floor temperature sensor (optional)",
+          "presence_entities": "People tracked via GPS (person)",
+          "manual_presence_entities": "Manual presence override (e.g. guest)",
+          "use_fireplace_guard": "React to fireplace",
+          "external_temp_entity": "External zone thermometer (replaces built-in AC/floor sensor in calculations)",
+          "clear_floor_temp_entity": "Clear floor temperature sensor",
+          "clear_external_temp_entity": "Clear external zone thermometer",
+          "use_fixed_ac_setpoint": "Use fixed AC setpoint even without external thermometer (only for 'AC + floor' type)",
+          "radiator_entity": "Radiator relay (switch) - only for type 'Radiator + floor'",
+          "use_floor_min": "Keep minimum floor temperature (floor heats even when the air is warm)",
+          "power_entities": "Other power sensors (W) - summed",
+          "energy_entities": "Other energy sensors (kWh) - summed",
+          "floor_power_entities": "Floor - power meter (W)",
+          "floor_energy_entities": "Floor - energy meter (kWh)",
+          "ac_power_entities": "AC - power meter (W)",
+          "ac_energy_entities": "AC - energy meter (kWh)",
+          "radiator_power_entities": "Radiator - power meter (W)",
+          "radiator_energy_entities": "Radiator - energy meter (kWh)",
+          "humidity_entity": "Humidity sensor (optional, monitoring only)",
+          "clear_humidity_entity": "Clear humidity sensor"
+        }
+      },
+      "remove_zone": {
+        "title": "Remove zone",
+        "data": {
+          "zone_id": "Zone"
+        }
+      },
+      "number_ranges": {
+        "title": "Number ranges (min/max)",
+        "data": {
+          "teplota_den__min": "Day temperature - min",
+          "teplota_den__max": "Day temperature - max",
+          "teplota_noc__min": "Night temperature - min",
+          "teplota_noc__max": "Night temperature - max",
+          "teplota_min__min": "Min temperature (baseline) - min",
+          "teplota_min__max": "Min temperature (baseline) - max",
+          "teplota_mraz__min": "Frost protection temperature - min",
+          "teplota_mraz__max": "Frost protection temperature - max",
+          "floor_min__min": "Floor min. temperature - min",
+          "floor_min__max": "Floor min. temperature - max",
+          "floor_max__min": "Floor max. temperature - min",
+          "floor_max__max": "Floor max. temperature - max",
+          "boost_hodiny__min": "Boost duration (h) - min",
+          "boost_hodiny__max": "Boost duration (h) - max",
+          "vonkajsia_hranica__min": "Outdoor threshold - forces heating (°C) - min",
+          "vonkajsia_hranica__max": "Outdoor threshold - forces heating (°C) - max",
+          "ac_priorita_rozdiel__min": "AC priority - temperature difference (°C) - min",
+          "ac_priorita_rozdiel__max": "AC priority - temperature difference (°C) - max",
+          "ac_priorita_minuty__min": "AC priority - time before floor kicks in (min) - min",
+          "ac_priorita_minuty__max": "AC priority - time before floor kicks in (min) - max",
+          "ac_setpoint_teplota__min": "AC physical setpoint when heating (°C) - min",
+          "ac_setpoint_teplota__max": "AC physical setpoint when heating (°C) - max",
+          "ac_hysterezia__min": "AC hysteresis (°C) - min",
+          "ac_hysterezia__max": "AC hysteresis (°C) - max",
+          "vonkajsia_hranica_chladenie__min": "Cooling - outdoor threshold for Auto season (°C) - min",
+          "vonkajsia_hranica_chladenie__max": "Cooling - outdoor threshold for Auto season (°C) - max",
+          "teplota_chladenie__min": "Cooling target temperature (°C) - min",
+          "teplota_chladenie__max": "Cooling target temperature (°C) - max",
+          "bateria_hranica_chladenie__min": "Cooling - min. solar battery charge (%) - min",
+          "bateria_hranica_chladenie__max": "Cooling - min. solar battery charge (%) - max",
+          "floor_hysterezia__min": "Floor hysteresis - min",
+          "floor_hysterezia__max": "Floor hysteresis - max",
+          "radiator_hysterezia__min": "Radiator hysteresis - min",
+          "radiator_hysterezia__max": "Radiator hysteresis - max",
+          "fve_max_teplota__min": "Solar storage max. temperature - minimum",
+          "fve_max_teplota__max": "Solar storage max. temperature - maximum"
+        }
+      }
+    },
+    "abort": {
+      "no_zones": "No zone has been created yet."
+    },
+    "error": {
+      "invalid_range": "Minimum must be lower than maximum.",
+      "radiator_requirements": "Type 'Radiator + floor' needs a radiator relay and an external (air) thermometer."
+    }
+  }
+}

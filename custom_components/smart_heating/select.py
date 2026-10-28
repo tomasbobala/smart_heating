@@ -1,0 +1,112 @@
+"""Select platform - rezim (Auto/Den/Noc/Min/Mraz/Vypnute) + sezona (len floor_ac)."""
+from __future__ import annotations
+
+from homeassistant.components.select import SelectEntity
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
+
+from .const import (
+    CONF_ZONE_TYPE,
+    DOMAIN,
+    MODE_AUTO,
+    OPT_ZONES,
+    SEASON_AUTO,
+    SEASONS,
+    PV_PRIORITIES,
+    ZONE_MODES,
+    ZONE_TYPE_FLOOR_AC,
+)
+from .coordinator import SmartHeatingCoordinator
+
+
+async def async_setup_entry(
+    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+) -> None:
+    coordinator: SmartHeatingCoordinator = hass.data[DOMAIN][entry.entry_id]
+    entities: list = []
+    for zone_id, zone in entry.options.get(OPT_ZONES, {}).items():
+        entities.append(ZoneModeSelect(coordinator, zone_id, zone["name"]))
+        entities.append(ZonePvPrioritySelect(coordinator, zone_id, zone["name"]))
+        if zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC:
+            entities.append(ZoneSeasonSelect(coordinator, zone_id, zone["name"]))
+    async_add_entities(entities)
+
+
+class ZoneModeSelect(SelectEntity, RestoreEntity):
+    _attr_options = ZONE_MODES
+    _attr_icon = "mdi:thermostat-auto"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
+        self._coordinator = coordinator
+        self._zone_id = zone_id
+        self._attr_unique_id = f"{DOMAIN}_{zone_id}_rezim"
+        self.entity_id = f"select.smart_heating_{zone_id}_rezim"
+        self._attr_name = f"{zone_name} rezim"
+        self._attr_current_option = MODE_AUTO
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state in ZONE_MODES:
+            self._attr_current_option = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._coordinator.async_recompute_and_apply()
+
+
+class ZoneSeasonSelect(SelectEntity, RestoreEntity):
+    """Kurenie / Chladenie / Auto - len pre zony s klimatizaciou (floor_ac)."""
+
+    _attr_options = SEASONS
+    _attr_icon = "mdi:sun-snowflake-variant"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
+        self._coordinator = coordinator
+        self._zone_id = zone_id
+        self._attr_unique_id = f"{DOMAIN}_{zone_id}_sezona"
+        self.entity_id = f"select.smart_heating_{zone_id}_sezona"
+        self._attr_name = f"{zone_name} sezona"
+        self._attr_current_option = SEASON_AUTO
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state in SEASONS:
+            self._attr_current_option = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._coordinator.async_recompute_and_apply()
+
+
+class ZonePvPrioritySelect(SelectEntity, RestoreEntity):
+    """Priorita zony pri FVE prebytku (kaskada). 1 = kuri z prebytku prva; nizsie
+    priority sa pridaju az ked su vsetky vyssie nahriate a odpoja sa hned, ked
+    niektora vyssia vychladne."""
+
+    _attr_options = PV_PRIORITIES
+    _attr_icon = "mdi:solar-power-variant"
+
+    def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_name: str) -> None:
+        self._coordinator = coordinator
+        self._zone_id = zone_id
+        self._attr_unique_id = f"{DOMAIN}_{zone_id}_fve_priorita"
+        self.entity_id = f"select.smart_heating_{zone_id}_fve_priorita"
+        self._attr_name = f"{zone_name} FVE priorita"
+        self._attr_current_option = PV_PRIORITIES[0]
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state and last_state.state in PV_PRIORITIES:
+            self._attr_current_option = last_state.state
+
+    async def async_select_option(self, option: str) -> None:
+        self._attr_current_option = option
+        self.async_write_ha_state()
+        await self._coordinator.async_recompute_and_apply()
