@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.25.2";
+const CARD_VERSION = "0.25.3";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -699,6 +699,23 @@ function deltaClass(d) {
   return d > 0 ? "up" : "dn";
 }
 
+/** Poistka proti skoku stranky: pred aktualizaciou podrzi vysku karty 800 ms.
+ * Ked sa cokolvek v karte na okamih zmensi (prepisovany obsah, pomaly dokreslovany
+ * prvok, meranie rozlozenia uprostred zmeny) a pouzivatel je na konci stranky, prehliadac
+ * (hlavne Safari - nema scroll anchoring) by ho posunul hore. Rovnaky princip ako mtHold. */
+function holdCardHeight(el) {
+  const card = el && el.querySelector("ha-card");
+  if (!card) return;
+  const h = card.offsetHeight;
+  if (!h) return;
+  card.style.boxSizing = "border-box";
+  const cur = parseFloat(card.style.minHeight) || 0;
+  card.style.minHeight = `${Math.max(h, card._holding ? cur : 0)}px`;
+  card._holding = true;
+  clearTimeout(card._holdT);
+  card._holdT = setTimeout(() => { card.style.minHeight = ""; card._holding = false; }, 800);
+}
+
 function fireMoreInfo(node, entityId) {
   node.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
 }
@@ -766,6 +783,7 @@ class SmartHeatingCard extends HTMLElement {
   set hass(hass) {
     const prevHass = this._hass;
     this._hass = hass;
+    holdCardHeight(this);
     if (!this._built) {
       this._buildSkeleton();
       this._built = true;
@@ -1874,6 +1892,7 @@ class SmartHeatingOverview extends HTMLElement {
   set hass(hass) {
     const prev = this._hass;
     this._hass = hass;
+    holdCardHeight(this);
     if (prev && prev.language === hass.language) {
       const changed = this._watched().some((id) => hass.states[id] !== prev.states[id]);
       if (!changed) {
@@ -2062,6 +2081,7 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-pvmsg { font-size: 13.5px; color: var(--sh-txt); }
       .sho-pvmsg.is-add { color: var(--sh-ok, #4caf7d); } .sho-pvmsg.is-shed { color: var(--sh-warn, #e8a838); }
       .sho-pvbar { height: 6px; border-radius: 3px; background: rgba(127,127,127,.15); overflow: hidden; margin-top: -6px; }
+      .sho-pvbar.is-empty { visibility: hidden; }
       .sho-pvbar i { display: block; height: 100%; background: var(--sh-ok, #4caf7d); border-radius: 3px; }
       .sho-pvbar.is-shed i { background: var(--sh-warn, #e8a838); }
       .sho-pvls { display: flex; flex-direction: column; gap: 8px; }
@@ -2542,11 +2562,30 @@ class SmartHeatingOverview extends HTMLElement {
 
   // -------------------------------------------------- nabehy a dynamicke predkurenie
 
+  /** Otvoreny panel (kaskada FVE, nabehy, statistiky) sa pri aktualizacii nesmie zmensit:
+   * na konci stranky by prehliadac posunul zobrazenie hore (text sa raz zalomi, raz nie,
+   * pasik odpoctu sa objavi a zmizne...). Panel si drzi najvacsiu vysku od otvorenia;
+   * pri zmene sirky (otocenie mobilu, okno) sa zacne odznova. */
+  _holdHeight(panel) {
+    if (!panel || panel.hidden) return;
+    const w = panel.clientWidth;
+    if (panel._holdW !== w) { panel._holdW = w; panel.style.minHeight = ""; }
+    panel.style.boxSizing = "border-box";      // min-height = cela vyska vratane paddingu
+    const h = panel.offsetHeight;
+    if (h && h > (parseFloat(panel.style.minHeight) || 0)) panel.style.minHeight = `${h}px`;
+  }
+
+  _releaseHeight(panel) {
+    if (!panel) return;
+    panel.style.minHeight = "";
+    panel._holdW = null;
+  }
+
   _toggleWu() {
     const panel = this.querySelector(".sho-wu");
     if (!panel) return;
     this._wuOpen = !this._wuOpen;
-    if (!this._wuOpen) { panel.hidden = true; panel.innerHTML = ""; panel._html = ""; this._renderSummary(this._zoneData()); return; }
+    if (!this._wuOpen) { panel.hidden = true; panel.innerHTML = ""; panel._html = ""; this._releaseHeight(panel); this._renderSummary(this._zoneData()); return; }
     if (this._statsOpen) this._toggleStats();
     if (this._setOpen) this._closeSettings(true);
     if (this._pvOpen) this._togglePv();
@@ -2629,13 +2668,14 @@ class SmartHeatingOverview extends HTMLElement {
       <div class="sho-wu-zs">${heating.map((z) => this._wuZoneHtml(z)).join("")}</div>
       <div class="sho-wu-note">${esc(this._t("wu_note"))}</div>`;
     if (panel._html !== html) { panel.innerHTML = html; panel._html = html; }
+    this._holdHeight(panel);
   }
 
   _togglePv() {
     const panel = this.querySelector(".sho-pv");
     if (!panel) return;
     this._pvOpen = !this._pvOpen;
-    if (!this._pvOpen) { panel.hidden = true; panel.innerHTML = ""; return; }
+    if (!this._pvOpen) { panel.hidden = true; panel.innerHTML = ""; this._releaseHeight(panel); return; }
     if (this._statsOpen) this._toggleStats();
     if (this._setOpen) this._closeSettings(true);
     if (this._wuOpen) this._toggleWu();
@@ -2751,7 +2791,10 @@ class SmartHeatingOverview extends HTMLElement {
     else if (reason === "no_zones") msg = this._t("pv_r_no_zones");
     else if (tier && tier >= maxLevel) msg = this._t("pv_r_hold_top");
     else msg = this._t("pv_r_hold", { w: kw(prm.pv_add_power) });
-    const progHtml = prog == null ? "" : `<div class="sho-pvbar ${cls}"><i style="width:${Math.max(0, Math.min(100, prog * 100)).toFixed(0)}%"></i></div>`;
+    // pasik ma miesto vzdy (bez odpoctu je neviditelny) - panel nemeni vysku
+    const progHtml = prog == null
+      ? `<div class="sho-pvbar is-empty" aria-hidden="true"></div>`
+      : `<div class="sho-pvbar ${cls}"><i style="width:${Math.max(0, Math.min(100, prog * 100)).toFixed(0)}%"></i></div>`;
 
     // priority a zony
     const useFve = (z) => { const sw = this._hass.states[eid(z.id, "switch", "vyuzi_fve_prebytok")]; return !sw || sw.state !== "off"; };
@@ -2773,6 +2816,7 @@ class SmartHeatingOverview extends HTMLElement {
       <div class="sho-pvmsg ${cls}">${esc(msg)}</div>${progHtml}
       <div class="sho-pvls">${rows}${noFveHtml}</div>
       ${this._pvTimeline(maxLevel || 1)}`;
+    this._holdHeight(panel);
   }
 
   /** Casova os dnes: vyska/farba = aktivna uroven kaskady. */
@@ -2806,6 +2850,7 @@ class SmartHeatingOverview extends HTMLElement {
       this._statsOpen = false;
       panel.hidden = true;
       panel.innerHTML = "";
+      this._releaseHeight(panel);
       this._renderSummary(this._zoneData());
       return;
     }
@@ -2834,6 +2879,7 @@ class SmartHeatingOverview extends HTMLElement {
       return;
     }
     panel.innerHTML = this._statsHead() + `<div class="sho-msg">${esc(this._t("ov_loading"))}</div>`;
+    this._holdHeight(panel);
     const has = (id) => (this._hass.states[id] ? id : null);
     const fveId = has("sensor.smart_heating_energia_z_fve");
     const houseIds = {
@@ -2975,6 +3021,7 @@ class SmartHeatingOverview extends HTMLElement {
          <div><div class="sho-leg"><b>${esc(this._t("st_meters"))}</b></div>${meters}${standby}${hum}
            <div class="sho-note">${esc(this._t("st_fve_note"))}</div></div>
        </div>`;
+    this._holdHeight(panel);
     this._watchChartWidth();
   }
 

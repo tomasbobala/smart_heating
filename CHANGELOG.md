@@ -2,6 +2,17 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.25.3
+- Fixed: the HVAC dashboard jumped up a bit every few seconds when scrolled to
+  the bottom (Safari on Mac and iPhone - Safari has no scroll anchoring).
+  - Every card (zone cards and the overview) now holds its height for 800 ms on
+    each update, so a momentary shrink while content is being replaced can no
+    longer pull the page up (same approach as the mt-* dashboard cards).
+  - An open panel (solar cascade, Warm-ups, Statistics) keeps its largest height
+    until it is closed (or the width changes); the cascade countdown bar always
+    has its space. Before, the panel changed height on every update (bar
+    appeared / disappeared, texts wrapped to one or two lines).
+
 ## 0.25.2
 - Tests: the card test for the "Warm-ups" tab no longer depends on the time
   zone of the machine (it failed on GitHub Actions, which runs in UTC).

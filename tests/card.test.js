@@ -1875,3 +1875,60 @@ test("overview settings: meter and preheat fields get their own groups", async (
   assert.ok(groups.some((g) => /Merače/.test(g) && /Klíma beží nad/.test(g) && /150 W/.test(g)));
   assert.ok(groups.some((g) => /Dynamické predkúrenie/.test(g) && /120 min/.test(g)));
 });
+
+// ------------------------------------------------------------------ 0.25.3 vyska otvoreneho panela
+
+test("overview: an open panel keeps its height while it is open, released when closed", () => {
+  const { hass } = wuHass({ swOn: true });
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  const panel = card.querySelector(".sho-wu");
+  // jsdom nema layout - nasimulujeme vysku panela
+  let h = 500;
+  Object.defineProperty(panel, "offsetHeight", { get: () => h, configurable: true });
+  card._holdHeight(panel);
+  assert.strictEqual(panel.style.minHeight, "500px");
+  assert.strictEqual(panel.style.boxSizing, "border-box");
+  h = 420;                                   // obsah sa zmensil (kratsi text, zmizol pasik)
+  card._holdHeight(panel);
+  assert.strictEqual(panel.style.minHeight, "500px");
+  h = 560;                                   // narastie - drzi sa nova maximalna vyska
+  card._holdHeight(panel);
+  assert.strictEqual(panel.style.minHeight, "560px");
+  card.querySelector(".sho-wubtn").click();  // zatvorenie uvolni vysku
+  assert.strictEqual(panel.style.minHeight, "");
+});
+
+test("overview: solar cascade keeps space for the countdown bar even without countdown", () => {
+  const { hass } = wuHass();
+  hass.states["sensor.smart_heating_fve_kaskada"] = { state: "0", attributes: { rezim: "vykon", dovod: "low_soc", soc: 34, nastavenia: { pv_stop_soc: 85 } } };
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.fve_priorita = 1;
+  const card = renderOverview({ tiles: ["pv"] }, hass);
+  card._togglePv();
+  const bar = card.querySelector(".sho-pv .sho-pvbar");
+  assert.ok(bar, "pasik je vzdy v paneli");
+  assert.ok(bar.classList.contains("is-empty"));
+});
+
+test("zone card and overview hold their height for a moment on every update", async () => {
+  const { CardClass, OverviewClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = buildHass();
+  document.body.appendChild(card);
+  const hc = card.querySelector("ha-card");
+  Object.defineProperty(hc, "offsetHeight", { get: () => 444, configurable: true });
+  card.hass = buildHass({ climateAttrs: { current_temperature: 21 } });
+  assert.strictEqual(hc.style.minHeight, "444px");
+  assert.strictEqual(hc.style.boxSizing, "border-box");
+  await new Promise((r) => setTimeout(r, 900));
+  assert.strictEqual(hc.style.minHeight, "", "po 800 ms sa vyska uvolni");
+  const ov = new OverviewClass();
+  ov.setConfig({ type: "custom:smart-heating-overview" });
+  ov.hass = overviewHass();
+  document.body.appendChild(ov);
+  const oc = ov.querySelector("ha-card");
+  Object.defineProperty(oc, "offsetHeight", { get: () => 430, configurable: true });
+  ov.hass = overviewHass();
+  assert.strictEqual(oc.style.minHeight, "430px");
+});
