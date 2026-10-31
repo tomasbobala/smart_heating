@@ -1,22 +1,59 @@
-# Contributing / Prispievanie
+# Contributing
 
-**English** – Thank you for helping! Bug reports and ideas go to [Issues](https://github.com/tomasbobala/solax-fve-card/issues) – please use the forms and attach a screenshot and your card YAML (remove anything private).
+Thanks for considering a contribution to Smart Heating!
 
-**Slovensky** – Ďakujem za pomoc! Chyby a nápady patria do [Issues](https://github.com/tomasbobala/solax-fve-card/issues) – použite formulár a priložte obrázok a YAML karty (bez súkromných údajov).
+## Development setup
 
-## Pull requests
+```bash
+git clone https://github.com/tomasbobala/smart_heating.git
+cd smart_heating
 
-1. Fork the repository and create a branch: `git checkout -b fix/battery-label`.
-2. The card is a single file, `dist/solax-fve-card.js` – no build step.
-3. User-facing texts live in `I18N` (UI and editor) and `STATE_TEXT` (device states). Add every new text in **both** `en` and `sk`.
-4. Run the tests and look at the demo page:
-   ```bash
-   npm install
-   npm test
-   npx serve .   # http://localhost:3000/demo/?lang=en&view=day,night,details,editor
-   ```
-5. Keep the code style (Prettier, print width 160) and open a pull request with a short description and a screenshot.
+# Python (integration)
+pip install -r requirements-test.txt
+pytest
 
-## New languages / Nové jazyky
+# JavaScript (card)
+npm install
+npm test
+```
 
-Add a new block to `I18N` and `STATE_TEXT`, add it to `LANGUAGES` and extend `resolveLang()` so the language is picked from Home Assistant automatically.
+Both test suites run in CI (`.github/workflows/validate.yml`) on every push
+and pull request, along with the official HACS and `hassfest` validation.
+Please make sure both pass locally before opening a PR.
+
+## Project layout
+
+```
+custom_components/smart_heating/       Python integration (config flow, coordinator, platforms)
+custom_components/smart_heating/www/   Lovelace card (vanilla JS, no build step) - self-registers at startup
+tests/                                 pytest (Python) + node:test (card)
+.github/workflows/                     CI
+```
+
+## Making changes
+
+- Bump `version` in `custom_components/smart_heating/manifest.json` for
+  integration changes (and `package.json` if the card changed) - `release.yml`
+  checks that the git tag matches on release.
+- The card lives under `custom_components/smart_heating/www/` (not a
+  top-level `www/`) so that HACS deploys it automatically along with the
+  rest of the code, and `__init__.py` self-registers it as a frontend
+  resource at startup - no manual copying or Lovelace resource needed.
+- User-facing strings: `strings.json` is the canonical English source;
+  `translations/sk.json` is the Slovak translation. Keep both in sync.
+- Backend-generated text (decision reasons, notifications) lives in
+  `custom_components/smart_heating/i18n.py` - every key needs both an `en`
+  and an `sk` entry (checked by `tests/test_i18n.py`).
+- Card text lives in the `I18N` object at the top of
+  `custom_components/smart_heating/www/smart-heating-card.js`, same rule.
+
+## Reporting issues
+
+Please include your Home Assistant version, the integration version, and
+relevant log lines from **Settings → System → Logs** (filter for
+`smart_heating`).
+
+## License
+
+By contributing, you agree that your contributions will be licensed under
+the project's [MIT License](LICENSE).
