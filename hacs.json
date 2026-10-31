@@ -1,7 +1,6 @@
 {
-  "name": "Smart Heating",
+  "name": "SolaX FVE Card",
+  "filename": "solax-fve-card.js",
   "render_readme": true,
-  "homeassistant": "2024.12.0",
-  "zip_release": true,
-  "filename": "smart_heating.zip"
+  "homeassistant": "2023.9.0"
 }

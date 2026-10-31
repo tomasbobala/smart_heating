@@ -1,704 +1,330 @@
-<p align="center">
-  <a href="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png">
-    <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/custom_components/smart_heating/brand/icon.png" width="120" alt="Smart Heating logo">
-  </a>
-</p>
+<div align="center">
 
-# Smart Heating
+<img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/icon.png" alt="SolaX FVE Card" width="128">
 
-**Viaczónové kúrenie a chladenie pre Home Assistant**
+# SolaX FVE Card
 
-Podlahové kúrenie · kúrenie a chladenie klimatizáciou · krb · FVE prebytok a batéria · tarifa
+**Animovaná karta toku energie pre Home Assistant a meniče SolaX**
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
-[![GitHub Release](https://img.shields.io/github/v/release/tomasbobala/smart_heating?style=for-the-badge&color=C2410C)](https://github.com/tomasbobala/smart_heating/releases)
-[![License: MIT](https://img.shields.io/github/license/tomasbobala/smart_heating?style=for-the-badge&color=4caf7d)](LICENSE)
-[![Validate](https://img.shields.io/github/actions/workflow/status/tomasbobala/smart_heating/validate.yml?style=for-the-badge&label=validate)](https://github.com/tomasbobala/smart_heating/actions/workflows/validate.yml)
+FV stringy · menič · batéria s ovládaním SOC · sieť a tarifa · záťaže · wallbox a elektromobil
 
-**Slovensky** · [English](README.md)
+[![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5?style=for-the-badge&logo=homeassistantcommunitystore&logoColor=white)](https://hacs.xyz)
+[![GitHub release](https://img.shields.io/github/v/release/tomasbobala/solax-fve-card?style=for-the-badge&color=f5a623)](https://github.com/tomasbobala/solax-fve-card/releases)
+[![Licencia: MIT](https://img.shields.io/github/license/tomasbobala/solax-fve-card?style=for-the-badge&color=4caf7d)](LICENSE)
+[![Validate](https://img.shields.io/github/actions/workflow/status/tomasbobala/solax-fve-card/validate.yml?style=for-the-badge&label=validate)](https://github.com/tomasbobala/solax-fve-card/actions)
 
-[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=smart_heating&category=integration)
+[English](README.md) · **Slovensky**
 
-Univerzálna Home Assistant integrácia na riadenie viaczónového kúrenia **aj chladenia**
-— elektrické podlahové kúrenie, klimatizácia ako primárny zdroj tepla alebo chladu,
-krb, fotovoltaika (prebytok aj batéria) a tarifa elektriny, všetko v jednom systéme
-s vlastnou logikou a Lovelace kartou.
+[![Otvoriť tento repozitár v HACS vo vašom Home Assistant.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=solax-fve-card&category=plugin)
 
-Vytvorené pre reálny dom s viacerými nezávislými zónami (izbami), kde každá zóna
-má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
+<img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-day-sk.png" alt="SolaX FVE Card po slovensky" width="430">
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/dashboard.png" width="100%" alt="Smart Heating - prehľadová karta a karty zón">
-  <br>
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/statistics.png" width="100%" alt="Panel Štatistiky v prehľadovej karte">
-  <br>
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/overview-settings.png" width="100%" alt="Nastavenia integrácie priamo v prehľadovej karte">
-  <br>
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/card-settings.png" width="32%" alt="Karta zóny - otvorené nastavenia">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/global-settings.png" width="32%" alt="Formulár Globálne nastavenia">
-  <img src="https://raw.githubusercontent.com/tomasbobala/smart_heating/main/docs/screenshots/edit-zone.png" width="32%" alt="Formulár Upraviť zónu">
-</p>
+</div>
 
 ---
 
 ## Obsah
 
 - [Funkcie](#funkcie)
-- [Architektúra](#architektúra)
-- [Rozhodovacia logika — Kúrenie](#rozhodovacia-logika--kúrenie)
-- [Rozhodovacia logika — Chladenie](#rozhodovacia-logika--chladenie)
-- [Externý teplomer a presné riadenie AC](#externý-teplomer-a-presné-riadenie-ac)
-- [Kaskáda FVE prebytku](#kaskáda-fve-prebytku)
-- [Spotreba energie](#spotreba-energie)
-- [Diagnostika](#diagnostika)
-- [Notifikácie](#notifikácie)
-- [Jazyk (i18n)](#jazyk-i18n)
-- [Testy a CI](#testy-a-ci)
-- [Režim Vypnuté — ako funguje](#režim-vypnuté--ako-funguje)
-- [Instalácia](#instalácia)
-- [Nastavenie](#nastavenie)
-- [Entity vytvorené integráciou](#entity-vytvorené-integráciou)
-- [Lovelace karty](#lovelace-karty)
-- [Príklady použitia](#príklady-použitia)
+- [Požiadavky](#požiadavky)
+- [Inštalácia](#inštalácia)
+- [Rýchly štart](#rýchly-štart)
+- [Nastavenia](#nastavenia)
+- [Príklady](#príklady)
+- [Obrázky](#obrázky)
 - [Riešenie problémov](#riešenie-problémov)
-- [Známe obmedzenia](#známe-obmedzenia)
-
----
+- [Vývoj](#vývoj)
+- [Licencia](#licencia)
 
 ## Funkcie
 
-|   |   |
+| | |
 |---|---|
-| 🏠 **Viacero zón** | Každá miestnosť má vlastný režim, teploty a časy, so spoločnými globálnymi nastaveniami. |
-| 🔥 **Podlahové kúrenie** | Elektrické podlahové kúrenie s max. teplotou podlahy (s hysteréziou, aby relé necvakalo) a voliteľnou min. teplotou podlahy, ktorá drží podlahu teplú aj pri teplom vzduchu. |
-| ♨️ **Zóna radiátor + podlaha** | Dve nezávislé regulácie v jednej miestnosti (napr. kúpeľňa): elektrický radiátor cez relé drží vzduch, podlaha vlastné minimum. |
-| ❄️ **Kúrenie aj chladenie klímou** | Klimatizácia ako primárny zdroj tepla, plus zámerne jednoduchšia logika chladenia riadená batériou FVE. |
-| 🪵 **Reaguje na krb** | Vypne kúrenie v miestnosti, keď je pri krbe dostatočne teplo. |
-| 💶 **Sleduje tarifu** | Globálne zablokovanie kúrenia pri vysokej tarife. |
-| ☀️ **Kaskáda FVE prebytku** | Izby kúria z prebytku podľa priority (1 → 2 → 3). Riadené skutočným výkonom: priorita sa pridá, kým je prebytok, a odoberá sa od najnižšej, keď batéria vybíja alebo sa berie zo siete, s nastaviteľnými hranicami a časmi. |
-| ⚡ **Spotreba energie** | Merače po zdrojoch (podlaha, klíma, radiátor): príkon a spotreba za dnes po izbách aj za dom, kontrola meračov a panel štatistík (FVE verzus sieť, kWh na stupeňodeň, poradie izieb). |
-| 🩺 **Diagnostika** | Upozorní na nedostupné zariadenia, nezmyselné hodnoty a izby, ktoré sa nevedia dohriať. |
-| 🥶 **Protimrazová ochrana** | Núdzová ochrana zabráni zamrznutiu, aj počas zablokovania tarifou. |
-| 🧊 **Vynútené kúrenie pri mraze** | Per zóna nastaviteľná vonkajšia hranica spustí komfortné kúrenie v Auto režime. |
-| ⏰ **Predkúrenie** | Pevné časové okno pred príchodom, nezávisle od reálnej prítomnosti. |
-| 🌡️ **Externý teplomer** | Presnejšie riadenie, keď vstavaný senzor AC/podlahovky nestačí. |
-| 🚀 **Boost** | Okamžité, dočasné komfortné kúrenie na požiadanie. |
-| 🎛️ **Vlastné Lovelace karty** | Jedna karta na zónu s grafom za 24 h a plným ovládaním bez YAML, plus prehľadová karta celého domu, v ktorej sa dajú meniť aj nastavenia integrácie. |
-| 📈 **Záznam nábehov** | Každý nábeh sa zaznamená (minúty na 1 °C) – základ pre adaptívne predkúrenie. |
-| 🌍 **Slovenčina a angličtina** | Karta aj texty generované backendom (dôvody, notifikácie) podporujú oba jazyky. |
+| 🌞 **Solar** | Dva FV stringy s výkonom, napätím, prúdom a podielom, ich súčet a dnešná výroba. V noci sa stringy zbalia do jedného riadku. |
+| 🔆 **Menič** | Nakreslený menič (alebo vlastná fotka), režim, AC výkon, teplota a bodka stavu Modbus komunikácie. |
+| 🔋 **Batéria** | Segmentová ikona, SOC, smer nabíjania/vybíjania, V/A/°C, denné kWh, odhad výdrže, **rysky MIN/MAX SOC** a posuvníky na ich zmenu. |
+| 🗼 **Sieť** | Import/export s farbou podľa smeru, denný nákup/predaj a voliteľný odznak nízkej/vysokej tarify (NT/VT). |
+| 🏠 **Dom a záťaže** | Veľký uzol domu s celkovou spotrebou a ľubovoľný počet záťaží (bojler, auto, kúrenie, klíma …) ako čiarové ikony, ktoré sa rozsvietia, keď berú prúd. Rozloženie **v jednom rade, vo viacerých radoch alebo ako dlaždice**; dlaždica **Ostatné** ukáže nemeranú spotrebu. Klíma prepína ❄️ / 🔥 podľa režimu. |
+| 🚗 **Wallbox a auto** | Pruh nabíjacieho výkonu, stav, tlačidlá **GREEN · ECO · FAST · STOP / START**, posuvník prúdu, batéria auta s cieľom, dojazd, zostávajúci čas a limit nabíjania. |
+| ✨ **Animácia** | Putujúce pulzujúce šípky po každom toku – rýchlosť podľa výkonu. Pri dlaždiciach má každá záťaž vlastnú farebnú šípku, ktorá ide od domu. |
+| 🌍 **Jazyky** | Angličtina a slovenčina, automaticky podľa Home Assistant (alebo nastavené pre kartu). |
+| 🛠️ **Vizuálny editor** | Všetko sa nastavuje v UI – YAML netreba. Entity integrácie `solax_modbus` sa nájdu automaticky. |
+| 📦 **Bez závislostí** | Jeden čistý JavaScript súbor, žiadny build, žiadne externé požiadavky. |
 
----
+## Požiadavky
 
-## Architektúra
+- Home Assistant **2023.9** alebo novší
+- Odporúčané: integrácia [SolaX Modbus](https://github.com/wills106/homeassistant-solax-modbus) (`solax_modbus`).
+  Funguje aj akýkoľvek iný zdroj – entity len vyberiete v editore.
 
-### Hub (jeden na inštanciu Home Assistant)
+## Inštalácia
 
-Všetky globálne nastavenia sa spravujú cez **Nastaviť → Globálne nastavenia**
-(nie ako samostatné entity — všetko na jednom mieste):
+### HACS (odporúčané)
 
-| Nastavenie | Popis |
-|---|---|
-| Senzor vonkajšej teploty | používa sa aj na vynútené kúrenie pri mraze a Auto-sezónu |
-| Entita tarify / povolenie kúrenia | `on` = kúrenie povolené (najvyššia priorita blok) |
-| Krb - senzor teploty | teplota pri krbe |
-| Krb - prahová teplota (°C) | nad ktorou sa vypne kúrenie v zónach reagujúcich na krb |
-| FVE prebytok entita | `on` = fotovoltaika vyrába prebytok a batéria je nabitá (pre kúrenie) |
-| Batéria FVE - stav nabitia (%) | číselný senzor SOC, používa sa pre jednoduché chladenie |
-| Núdzová protimrazová ochrana (°C) | preráža aj tarifu |
-| Dovolenka / Neprítomnosť | force Min vo všetkých zónach (Auto režim) |
-| Notifikačné entity | kam sa posielajú upozornenia (dá sa vybrať viacero naraz) |
-| Jazyk | `auto \| en \| sk` — jazyk dôvodov/notifikácií generovaných backendom |
+1. Kliknite na tlačidlo – otvorí HACS vo vašom Home Assistant s vyplneným repozitárom:
 
-### Zóna (koľko izieb, toľko zón)
+   [![Otvoriť v HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=tomasbobala&repository=solax-fve-card&category=plugin)
 
-Pridáva sa cez **Options Flow** (Nastavenia → Zariadenia a služby → Smart Heating
-→ Nastaviť → Pridať zónu):
+   Alebo ručne: **HACS → ⋮ → Custom repositories**, URL `https://github.com/tomasbobala/solax-fve-card`, typ **Dashboard**.
+2. Vyhľadajte **SolaX FVE Card** a kliknite na **Download**.
+3. Obnovte prehliadač (v mobile aplikáciu zavrite a znova otvorte).
 
-- **Typ zóny:**
-  - `floor` — len podlahové kúrenie
-  - `floor_ac` — klimatizácia (kúrenie aj chladenie) ako primárny zdroj, podlaha
-    ako záložné dokurovanie (len pri kúrení — chladiť nevie)
-  - `radiator_floor` — dve nezávislé regulácie (napr. kúpeľňa): elektrický
-    radiátor cez relé drží teplotu **vzduchu**, podlaha samostatne drží
-    **minimálnu teplotu podlahy**. Vyžaduje relé radiátora a externý teplomer
-- Podlahový `climate` termostat (povinné)
-- Klimatizačný `climate` entity (len pre `floor_ac`)
-- Relé radiátora – switch / input_boolean / light (len pre `radiator_floor`)
-- Senzor teploty podlahy (voliteľné, pre max./min. teplotu podlahy)
-- **Externý teplomer zóny** (voliteľné) — nahradí vstavaný senzor vo výpočtoch
-- Osoby sledované cez GPS (`person.x`)
-- Manuálny presence override (napr. `input_boolean.navsteva` pre návštevu)
-- Reaguj na krb (áno/nie)
-- Udržiavať min. teplotu podlahy (áno/nie)
-- **Senzory príkonu** a **senzory energie** (voliteľné, viac sa sčíta) – pre spotrebu na kartách
+HACS zaregistruje resource automaticky.
 
----
+### Ručne
 
-## Rozhodovacia logika — Kúrenie
+1. Stiahnite `solax-fve-card.js` z [posledného vydania](https://github.com/tomasbobala/solax-fve-card/releases/latest).
+2. Skopírujte ho do `<config>/www/solax-fve-card.js`.
+3. **Nastavenia → Dashboardy → ⋮ → Zdroje (Resources) → Pridať zdroj**
+   - URL: `/local/solax-fve-card.js?v=1.0.0`
+   - Typ: **JavaScript modul**
+4. Obnovte prehliadač. Po každej aktualizácii zvýšte číslo `?v=`, aby prehliadač načítal nový súbor.
 
-Pre zónu v sezóne **Kúrenie** (pozri nižšie, ako sa sezóna určuje) sa v tomto
-poradí vyhodnocuje cieľ (vyššie položky prebíjajú nižšie):
+## Rýchly štart
 
-```
-0. NÚDZOVÁ OCHRANA
-   current_temp < núdzová hranica (default 8°C)
-   → krátko zapne kúrenie, PRERAZÍ TARIFU (nie floor/krb bezpečnosť)
+1. Otvorte dashboard → **Upraviť** → **Pridať kartu** → vyhľadajte **SolaX FVE Card**.
+2. Karta sama doplní nájdené entity `solax_modbus`. Prejdite sekcie editora a upravte, čo treba.
+3. V sekcii **Záťaže** pridajte bojler, kúrenie, klímu …
 
-0.5 FVE PREBYTOK
-   FVE entita = on A zóna má "Využi FVE prebytok" zapnuté
-   → cieľ = Deň/Noc komfort, PRERAZÍ TARIFU (nie floor/krb)
+Minimálny YAML:
 
-1. TARIFA
-   Entita "kúrenie povolené" != on → VYPNI VŠETKO (podlahu aj AC)
-
-2. BEZPEČNOSŤ PODLAHY
-   Teplota podlahy >= max (per zóna) → VYPNI, bez výnimky
-
-3. KRB
-   Zóna má "Reaguj na krb" zapnuté A teplota pri krbe >= threshold → VYPNI
-
-4. MANUÁLNY REŽIM (ak zóna nie je v Auto)
-   Den / Noc / Min / Mraz / Vypnute — priama teplota, žiadne ďalšie vyhodnocovanie
-
-5. AUTO
-   a. Urč Deň/Noc komfortnú teplotu podľa aktuálneho času (samostatné hranice
-      pre pracovný deň a víkend)
-   b. Skutočne je niekto doma (GPS alebo manuálny override)? → Komfort
-   c. Beží okno predkúrenia? (len Po–Pia, pevný čas) → Komfort
-   d. Vonkajšia teplota <= per-zóna hranica? → Komfort (vynútené kúrenie pri mraze)
-   e. Inak → Min (len udržiavanie, baseline)
+```yaml
+type: custom:solax-fve-card
+language: sk
+entities:
+  solar_power: sensor.solax_pv_power_total
+  battery_power: sensor.solax_battery_power_charge
+  battery_soc: sensor.solax_battery_capacity
+  grid_power: sensor.solax_measured_power
+  total_power: sensor.solax_house_load
 ```
 
-**Boost** (tlačidlo, dočasné na X hodín) sa vyhodnocuje pred krokom 4 — prebíja
-manuálny režim aj Auto, ale **rešpektuje** tarifu, podlahu aj krb. Nezávisí od
-reálnej prítomnosti.
+## Nastavenia
 
-### Zóna `floor_ac` v Kúrení — priorita AC → podlaha
+Všetky voľby sú nepovinné, pokiaľ nie je uvedené inak, a všetky sa dajú nastaviť aj vo vizuálnom editore.
 
-1. AC sa nastaví na vypočítaný cieľ ako prvá (primárny zdroj) — pozri aj
-   [Externý teplomer](#externý-teplomer-a-presné-riadenie-ac) nižšie, ak má AC
-   nepresný vlastný senzor
-2. Ak aktuálna teplota zaostáva za cieľom o viac než nastavený rozdiel (°C)
-   dlhšie než nastavený čas (minúty), zapne sa aj podlaha ako dokurovanie
-3. Keď AC dobehne cieľ, podlaha sa vypne
+### Všeobecné
 
----
+| Voľba | Typ | Predvolené | Popis |
+|---|---|---|---|
+| `type` | text | **povinné** | `custom:solax-fve-card` |
+| `language` | text | `auto` | `auto` (podľa Home Assistant), `en` alebo `sk` |
+| `title` | text | `Energia domu` | Nadpis karty |
+| `title_icon` | text | `⚡` | Emoji pred nadpisom, prázdne = bez ikony |
+| `links` | zoznam | tlačidlo Energie | Tlačidlá v hlavičke – pozri [Tlačidlá](#tlačidlá) |
+| `power_unit` | text | `W` | `W`, `kW` alebo `auto` |
+| `decimals` | číslo | `2` | Desatinné miesta pre kW |
+| `animation_speed` | text | `normal` | `slow`, `normal`, `fast` |
+| `colors` | mapa | – | Pozri [Farby](#farby) |
+| `show` | mapa | – | Pozri [Čo zobraziť](#čo-zobraziť) |
 
-## Rozhodovacia logika — Chladenie
+### Entity
 
-Platí **len pre zóny typu `floor_ac`**. Podlaha sa pri chladení nikdy nezapája.
+Zadávajú sa pod `entities:`. Výkon v kW sa prepočíta automaticky.
 
-### Ako sa určí sezóna (Kúrenie vs Chladenie)
-
-Každá `floor_ac` zóna má vlastný prepínač **Sezóna**: `Kurenie` / `Chladenie` / `Auto`.
-
-- **Kurenie** / **Chladenie** — manuálne vynútené, ignoruje vonkajšiu teplotu
-- **Auto** — vonkajšia teplota >= per-zóna hranica → **Chladenie**, inak **Kúrenie**
-
-### Logika v sezóne Chladenie (zámerne jednoduchšia než kúrenie)
-
-Žiadna prítomnosť, žiadny Deň/Noc, žiadne predkúrenie — len:
-
-```
-1. Manuálny rezim = Vypnute? → AC off, koniec
-
-2. Batéria FVE (%) >= nastavená hranica?
-   → NIE → AC off
-   → ÁNO → pokračuj
-
-3. Ma zóna externý teplomer?
-   → NIE → chladí (spolieha sa na vlastný senzor AC, ako doteraz)
-   → ÁNO → hysteréza podľa externého teplomera:
-       teplomer <= cieľ - hysterézia → vypni chladenie
-       teplomer >= cieľ + hysterézia → zapni chladenie
-       (v pásme medzi) → nechaj predchádzajúci stav (anti-cyklovanie)
-```
-
-`Cieľová teplota chladenia` slúži zároveň ako hranica pre hysterézu **aj** ako
-fyzická hodnota, ktorá sa reálne pošle klimatizácii.
-
----
-
-## Externý teplomer a presné riadenie AC
-
-Bežný problém: vstavaný senzor klimatizácie môže byť nepresný alebo neodráža
-reálnu teplotu v miestnosti (napr. je pri okne, alebo miestnosť má iný tepelný
-zdroj ako krb). Riešenie:
-
-1. V nastavení zóny priraď **Externý teplomer zóny** (napr. teplomer pri krbe)
-2. Táto hodnota **nahradí** vstavaný senzor vo **všetkých** výpočtoch danej zóny
-   (zobrazená aktuálna teplota, núdzová ochrana, AC↔podlaha priorita, hysteréza
-   pri kúrení aj chladení)
-3. Pri kúrení navyše: AC dostane príkaz kúriť na **pevný fyzický setpoint**
-   (`AC fyzický setpoint`, napr. 26°C) namiesto vypočítaného komfortného cieľa
-   — pretože jej vlastný senzor a regulačný okruh sú nepresné. O tom, **či**
-   AC vôbec beží, rozhoduje `AC hysteréza` vs externý teplomer, nie AC sama.
-
-Ak zóna **nemá** externý teplomer nastavený, všetko funguje presne ako predtým
-(AC sa riadi vlastným senzorom a regulačným okruhom).
-
----
-
-## Kaskáda FVE prebytku
-
-Každá zóna so zapnutým *Využi FVE prebytok* má **prioritu FVE** (1 / 2 / 3).
-Izby s prioritou 1 kúria z prebytku prvé, ostatné len keď prebytok ešte zostáva.
-
-**Riadenie podľa výkonu** (Globálne nastavenia → *Riadiť FVE prebytok podľa
-výkonu*, odporúčané). Vstupy: výroba FVE, výkon siete, výkon batérie a SOC
-batérie, s voliteľnými znamienkami. Vyhodnocuje sa každých 30 s.
-
-- **Pridávanie:** dostupný prebytok = export do siete + nabíjanie batérie
-  (nabíjanie sa ráta až od *nabíjanie batérie je prebytok od SOC*, takže sa
-  batéria nabije prvá). Keď vydrží nad *pridať prioritu pri prebytku* počas
-  *trvajúcom*, pridá sa ďalšia priorita, a po rovnakom čase prípadne ďalšia.
-- **Odoberanie (hysteréza):** vybíjanie batérie alebo odber zo siete nad
-  *odobrať pri*, alebo výroba pod *nedostatočná výroba*, počas *trvajúcom* →
-  odpojí sa najnižšia aktívna priorita; ak to trvá ďalej, po rovnakom čase
-  ďalšia. Pod *vypnúť všetko pri batérii pod* sa vypne všetko hneď.
-- Medzi oboma hranicami sa nič nemení, takže prechodný mrak izby nezapína a
-  nevypína.
-
-`sensor.smart_heating_fve_kaskada` ukazuje aktívnu prioritu (0 = nič) a
-namerané výkony, takže ho môžu použiť aj iné automatizácie. Všetky hodnoty sa
-dajú meniť v Globálnych nastaveniach aj v prehľadovej karte.
-
-**Bez senzorov výkonu** stačí obyčajná entita prebytku áno/nie. Kaskáda potom
-pridá nižšie priority, keď sú všetky vyššie izby 10 minút na cieli, a odpojí
-ich hneď, keď niektorá vyššia vychladne.
-
-## Spotreba energie
-
-Každá zóna môže mať merače **príkonu** (W) a **energie** (kWh) **po
-zdrojoch**: podlaha, klíma a radiátor (každý ako zoznam, napr. dva okruhy
-podlahy), plus "ostatné" senzory. Karta zóny potom ukazuje príkon po zdrojoch.
-
-- Zdroj s meračom príkonu sa ráta ako **v chode nad 20 W**. Podľa toho sa určuje
-  stav zóny, `v_chode` aj "Kúrenie dnes", spoľahlivejšie než podľa `hvac_action`.
-- **Kontrola meračov:** hlási kúrenie, ale 10 min ťahá 0 W (vypadnutý ohrev),
-  alebo ťahá viac ako 50 W, hoci má byť vypnutý (zaseknuté relé) → porucha s
-  notifikáciou.
-
-- Karta zóny ukazuje aktuálny príkon a spotrebu za dnes.
-- Prehľadová karta ukazuje súčet za celý dom.
-- Spotreba za dnes sa berie z 5-minútových štatistík Home Assistanta, takže
-  funguje akýkoľvek senzor energie s dlhodobými štatistikami (kumulatívne
-  merače aj denné utility metre). Obnovuje sa každých 5 minút, príkon sa
-  mení živo bez prekresľovania celej karty.
-
-### Štatistiky
-
-Tlačidlo **Štatistiky** v prehľadovej karte otvorí panel za dnes, 7 alebo 30
-dní: celková spotreba rozdelená na **FVE / batériu / sieť** (FVE + batéria +
-sieť = spotreba), z toho prebytok z kaskády FVE, **kWh na stupeňodeň** (základ
-18 °C) v porovnaní s predchádzajúcim obdobím (len keď je porovnateľné), graf po
-dňoch alebo hodinách s mriežkou a hodnotami (ťuknutím na stĺpec detail), poradie
-izieb, kontrola meračov a priemerná vlhkosť.
-
-Rozdelenie podľa zdroja: integrácia každých 30 s zo senzorov výkonu FVE, siete
-a batérie (Globálne nastavenia) rozdelí spotrebu domu na
-`sensor.smart_heating_energia_domu_zo_siete`, `..._z_fve` a `..._z_baterie`
-(proporcionálne). Panel v každej hodine rozdelí spotrebu kúrenia rovnakým
-pomerom ako celý dom – funguje aj pre zdroje len s meračom energie (klíma).
-Obdobie pred vznikom týchto senzorov je „nerozdelené“.
-
-### Panel kaskády FVE
-
-Klik na dlaždicu **FVE prebytok** v prehľade otvorí panel: stav kaskády a od
-kedy platí, toky (výroba, do siete, zo siete, batéria, prebytok vs. prah),
-čo kaskáda robí a prečo s odpočtom (pridanie / odobratie priority), priority
-1–5 so stavom každej izby (kúri, akumulácia a čas do ďalšieho kroku, na maxime,
-čaká, blokované) a priebeh dňa. Priority sú 1–5.
-
-**Max. príkon kúrenia z prebytku** (`pv_max_heat_power`, predvolene 7000 W,
-0 = bez limitu) necháva rezervu pre dom: ďalšia priorita sa pridá, len ak sa
-kúrenie aj s ďalšou zónou zmestí do limitu; nad limitom sa najnižšia priorita
-odoberie. Príkon kúrenia = súčet meračov príkonu zón.
-
-### Akumulácia prebytku FVE
-
-Pri prebytku FVE zóna začne na dennej teplote a vždy, keď ju dosiahne (najskôr
-po `pv_acc_minutes`, predvolene 15 min), sa cieľ zvýši o `pv_acc_step`
-(predvolene 1 °C) – až po **max. teplotu z prebytku** zóny
-(`number.*_fve_max_teplota`, predvolene 24 °C). Po skončení prebytku sa cieľ
-vráti na normál. Vypína sa prepínačom `switch.*_fve_akumulacia`; všetko sa
-nastavuje aj na kartách. V zóne s klímou kúri najprv klíma; keď pri krbe
-dosiahne teplota hranicu krbu, klíma sa vypne a ďalej akumuluje podlaha až po
-max. teplotu podlahy.
-
-### Vlhkosť (len sledovanie)
-
-Voliteľný senzor vlhkosti pri zóne a senzory vonkajšej vlhkosti a tlaku
-v Globálnych nastaveniach. Zóna dostane pocitovú teplotu (Steadman, bez vetra),
-rosný bod a odporúčanie vetrania (porovnáva absolútnu vlhkosť dnu a vonku);
-karta zóny ich ukáže v jednom riadku, prehľad vonkajšiu vlhkosť a tlak s trendom
-za 3 h. Voliteľná notifikácia, keď je vlhkosť hodinu nad 65 % alebo pod 30 %.
-Podľa vlhkosti sa zatiaľ nereguluje.
-
-## Diagnostika
-
-Ako porucha sa hlási (riadok na karte zóny, riadok *Poruchy* v prehľade a
-notifikácia pri vzniku aj vyriešení):
-
-- termostat, klíma, relé radiátora alebo senzor nedostupné viac ako 15 min,
-- nezmyselná teplota v miestnosti alebo podlahy,
-- izba, ktorá 3 h kúri a stále je viac ako 1 °C pod cieľom.
-
-## Notifikácie
-
-10 samostatných kategórií, každá s vlastným prepínačom v **Globálnych nastaveniach**
-(defaultne všetky zapnuté):
-
-| Kategória | Rozsah | Príklad |
+| Kľúč | Popis | Typická entita `solax_modbus` |
 |---|---|---|
-| Tarifa | 1× pre celý dom | `Globálny stav: kúrenie zablokované vysokou tarifou.` |
-| Podlaha | per zóna | `{zóna}: kúrenie vypnuté - podlaha dosiahla max. teplotu {teplota}.` |
-| Krb | 1× so zoznamom zón | `Krb: kúrenie vypnuté v zónach: {zoznam}.` |
-| Núdzová ochrana | 1× so zoznamom zón | `Núdzová ochrana aktivovaná v zónach: {zoznam}!` |
-| Boost | per zóna | `Boost aktivovaný v zóne {zóna} na {hodiny} h.` |
-| Chladenie | per zóna | `{zóna}: chladenie spustené (batéria {%}, cieľ {°C}).` |
-| Dovolenka | 1× pre celý dom | `Dovolenka aktivovaná - všetky zóny na Min.` |
-| Predkúrenie | per zóna | `{zóna}: predkúrenie spustené pred príchodom.` |
-| AC/podlaha záloha | per zóna, len `floor_ac` | `{zóna}: AC nestíha, podlaha zapojená ako dokurovanie.` |
-| Vonkajšia hranica (mráz) | per zóna | `{zóna}: nízka vonkajšia teplota vynútila kúrenie.` |
+| `pv1_power`, `pv2_power` | Výkon stringu | `sensor.solax_pv_power_1`, `_2` |
+| `pv1_voltage`, `pv2_voltage` | Napätie stringu | `sensor.solax_pv_voltage_1`, `_2` |
+| `pv1_current`, `pv2_current` | Prúd stringu | `sensor.solax_pv_current_1`, `_2` |
+| `solar_power` | Celkový FV výkon | `sensor.solax_pv_power_total` |
+| `solar_today` | Vyrobené dnes (kWh) | `sensor.solax_today_s_solar_energy` |
+| `inverter_status` | Režim meniča | `sensor.solax_run_mode` |
+| `inverter_power` | AC výkon meniča | `sensor.solax_inverter_power` |
+| `inverter_temp` | Teplota meniča | `sensor.solax_inverter_temperature` |
+| `inverter_comm_health`, `inverter_comm_rate` | Stav / úspešnosť komunikácie | – |
+| `inverter_voltage_l1…l3`, `inverter_current_l1…l3` | Hodnoty po fázach | `sensor.solax_inverter_voltage_l1` … |
+| `grid_power` | Výkon siete, **+ import / − export** | `sensor.solax_measured_power` |
+| `grid_power_l1…l3`, `grid_voltage_l1…l3` | Hodnoty po fázach | `sensor.solax_measured_power_l1` … |
+| `grid_import_today`, `grid_export_today` | Denný nákup / predaj | `sensor.solax_today_s_import_energy` … |
+| `tariff_low` | ON = nízka tarifa (odznak NT/VT) | ľubovoľný `switch` / `binary_sensor` |
+| `tariff_enabled` | Bodka vedľa odznaku | ľubovoľný `input_boolean` |
+| `battery_power` | Výkon batérie, **+ nabíja / − vybíja** | `sensor.solax_battery_power_charge` |
+| `battery_soc` | Stav nabitia (%) | `sensor.solax_battery_capacity` |
+| `battery_voltage`, `battery_current`, `battery_temp` | Detaily batérie | `sensor.solax_battery_voltage_charge` … |
+| `battery_charge_today`, `battery_discharge_today` | Denná energia | `sensor.solax_battery_input_energy_today` … |
+| `battery_capacity` | Kapacita z BMS (Wh) pre odhad výdrže | `sensor.solax_bms_battery_capacity` |
+| `battery_min_soc` | MIN SOC `number` (ryska + posuvník) | `number.solax_selfuse_discharge_min_soc` |
+| `battery_max_soc` | MAX SOC `number` (ryska + posuvník) | `number.solax_battery_charge_upper_soc` |
+| `total_power`, `total_today` | Spotreba domu / dnes | `sensor.solax_house_load` |
+| `wallbox_power` | Nabíjací výkon | `sensor.solax_wallbox_charge_power_total` |
+| `wallbox_status` | Stav nabíjačky | `sensor.solax_wallbox_run_mode` |
+| `wallbox_mode` | Režim nabíjania (`select`) | `select.solax_wallbox_charge_mode` |
+| `wallbox_stop` | Entita na zastavenie (`select`, `switch`, `button`) | auto: `select.<prefix>_control_command` |
+| `wallbox_current` | Nabíjací prúd (`number`) | `number.solax_wallbox_charge_current` |
+| `wallbox_added`, `wallbox_today`, `wallbox_temp` | Energia relácie / dňa, teplota | – |
+| `wallbox_comm_health`, `wallbox_comm_rate` | Stav komunikácie | – |
+| `car_soc`, `car_target_soc`, `car_range`, `car_time_remaining` | Batéria auta z integrácie auta | – |
+| `car_limit` | Limit nabíjania auta (`number`, posuvník) | – |
+| `car_plug`, `car_state` | Pripojená nabíjačka / stav nabíjania | – |
 
-Väčšina kategórií posiela **aj** správu o návrate do normálu (napr. "kúrenie obnovené").
-Po reštarte HA je 3-minútové ochranné okno, počas ktorého sa notifikácie neposielajú
-(len sa ticho zaznamená základný stav) — zabraňuje falošným upozorneniam za stav,
-ktorý existoval už pred reštartom. **Notifikačná entita** podporuje výber **viacerých**
-cieľov naraz (napr. telefóny oboch partnerov).
+### Rozloženie a popisy
 
----
+| Voľba | Typ | Predvolené | Popis |
+|---|---|---|---|
+| `pv1_label`, `pv2_label` | text | `String 1`, `String 2` | Názvy stringov; panel ukáže začiatočné písmená (*Východ/Západ* → `V/Z`) |
+| `home_label`, `home_icon` | text | `Dom`, `🏠` | Uzol domu |
+| `home_mode` | text | `total` | `total` = celá spotreba, `remainder` = mínus záťaže pod ním |
+| `loads_layout` | text | `row` | `row` = jeden rad (pôvodné), `rows` = krúžky vo viacerých radoch, `tiles` = dlaždice v mriežke |
+| `loads_per_row` | číslo | `3` | Záťaží v rade pre `rows` a `tiles` |
+| `other_label`, `other_icon`, `other_color` | text | `Ostatné`, `🔌`, `#9aa0a8` | Dlaždica OSTATNÉ (dom mínus merané záťaže) |
+| `inverter_image` | text | – | Vlastný obrázok meniča, napr. `/local/menic.png` |
+| `inverter_power_label` | text | `výstup` | Text pred výkonom meniča, prázdne = bez textu |
+| `wallbox_image` | text | – | Vlastný obrázok wallboxu |
+| `wallbox_max_power` | číslo | `11000` | Plný rozsah pruhu nabíjania (W) |
+| `invert_battery`, `invert_grid` | text | `auto` | `auto`, `yes`, `no` – otočí znamienko, ak má senzor opačnú konvenciu |
+| `battery_capacity_kwh` | číslo | z BMS | Kapacita pre odhad výdrže |
+| `battery_runtime_target` | číslo | MIN SOC | Cieľové % pre odhad výdrže |
+| `battery_segments` | číslo | `3` | Počet segmentov ikony batérie |
 
-## Jazyk (i18n)
-
-Integrácia aj karta podporujú slovenčinu aj angličtinu:
-
-- **Karta**: `language: auto | en | sk` v konfigurácii karty (`auto` sleduje jazyk HA)
-- **Backend** (dôvody rozhodnutí, zdroj kúrenia, notifikácie): pole **Jazyk** v
-  Globálnych nastaveniach integrácie (`auto | en | sk`)
-
-Obe sú nezávislé — môžeš mať kartu po anglicky a notifikácie po slovensky, ak chceš.
-
----
-
-## Testy a CI
-
-Projekt má skutočnú testovaciu sadu (nie len manuálne overenie):
-
-- **Python** (`pytest` + `pytest-homeassistant-custom-component`) — rozhodovacia
-  logika, i18n, notifikácie, config/options flow (vrátane regresných testov na
-  konkrétne bugy nájdené počas vývoja)
-- **JavaScript** (`node:test` + `jsdom`) — karta, i18n, optimalizácia prekresľovania
-
-```bash
-# Python
-pip install -r requirements-test.txt
-pytest
-
-# JS
-npm install
-npm test
-```
-
-GitHub Actions (`.github/workflows/validate.yml`) spúšťa oboje pri každom
-push/PR, spolu s oficiálnou HACS a `hassfest` validáciou.
-
----
-
-## Režim Vypnuté — ako funguje
-
-Pri **prechode** do režimu Vypnuté (zmena z iného režimu) sa pošle `off`
-**jedenkrát**. Pokým zóna **zostáva** vo Vypnuté, coordinator už do zariadenia
-vôbec nezasahuje — necháš si ho ovládať úplne sám (napr. prepnúť klimatizáciu
-na chladenie mimo Smart Heating), kým znova neprepneš na iný režim. Toto platí
-rovnako pre kúrenie aj chladenie.
-
----
-
-## Instalácia
-
-### Cez HACS (odporúčané)
-
-1. HACS → tri bodky vpravo hore → **Vlastné repozitáre**
-2. URL: `https://github.com/tomasbobala/smart_heating`
-3. Kategória: **Integrácia**
-4. Vyhľadaj "Smart Heating" v HACS a nainštaluj
-5. Reštartuj Home Assistant
-
-### Manuálne
-
-1. Skopíruj `custom_components/smart_heating` do `config/custom_components/smart_heating`
-2. Reštartuj Home Assistant
-
----
-
-## Nastavenie
-
-### 1. Pridanie integrácie (hub)
-
-**Nastavenia → Zariadenia a služby → Pridať integráciu → Smart Heating**
-
-Všetky polia sú voliteľné — dajú sa doplniť aj neskôr cez "Nastaviť → Globálne
-nastavenia".
-
-### 2. Pridanie zóny
-
-Na dlaždici integrácie klikni **Nastaviť (Configure)** → **Pridať zónu**:
-
-- Zadaj názov, vyber typ zóny a podlahový/klimatizačný `climate` entity
-- Voliteľne priraď externý teplomer, senzor teploty podlahy
-- Priraď osoby na sledovanie prítomnosti
-- Ulož
-
-Po pridaní zóny sa vytvorí ~19–26 entít (podľa typu zóny) s predvolenými
-hodnotami, ktoré si doladíš cez entity alebo priamo cez Lovelace kartu.
-
-### 3. Karta sa pridá automaticky — žiadne ručné kroky
-
-Od verzie 0.12.0 je Lovelace karta zabudovaná **priamo vo vnútri**
-`custom_components/smart_heating/` a pri štarte Home Assistant sa **sama
-zaregistruje** — ako statický súbor **aj** ako automaticky vložený dashboard
-resource. To znamená:
-
-- HACS ju nasadí automaticky spolu so zvyškom kódu (leží pod
-  `custom_components/`, nie v samostatnom priečinku `www/`)
-- **Žiadne** ručné kopírovanie do `config/www/`
-- **Žiadne** ručné pridávanie resource cez Nastavenia → Ovládacie panely → Zdroje
-- Cache sa rieši sama — do vloženej URL sa automaticky zapíše nainštalovaná
-  verzia, takže po aktualizácii stačí len reštart HA
-
-Stačí pridať kartu na dashboard cez UI (Upraviť dashboard → Pridať kartu →
-Smart Heating) — otvorí sa vizuálny výber zóny, netreba písať `zone_id`
-ručne. Alebo priamo v YAML:
+### Záťaže
 
 ```yaml
-type: custom:smart-heating-card
-zone_id: "xxxxxxxx"
-name: "Obývačka"       # volitelne, inak sa pouzije meno z climate entity
+loads:
+  - label: Bojler
+    icon: 🚿            # emoji sa nakreslí ako čiarová ikona
+    color: "#e0a020"
+    entity: sensor.bojler_vykon
+    today: sensor.bojler_dnes
+  - label: Kúrenie
+    icon: ♨️
+    entity: sensor.kurenie_obyvacka_vykon
+    extra_entities: sensor.kurenie_spalna_vykon, sensor.kurenie_kupelna_vykon
+  - label: Klíma
+    icon: 🌡️
+    entity: sensor.klima_vykon
+    icon_entity: climate.obyvacka    # ❄️ pri chladení, 🔥 pri kúrení
 ```
 
-Ak sa karta neobjaví hneď po inštalácii/aktualizácii, treba **úplný reštart
-Home Assistant** (nie len HACS "reload") — registrácia prebieha len raz, pri
-štarte.
-
----
-
-## Entity vytvorené integráciou
-
-Hub **nemá** žiadne vlastné entity — všetko globálne je súčasťou Globálnych
-nastavení (Options Flow).
-
-### Per zóna (`<id>` = interné ID zóny)
-
-| Entity | Popis |
+| Kľúč | Popis |
 |---|---|
-| `climate.smart_heating_<id>` | hlavný virtuálny termostat — primárne ovládacie miesto (podporuje aj Cool pri `floor_ac`) |
-| `select.smart_heating_<id>_rezim` | Auto / Den / Noc / Min / Mraz / Vypnute |
-| `select.smart_heating_<id>_sezona` | **len `floor_ac`**: Kurenie / Chladenie / Auto |
-| `number..._teplota_den` / `_teplota_noc` / `_teplota_min` / `_teplota_mraz` | teploty kúrenia |
-| `number..._floor_max` / `_floor_hysterezia` | max. podlahy: vypne na maxime, znova zapne pod max - hysteréza. Keď senzor podlahy 10 min nedáva platnú hodnotu, podlahovka sa vypne (atribút `floor_sensor_lost`) |
-| `number..._floor_min` + `switch..._udrzat_min_podlahy` | min. teplota podlahy: podlaha kúri pod ňou aj keď je vzduch teplý |
-| `sensor.smart_heating_fve_kaskada` | FVE podľa výkonu: aktívna priorita (0 = nič), výkony, dostupný prebytok, kedy sa pridá / odoberie ďalšia priorita |
-| `select..._fve_priorita` | kaskáda FVE prebytku: 1 kúri prvá; 2 a 3 sa pridajú, keď sú vyššie priority 10 min nahriate, a odpoja sa hneď, keď vyššia vychladne o > 0,5 °C |
-| `number..._radiator_hysterezia` | len zóny s radiátorom: radiátor zapne pod cieľ - hysteréza, vypne na cieli |
-| atribúty `sensor..._stav`: `problemy`, `nabeh_min_na_stupen`, `nabehy_pocet` | aktuálne poruchy; záznam nábehov (medián minút na 1 °C, počet) |
-| `number..._vonkajsia_hranica` | hranica pre vynútené kúrenie pri mraze |
-| `number..._boost_hodiny` | trvanie Boostu |
-| `number..._ac_priorita_rozdiel` / `_ac_priorita_minuty` | **len `floor_ac`**: kedy nastúpi podlaha ako záloha |
-| `number..._ac_setpoint_teplota` | **len `floor_ac`**: fyzický setpoint AC pri kúrení (s ext. teplomerom) |
-| `number..._ac_hysterezia` | **len `floor_ac`**: hysteréza pre zapnutie/vypnutie AC (kúrenie aj chladenie) |
-| `number..._teplota_chladenie` | **len `floor_ac`**: cieľ/setpoint chladenia |
-| `number..._bateria_hranica_chladenie` | **len `floor_ac`**: min. % SOC batérie pre chladenie |
-| `number..._vonkajsia_hranica_chladenie` | **len `floor_ac`**: hranica pre Auto-sezónu |
-| `time..._den_od_tyzden` / `_vikend`, `_noc_od_tyzden` / `_vikend` | časové hranice Deň/Noc |
-| `time..._predkurenie_od` / `_do` | okno predkúrenia (len Po–Pia) |
-| `switch..._predkurenie_povolene` | zapnutie/vypnutie predkúrenia |
-| `switch..._reaguj_na_krb` | zapnutie/vypnutie reakcie na krb |
-| `switch..._vyuzi_fve_prebytok` | zapnutie/vypnutie využitia FVE prebytku (kúrenie) |
-| `button..._boost` | okamžité spustenie Boostu |
-| `binary_sensor.smart_heating_<id>_v_chode` | zapnutý, keď zóna reálne kúri alebo chladí (atribút `action`: heating / cooling / idle / off) — lacná história pre prehľadovú kartu, použiteľný aj v `history_stats` |
-| `sensor..._stav` | diagnostický dôvod aktuálneho rozhodnutia + atribúty (`heating_allowed`, `season`, `release_control`, `zdroj_kurenia`, `tariff_blocked`, `floor_override`, `krb_override`, `emergency_active`, `pv_active`, `boost_active`, `outdoor_temperature`, `cold_outdoor_active`, a pre prehľadovú kartu `outdoor_entity`, `presence_entities`, `manual_presence_entities`) |
+| `label`, `icon`, `color` | Názov, emoji a farba |
+| `art` | Vynútená kresba: `home`, `boiler`, `car`, `heating`, `heat`, `cool`, `thermo`, `bolt`, `plug` |
+| `entity` | Entita výkonu |
+| `extra_entities` | Ďalšie entity výkonu na sčítanie, oddelené čiarkou |
+| `today`, `today_extra` | Denná energia / ďalšie na sčítanie |
+| `icon_entity` | `climate` entita – ikona podľa `hvac_action` / režimu |
 
----
+Emoji → kresba: 🏠 🏡 → dom, 🚿 🛁 → bojler, ♨️ → kúrenie, 🔥 → oheň, ❄️ → chladenie, 🌡️ → teplomer, 🚗 🚙 → auto, 🔌 ⚡ → blesk.
 
-## Lovelace karty
-
-`custom_components/smart_heating/www/smart-heating-card.js` — čisté JavaScript web components, žiadny build
-krok. Súbor obsahuje dve karty.
-
-### Karta zóny — `custom:smart-heating-card`
-
-Jedna karta = jedna zóna:
-
-- **Stav na prvý pohľad** — farebný pásik vľavo a odznak stavu: Kúri
-  (oranžový, pulzuje) / Nekúri / Chladí / Vypnuté. Stav vychádza z toho, čo
-  reálne beží (ak zariadenie hlási vlastný `hvac_action`, použije sa ten), nie
-  len z toho, že je kúrenie povolené
-- **Veľká aktuálna teplota** a vedľa nej **graf za 24 h** s cieľom ako
-  prerušovanou čiarou, pod ním min · Ø · max za 24 h. Údaje sú z
-  5-minútových štatistík, ktoré si Home Assistant sám počíta pre teplotný
-  senzor zóny (`sensor.smart_heating_<id>_teplota`), takže načítanie je lacné.
-  Tento senzor nevylučuj z recordera; graf sa doplní počas prvého dňa.
-  Kliknutím na teplotu sa otvorí jej história
-- **Štítok odchýlky** — `v cieli` (±0,5 °C), `+1,0° nad`, `−1,6° pod` — a
-  teplota podlahy
-- **Cieľ − / +** priamo na karte. Viac klikov sa spojí do jedného volania
-  `climate.set_temperature`; hodnota sa uloží pre práve aktívny podrežim
-  (Deň / Noc / Min)
-- **Lišta režimov** Auto / Deň / Noc / Min. Mráz a Vypnuté sa na nej ukážu
-  len keď sú aktívne; všetkých šesť režimov je v nastaveniach
-- **Riadok s dôvodom** rozhodnutia a farebné odznaky (tarifa, FVE prebytok,
-  krb, núdzová ochrana, Boost…)
-- **Ozubené koliesko** otvára nastavenia ako zbaliteľné sekcie: režim, sezóna
-  (len zóny s AC), teploty, chladenie, časy, prepínače a Boost. Ich obsah sa
-  vykresľuje len keď sú otvorené, takže karta je na mobile ľahká
-- **Vizuálny editor** pri pridávaní karty (dropdown zón, výber jazyka)
+### Tlačidlá
 
 ```yaml
-type: custom:smart-heating-card
-zone_id: "xxxxxxxx"
-name: "Obývačka"       # voliteľné, inak sa použije meno z climate entity
-language: auto          # voliteľné: auto | en | sk
+links:
+  - label: Energie
+    icon: ⚡
+    path: /energy
+  - label: Solar
+    icon: 🔆
+    color: "#f5a623"
+    path: /lovelace/solar
+  - label: SolaX Cloud
+    icon: ☁️
+    path: https://www.solaxcloud.com
 ```
 
-### Prehľadová karta — `custom:smart-heating-overview`
+`links: []` tlačidlá skryje. Celé adresy `https://` sa otvoria v novej karte.
 
-Jedna karta pre celý dom, najlepšie na celú šírku nad kartami zón.
-Nepotrebuje žiadnu konfiguráciu — stačí `type: custom:smart-heating-overview`;
-vonkajší senzor a entity prítomnosti si vezme z integrácie:
+### Čo zobraziť
 
-- **Vonkajšia teplota** so zmenou za posledné 3 h a dnešným rozsahom
-- **Dlaždice podmienok** — vstavané: `heating` (kúri N z M izieb), `presence`
-  (kto je doma, z entít prítomnosti zón), `guests` (návšteva), `pv`
-  (využíva sa FVE prebytok), `tariff` (tarifa blokuje kúrenie), `krb` (krb
-  vypína zóny), `emergency`, `boost`; plus ľubovoľné vlastné entity. Núdzová
-  ochrana a Boost sa objavia samé, keď sú aktívne. Klik na Návštevu alebo na
-  dlaždicu `input_boolean` / `switch` / `light` / `fan` ju prepne, ostatné
-  otvoria detail entity (pre dlaždicu: `tap_action: more-info | toggle | none`)
-- **Súhrn** — koľko izieb je v cieli / nad cieľom / pod cieľom a ako dlho dnes
-  kúrilo (čas, keď kúrila aspoň jedna zóna)
+Pod `show:` (`true` / `false`).
 
-```yaml
-type: custom:smart-heating-overview
-outdoor_entity: sensor.outdoor_temperature   # voliteľné, predvolene vonkajší senzor z integrácie
-zones: ["xxxxxxxx", "yyyyyyyy"]              # voliteľné, predvolene všetky zóny
-tiles:                                       # voliteľné, predvolene heating, presence, guests, pv, tariff, krb
-  - name: Doma
-    icon: mdi:home-account
-    entities: [person.tomas, person.monika]  # ukáže, kto je doma
-  - entity: input_boolean.navsteva
-    name: Návšteva
-    icon: mdi:account-group
-  - entity: input_boolean.krb_hori
-    name: Krb
-    icon: mdi:fireplace
-    on_text: Horí
-    off_text: Nehorí
-    color: hot                               # on (zelená) | hot | cold | warn
-    tap_action: toggle                       # predvolené pre input_boolean/switch/light/fan
-  - tariff
-  - pv
-  - heating
-grid_options:
-  columns: full
-```
+| Kľúč | Predvolené | Popis |
+|---|---|---|
+| `pv_split` | `true` | Dva samostatné stringy |
+| `pv_details` | `true` | Napätie / prúd / podiel % |
+| `solar_sum` | `true` | Súčet stringov (Σ) |
+| `night_compact` | `true` | Zbaliť stringy, keď nič nevyrába |
+| `battery` | `true` | Uzol batérie |
+| `battery_details` | `true` | V / A / °C / denné kWh |
+| `battery_settings` | `true` | Posuvníky MIN / MAX SOC |
+| `battery_runtime` | `true` | Odhad výdrže |
+| `grid` | `true` | Uzol siete |
+| `grid_details` | `true` | Denný nákup / predaj |
+| `tariff` | `true` | Odznak tarify |
+| `loads` | `true` | Záťaže |
+| `dim_idle_loads` | `true` | Stlmiť záťaže, ktoré nič neberú |
+| `loads_other` | `true` | Dlaždica OSTATNÉ – nemeraná spotreba (dom mínus záťaže), keď je zadaná aspoň jedna záťaž |
+| `wallbox_panel` | `true` | Panel wallboxu |
+| `wallbox_settings` | `true` | Nabíjací prúd / limit auta |
+| `wallbox_stop` | `true` | Tlačidlo STOP pri režimoch (po zastavení sa zmení na START) |
+| `wallbox_session` | `false` | Energia aktuálnej relácie |
+| `car` | `true` | Batéria auta |
+| `diagnostics` | `true` | Bodka komunikácie |
+| `phase_details` | `true` | Tabuľka fáz |
+| `energy_today` | `false` | Spodný riadok denných súčtov |
+| `translate_sk` | `true` | Prekladať stavy zariadení do jazyka karty |
+| `animation` | `true` | Animované toky |
 
-Obe karty prekresľujú obsah **len** keď sa zmení niečo, čo zobrazujú (nie pri
-každej zmene v celom Home Assistant) — dôležité pre výkon pri väčšom počte
-kariet na dashboarde. História a štatistiky sa načítavajú najviac raz za
-10–15 minút. Sekcie Sezóna/Chladenie/AC nastavenia sa zobrazujú **len** pre
-zóny typu `floor_ac`.
+### Farby
 
----
+Kľúče pod `colors:`: `solar`, `solar_today`, `hub`, `battery_charge`, `battery_discharge`, `grid_import`, `grid_export`, `home`, `wallbox`.
 
-## Príklady použitia
+## Príklady
 
-### "Chcem, aby sa doma kúrilo skôr, než prídeme"
+Kompletný príklad je v [`examples/card.yaml`](examples/card.yaml).
 
-Nastav `predkurenie_od` (napr. 15:00) a `predkurenie_do` (napr. 18:00, ako
-poistka keby nikto neprišiel) — funguje len v pracovné dni.
+## Obrázky
 
-### "Cez víkend chodíme spať neskôr a vstávame neskôr"
+| Deň | Noc | Detaily |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-day-sk.png" width="280"> | <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-night-en.png" width="280"> | <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-details-en.png" width="280"> |
 
-Nastav `den_od_vikend` a `noc_od_vikend` odlišne od `den_od_tyzden`/`noc_od_tyzden`.
+| Svetlá téma | Angličtina | Vizuálny editor |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-day-light.png" width="280"> | <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-day-en.png" width="280"> | <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/editor-en.png" width="280"> |
 
-### "Nechcem posielať prebytky FVE do siete v zime"
-
-Priraď v hube entitu "FVE prebytok" (vlastný template `binary_sensor`
-kombinujúci "FVE vyrába" + "batéria nabitá nad X %"). Zóny s
-`vyuzi_fve_prebytok` zapnutým sa vykurujú na komfort aj bez prítomnosti.
-
-### "V lete chcem chladiť, len keď je batéria FVE nabitá"
-
-Nastav `bateria_hranica_chladenie` (napr. 50 %), priraď v Globálnych
-nastaveniach senzor SOC batérie a nastav zóne Sezónu na `Auto` alebo `Chladenie`.
-
-### "Vstavaný senzor klimatizácie je nepresný, kúri/chladí nesprávne"
-
-Priraď zóne **Externý teplomer** (skutočný teplomer v miestnosti). Systém ho
-odvtedy použije namiesto senzora AC, vrátane hysteréznej logiky zapnutia/vypnutia.
-
-### "Idem domov, chcem aby bolo teplo, aj keď je vysoká tarifa"
-
-Stlač **Boost** — force-uje komfort na nastavený počet hodín. Rešpektuje
-tarifu (počká, kým tarifa klesne) aj bezpečnosť podlahy/krbu.
-
-### "Chcem klimatizáciu na chvíľu ovládať priamo, mimo Smart Heating"
-
-Prepni zónu na **Vypnuté** — po jednorazovom `off` sa integrácia do zariadenia
-prestane miešať, kým znova neprepneš na iný režim.
-
----
+| Dlaždice záťaží + Ostatné | | |
+|---|---|---|
+| <img src="https://raw.githubusercontent.com/tomasbobala/solax-fve-card/main/docs/images/card-tiles-en.png" width="280"> | | |
 
 ## Riešenie problémov
 
-**Zmena Python súboru sa neprejavila** → treba **celý reštart** Home Assistant,
-nie len reload integrácie (platí obzvlášť pri pridaní/zmene platformy).
+<details>
+<summary><b>Karta nie je v zozname kariet / „Custom element doesn't exist“</b></summary>
 
-**Zmena JS karty sa neprejavila** → urob **celý reštart** Home Assistant (nie
-len HACS "reload"). Karta sa registruje len raz, pri štarte integrácie, s
-nainštalovanou verziou zapísanou priamo v URL — reštart na novej verzii je
-vždy dosť, žiadny ručný cache bump netreba. Ak by to aj tak vyzeralo staro,
-tvrdý refresh v prehliadači (Safari: Shift+klik na obnovenie) dorieši
-posledný kúsok cache na strane prehliadača.
+Skontrolujte, či zdroj existuje (**Nastavenia → Dashboardy → Zdroje**) a je typu *JavaScript modul*. Potom úplne obnovte prehliadač (Ctrl + F5); v telefóne vymažte cache aplikácie.
+</details>
 
-**Options Flow hádže 500 Internal Server Error** → `config_entry` v
-`OptionsFlow` sa od HA 2024.12 nesmie nastavovať manuálne v `__init__` (v tejto
-integrácii už opravené, relevantné len ak forkuješ kód).
+<details>
+<summary><b>Šípky batérie alebo siete idú opačne</b></summary>
 
-**Custom entity vôbec nevznikli po pridaní zóny** → skontroluj **Nastavenia
-→ Systém → Logy**, filter `smart_heating` — časté príčiny: nesprávny
-`EntityCategory` (musí byť enum, nie string), nesprávny import konštanty z
-`homeassistant.components.climate`.
+Senzor používa opačné znamienko. Nastavte **Otočiť znamienko výkonu batérie / siete** na *Áno* (`invert_battery: yes`, `invert_grid: yes`).
+</details>
 
-**AC pri chladení/kúrení necháva bežať dlho aj po dosiahnutí cieľa** → priraď
-zóne Externý teplomer a skontroluj hodnotu `AC hysterezia` — príliš vysoká
-hodnota spôsobí veľké pásmo necitlivosti.
+<details>
+<summary><b>Chýba tlačidlo STOP</b></summary>
 
-**Klimatizácia sa mi "vypína sama", keď ju ovládam priamo** → over si režim
-zóny. Vo `Vypnuté` má systém po prvom `off` zariadenie nechať na pokoji — ak
-sa to nedeje, over si verziu (potrebuješ min. 0.6.0).
+Karta hľadá `<prefix>_control_command` vedľa entity režimu nabíjania. Ak vaša nabíjačka používa inú entitu, zadajte ju ako `entities.wallbox_stop` (`select` s možnosťou *Stop*, `switch` alebo `button`).
+</details>
 
----
+<details>
+<summary><b>Po aktualizácii karta vyzerá po starom</b></summary>
 
-## Známe obmedzenia
+Pri ručnej inštalácii zvýšte číslo `?v=` v zdroji. Pri HACS obnovte prehliadač / cache aplikácie.
+</details>
 
-- Boost, deficit AC↔podlaha, hysteréza a notifikačné flagy sú len v pamäti
-  (RAM) — po reštarte Home Assistant sa vynulujú (zámerne, ide o krátkodobý stav)
-- Bezpečnostné limity teploty podlahy vyžadujú samostatný senzor teploty
-  podlahy priradený k zóne — bez neho sa táto ochrana nevyhodnocuje
-- Chladenie je zámerne zjednodušené (len batéria ± externý teplomer) — žiadna
-  prítomnosť, Deň/Noc ani predkúrenie ako pri kúrení
-- Karta nemá vizuálny editor pre štrukturálne polia zóny (typ zóny, entity) —
-  tie sa nastavujú cez Options Flow integrácie, nie cez kartu
+## Vývoj
 
----
+```bash
+git clone https://github.com/tomasbobala/solax-fve-card.git
+cd solax-fve-card
+npm install
+npm test              # testy (node:test + jsdom)
+npx serve .           # potom otvorte http://localhost:3000/demo/?lang=sk&view=day,night
+```
+
+Celá karta je jeden súbor: [`dist/solax-fve-card.js`](dist/solax-fve-card.js). Demo stránka berie parametre `lang=en|sk`, `view=day,night,details,editor` a `theme=light`.
+
+
+## Prispievanie
+
+Nahlásenia chýb aj pull requesty sú vítané – pozri [CONTRIBUTING.md](CONTRIBUTING.md). Obzvlášť potešia preklady do ďalších jazykov: stačí pridať blok do `I18N` a `STATE_TEXT` v súbore karty.
 
 ## Licencia
 
-Tento projekt je licencovaný pod [MIT licenciou](LICENSE) — môžeš ho slobodne
-používať, upravovať aj šíriť, aj na komerčné účely, pokiaľ zachováš pôvodné
-copyright oznámenie.
+[MIT](LICENSE) © 2026 Tomáš Bobala
 
-[MIT](https://github.com/tomasbobala/smart_heating/blob/main/LICENSE) © 2026 Tomáš Bobala
+---
+
+<sub>SolaX je ochranná známka spoločnosti SolaX Power Network Technology (Zhejiang) Co., Ltd. Tento projekt je nezávislá komunitná karta a so spoločnosťou SolaX Power nie je nijako spojený.</sub>
