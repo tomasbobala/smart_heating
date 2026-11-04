@@ -1932,3 +1932,19 @@ test("zone card and overview do not change ha-card height on update", () => {
   ov.hass = overviewHass();
   assert.strictEqual(oc.style.minHeight, "");
 });
+
+test("zone card: unchanged humidity row is not rebuilt on every update", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const stav = { humidity_entity: "sensor.rh", humidity: 55, felt_temperature: 21.4, dew_point: 11.2 };
+  card.hass = buildHass({ stavAttrs: stav });
+  document.body.appendChild(card);
+  const el = card.querySelector(".sh-feel");
+  const icon = el.firstChild;
+  assert.ok(icon, "row has the drop icon");
+  card.hass = buildHass({ stavAttrs: stav, climateAttrs: { current_temperature: 21.3 } });
+  assert.strictEqual(el.firstChild, icon, "same content keeps its nodes (WebKit pulls the page up on rebuild)");
+  card.hass = buildHass({ stavAttrs: { ...stav, humidity: 61 }, climateAttrs: { current_temperature: 21.2 } });
+  assert.match(el.textContent, /61 %/);
+});

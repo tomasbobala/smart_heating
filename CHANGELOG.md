@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.25.5
+- Fixed: on iPhone (Safari / WebKit) the page could jump up a little on every update when scrolled to
+  the bottom. The humidity row of the zone card was rebuilt on every update: the "unchanged?" check
+  compared with the browser's serialization of the SVG icon (`<path/>` becomes `<path></path>`), which
+  never matched. Rows are now rewritten only when their content really changes (also the mode buttons).
+
 ## 0.25.4
 - Fixed: the HVAC dashboard trembled by a fraction of a pixel on every update.
   The 800 ms height hold from 0.25.3 rounded the card height (e.g. 322.83 px to

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.25.4";
+const CARD_VERSION = "0.25.5";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -1362,8 +1362,9 @@ class SmartHeatingCard extends HTMLElement {
       const special = active && !QUICK_MODES.includes(m);
       return `<button type="button" data-mode="${esc(m)}" class="${active ? "a" : ""}${special ? " special" : ""}" aria-pressed="${active}">${esc(this._modeLabel(m))}</button>`;
     }).join("");
-    if (wrap.innerHTML === html) return;
+    if (wrap._shHtml === html) return;
     wrap.innerHTML = html;
+    wrap._shHtml = html;
     wrap.querySelectorAll("button").forEach((btn) => {
       btn.onclick = () => {
         if (btn.classList.contains("a")) return;
@@ -1401,7 +1402,10 @@ class SmartHeatingCard extends HTMLElement {
     // rosny bod az na konci - pri uzkej karte sa oreze ako prvy
     if (num(zAttrs.dew_point) != null) parts.push(`${esc(this._t("hum_dew"))} ${esc(fmtNum(zAttrs.dew_point, lang))}°`);
     const html = `${ICONS.drop}<span class="t">${parts.join(" · ")}</span>`;
-    if (el.innerHTML !== html) el.innerHTML = html;
+    // porovnat s poslednym zapisanym textom, nie s el.innerHTML: prehliadac SVG ikonu zapise inak
+    // (<path/> -> <path></path>), takze riadok sa prestaval pri kazdej aktualizacii a na iPhone
+    // (WebKit) to posuvalo stranku hore, ked bola odscrollovana uplne dole
+    if (el._shHtml !== html) { el.innerHTML = html; el._shHtml = html; }
     el.title = el.textContent;
   }
 
