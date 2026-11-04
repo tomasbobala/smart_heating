@@ -1910,7 +1910,10 @@ test("overview: solar cascade keeps space for the countdown bar even without cou
   assert.ok(bar.classList.contains("is-empty"));
 });
 
-test("zone card and overview hold their height for a moment on every update", async () => {
+test("zone card and overview do not change ha-card height on update", () => {
+  // Drzanie vysky (min-height na 800 ms) sposobovalo chvenie stranky: vysku zaokruhlilo
+  // (napr. 322,83 -> 323 px) a po uvolneni sa stranka skratila. Skok pri opatovnom
+  // pripojeni k HA riesi poistka na celu stranku v mt-home-card.js (v1.13.4).
   const { CardClass, OverviewClass, document } = loadCard();
   const card = new CardClass();
   card.setConfig({ zone_id: ZONE_ID, language: "sk" });
@@ -1919,10 +1922,7 @@ test("zone card and overview hold their height for a moment on every update", as
   const hc = card.querySelector("ha-card");
   Object.defineProperty(hc, "offsetHeight", { get: () => 444, configurable: true });
   card.hass = buildHass({ climateAttrs: { current_temperature: 21 } });
-  assert.strictEqual(hc.style.minHeight, "444px");
-  assert.strictEqual(hc.style.boxSizing, "border-box");
-  await new Promise((r) => setTimeout(r, 900));
-  assert.strictEqual(hc.style.minHeight, "", "po 800 ms sa vyska uvolni");
+  assert.strictEqual(hc.style.minHeight, "");
   const ov = new OverviewClass();
   ov.setConfig({ type: "custom:smart-heating-overview" });
   ov.hass = overviewHass();
@@ -1930,5 +1930,5 @@ test("zone card and overview hold their height for a moment on every update", as
   const oc = ov.querySelector("ha-card");
   Object.defineProperty(oc, "offsetHeight", { get: () => 430, configurable: true });
   ov.hass = overviewHass();
-  assert.strictEqual(oc.style.minHeight, "430px");
+  assert.strictEqual(oc.style.minHeight, "");
 });

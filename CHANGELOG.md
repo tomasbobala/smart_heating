@@ -2,6 +2,18 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.25.4
+- Fixed: the HVAC dashboard trembled by a fraction of a pixel on every update.
+  The 800 ms height hold from 0.25.3 rounded the card height (e.g. 322.83 px to
+  323 px) and released it again, so the page grew and shrank with every state
+  change in Home Assistant. The hold is removed.
+  - The real cause of the page jumping to the top was Home Assistant rebuilding
+    the whole dashboard after a reconnect (app back from background, network
+    drop, HA restart). That is handled for the whole page by the mt-home-card
+    resource (v1.13.4), so it also covers these cards.
+  - Open panels (solar cascade, Warm-ups, Statistics) still keep their largest
+    height while open.
+
 ## 0.25.3
 - Fixed: the HVAC dashboard jumped up a bit every few seconds when scrolled to
   the bottom (Safari on Mac and iPhone - Safari has no scroll anchoring).

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.25.3";
+const CARD_VERSION = "0.25.4";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -699,23 +699,6 @@ function deltaClass(d) {
   return d > 0 ? "up" : "dn";
 }
 
-/** Poistka proti skoku stranky: pred aktualizaciou podrzi vysku karty 800 ms.
- * Ked sa cokolvek v karte na okamih zmensi (prepisovany obsah, pomaly dokreslovany
- * prvok, meranie rozlozenia uprostred zmeny) a pouzivatel je na konci stranky, prehliadac
- * (hlavne Safari - nema scroll anchoring) by ho posunul hore. Rovnaky princip ako mtHold. */
-function holdCardHeight(el) {
-  const card = el && el.querySelector("ha-card");
-  if (!card) return;
-  const h = card.offsetHeight;
-  if (!h) return;
-  card.style.boxSizing = "border-box";
-  const cur = parseFloat(card.style.minHeight) || 0;
-  card.style.minHeight = `${Math.max(h, card._holding ? cur : 0)}px`;
-  card._holding = true;
-  clearTimeout(card._holdT);
-  card._holdT = setTimeout(() => { card.style.minHeight = ""; card._holding = false; }, 800);
-}
-
 function fireMoreInfo(node, entityId) {
   node.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true }));
 }
@@ -783,7 +766,6 @@ class SmartHeatingCard extends HTMLElement {
   set hass(hass) {
     const prevHass = this._hass;
     this._hass = hass;
-    holdCardHeight(this);
     if (!this._built) {
       this._buildSkeleton();
       this._built = true;
@@ -1892,7 +1874,6 @@ class SmartHeatingOverview extends HTMLElement {
   set hass(hass) {
     const prev = this._hass;
     this._hass = hass;
-    holdCardHeight(this);
     if (prev && prev.language === hass.language) {
       const changed = this._watched().some((id) => hass.states[id] !== prev.states[id]);
       if (!changed) {
