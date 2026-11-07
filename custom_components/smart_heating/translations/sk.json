@@ -97,7 +97,12 @@
           "meter_ac_on_w": "Merač klímy: beží nad (W; pod tým je pohotovosť)",
           "meter_ac_stuck_w": "Merač klímy: zaseknutá nad (W, keď má byť vypnutá)",
           "preheat_max_lead": "Dynamické predkúrenie: najviac skôr o (min)",
-          "preheat_margin": "Dynamické predkúrenie: rezerva (min)"
+          "preheat_margin": "Dynamické predkúrenie: rezerva (min)",
+          "pv_pause_minutes": "Predvolená pauza kúrenia z FVE (min)",
+          "manual_minutes": "Ručné prevzatie – automatika sa vráti po (min)",
+          "manual_on_off": "Ručné prevzatie pri zapnutí/vypnutí zariadenia",
+          "manual_on_temp": "Ručné prevzatie pri zmene teploty na zariadení",
+          "notify_manual": "Notifikácia pri ručnom prevzatí"
         },
         "description": "Smart Heating verzia {version}"
       },
@@ -214,6 +219,26 @@
     "error": {
       "invalid_range": "Minimum musí byť menšie ako maximum.",
       "radiator_requirements": "Typ 'Radiátor + podlaha' potrebuje relé radiátora a externý teplomer (vzduch)."
+    }
+  },
+  "services": {
+    "pause_solar": {
+      "name": "Pozastaviť kúrenie z FVE",
+      "description": "Na čas zastaví kúrenie z prebytku FVE; zóny kúria na bežné teploty.",
+      "fields": {
+        "minutes": {
+          "name": "Minúty",
+          "description": "Dĺžka pauzy; predvolená z nastavení integrácie."
+        },
+        "until_midnight": {
+          "name": "Do polnoci",
+          "description": "Pauza do polnoci."
+        }
+      }
+    },
+    "resume_solar": {
+      "name": "Obnoviť kúrenie z FVE",
+      "description": "Zruší pauzu kúrenia z FVE."
     }
   }
 }

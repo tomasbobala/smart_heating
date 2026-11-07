@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.26.0
+- **Solar heating pause.** In the Solar cascade panel (tap the solar tile):
+  pause for 1 h / 2 h / 4 h / until midnight, and Cancel pause. While paused no
+  zone heats from the surplus, accumulated targets are dropped and rooms heat to
+  their normal temperatures; the tile shows "Paused till 17:45". Also
+  `switch.smart_heating_fve_pauza` (on = default length from the settings,
+  survives a restart) and services `smart_heating.pause_solar` (`minutes`,
+  `until_midnight`) and `smart_heating.resume_solar`.
+- **What is set on the devices.** The zone card lists the zone's thermostat,
+  AC and radiator relay with their mode, set and measured temperature.
+- **Manual takeover.** Switching a device off/on or changing its temperature
+  by hand (not by the integration; ignored while a thermostat runs its own
+  program) pauses automation for that zone for `manual_minutes` (default 30).
+  The card shows "Manual" with a countdown and "Resume automation now"
+  (`button.smart_heating_<id>_obnovit_automatiku`). Per-zone switch
+  `rucne_prevzatie`; global options for the length, what counts (on/off,
+  temperature) and an optional notification. Targets are clamped to the
+  device's min/max so a clipped value never looks like a manual change.
+- **Guide** in the integration settings panel (button "Guide" and "?" per
+  group): short articles on all features in Slovak and English.
+
 ## 0.25.5
 - Fixed: on iPhone (Safari / WebKit) the page could jump up a little on every update when scrolled to
   the bottom. The humidity row of the zone card was rebuilt on every update: the "unchanged?" check

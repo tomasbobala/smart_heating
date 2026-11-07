@@ -40,6 +40,12 @@ from .const import (
     CONF_NOTIFY_COLD_OUTDOOR,
     CONF_NOTIFY_COOLING,
     CONF_NOTIFY_DIAGNOSTICS,
+    CONF_PV_PAUSE_MINUTES,
+    CONF_MANUAL_MINUTES,
+    CONF_MANUAL_ON_OFF,
+    CONF_MANUAL_ON_TEMP,
+    CONF_NOTIFY_MANUAL,
+    PAUSE_MANUAL_NUMBERS,
     CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
     CONF_NOTIFY_FLOOR,
@@ -122,6 +128,7 @@ PV_CASCADE_DELAY = timedelta(minutes=10)   # vyssie priority nahriate tak dlho -
 PV_SATISFIED_MARGIN = 0.2                  # °C pod FVE cielom = este "nahriata"
 PV_RELEASE_GAP = 0.5                       # °C pod cielom vo vyssej priorite -> nizsie hned odpoj
 PV_ENGINE_INTERVAL = timedelta(seconds=30)
+MANUAL_GRACE = timedelta(seconds=60)   # po vlastnom prikaze cakame na odozvu zariadenia, kym porovnavame
 METER_CHECK_AFTER = timedelta(minutes=10)   # merac v rozpore s ocakavanim tak dlho -> porucha  # vyhodnotenie vykonov (nie pri kazdej zmene senzora)
 
 
@@ -171,6 +178,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._unsub_interval = None
         self._unsub_debounce = None
         self._unsub_pv_engine = None
+        self._pv_pause_until = None        # pauza kurenia z FVE (datetime)
+        self._last_cmd: dict[str, dict] = {}   # posledny prikaz pre zariadenie: mode, temp, at
         self._meter_cache: dict[str, bool] = {}
         self._pv_energy_kwh = 0.0          # energia kurenia v case FVE kaskady (sensor energia_z_fve)
         self._pv_energy_at = None
@@ -302,6 +311,118 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self.async_set_updated_data(self._compute())
         await self._async_apply()
 
+    # ------------------------------------------------- pauza kurenia z FVE
+
+    def _pv_paused(self) -> bool:
+        return self._pv_pause_until is not None and dt_util.now() < self._pv_pause_until
+
+    async def async_pv_pause(self, minutes=None, until_midnight: bool = False) -> None:
+        """Zastavi kurenie z prebytku na cas; zony sa hned vratia na bezne ciele."""
+        now = dt_util.now()
+        if until_midnight:
+            until = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        else:
+            if minutes is None:
+                minutes = self.entry.options.get(CONF_PV_PAUSE_MINUTES, PAUSE_MANUAL_NUMBERS[CONF_PV_PAUSE_MINUTES][4])
+            until = now + timedelta(minutes=float(minutes))
+        self._pv_pause_until = until
+        self._pv_engine_state().update(tier=0, add_since=None, bad_since=None, reason="paused")
+        self._global_rt["pv_tier"] = None
+        self._global_rt["pv_sat_since"] = None
+        await self.async_recompute_and_apply()
+
+    async def async_pv_resume(self) -> None:
+        self._pv_pause_until = None
+        await self.async_recompute_and_apply()
+
+    # ------------------------------------------------- rucne prevzatie
+
+    def _zone_devices(self, zone: dict) -> list[str]:
+        return [e for e in (zone.get(CONF_CLIMATE_ENTITY), zone.get(CONF_AC_ENTITY), zone.get(CONF_RADIATOR_ENTITY)) if e]
+
+    def _record_cmd(self, entity_id: str, mode: str, temp, sent: bool) -> None:
+        """Zapamata si, co zariadenie od nas ma mat. 'at' = kedy sme naposledy nieco
+        poslali (pocas MANUAL_GRACE este caka na odozvu zariadenia)."""
+        prev = self._last_cmd.get(entity_id)
+        same = prev is not None and prev["mode"] == mode and prev["temp"] == temp
+        if sent:
+            at = dt_util.now()
+        elif same:
+            at = prev["at"]
+        else:
+            at = dt_util.now() - timedelta(hours=1)    # zariadenie uz je v pozadovanom stave
+        self._last_cmd[entity_id] = {"mode": mode, "temp": None if temp is None else float(temp), "at": at}
+
+    def _manual_change(self, entity_id: str):
+        """'onoff' / 'temp' ak sa zariadenie lisi od nasho posledneho prikazu, inak None."""
+        last = self._last_cmd.get(entity_id)
+        if not last or dt_util.now() - last["at"] < MANUAL_GRACE:
+            return None
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown"):
+            return None
+        opt = self.entry.options
+        if state.state != last["mode"]:
+            return "onoff" if opt.get(CONF_MANUAL_ON_OFF, True) else None
+        if entity_id.startswith("climate.") and last["mode"] != "off" and last["temp"] is not None:
+            if not opt.get(CONF_MANUAL_ON_TEMP, True):
+                return None
+            preset = str(state.attributes.get("preset_mode") or "").lower()
+            if preset in ("program", "auto", "schedule", "smart"):
+                return None                      # termostat si teplotu meni sam podla programu
+            try:
+                current = state.attributes.get("temperature")
+                if current is not None and abs(float(current) - last["temp"]) >= 0.25:
+                    return "temp"
+            except (TypeError, ValueError):
+                return None
+        return None
+
+    def _manual_check(self, zone_id: str, zdata: dict) -> bool:
+        """Je zona v rucnom rezime? Pri novej rucnej zmene ho zapne na manual_minutes."""
+        rt = self._rt(zone_id)
+        now = dt_util.now()
+        zone = self.zones.get(zone_id, {})
+        until = rt.get("manual_until")
+        if until is not None and now >= until:
+            self._clear_manual(zone_id)
+            until = None
+        if until is None and self._state_bool(switch_entity_id(zone_id, "rucne_prevzatie"), True):
+            for entity_id in self._zone_devices(zone):
+                if self._manual_change(entity_id):
+                    minutes = float(self.entry.options.get(CONF_MANUAL_MINUTES, PAUSE_MANUAL_NUMBERS[CONF_MANUAL_MINUTES][4]))
+                    until = now + timedelta(minutes=minutes)
+                    rt["manual_until"] = until
+                    rt["manual_device"] = entity_id
+                    if self.entry.options.get(CONF_NOTIFY_MANUAL, False):
+                        self.hass.async_create_task(self._notify(self._t(
+                            "notify_manual", zone=zdata.get("name", zone_id), time=dt_util.as_local(until).strftime("%H:%M"))))
+                    break
+        if until is None:
+            zdata["manual_until"] = None
+            zdata["manual_device"] = None
+            return False
+        zdata["manual_until"] = until.isoformat()
+        zdata["manual_device"] = rt.get("manual_device")
+        zdata["reason"] = self._t("reason_manual", time=dt_util.as_local(until).strftime("%H:%M"))
+        zdata["heat_source"] = self._t("source_manual")
+        zdata["src_cmd"] = {}
+        running = "cooling" if zdata.get("season") == SEASON_CHLADENIE else "heating"
+        zdata["actual_action"] = self._resolve_action(self._zone_devices(zone), True, running)
+        return True
+
+    def _clear_manual(self, zone_id: str) -> None:
+        rt = self._rt(zone_id)
+        rt.pop("manual_until", None)
+        rt.pop("manual_device", None)
+        # po navrate automatiky porovnavame az s novym prikazom
+        for entity_id in self._zone_devices(self.zones.get(zone_id, {})):
+            self._last_cmd.pop(entity_id, None)
+
+    async def async_resume_zone(self, zone_id: str) -> None:
+        self._clear_manual(zone_id)
+        await self.async_recompute_and_apply()
+
     async def async_activate_boost(self, zone_id: str) -> None:
         hours = self._state_float(number_entity_id(zone_id, "boost_hodiny"), 2.0)
         rt = self._rt(zone_id)
@@ -372,6 +493,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             pv_allowed = {z: t <= tier for z, t in participants.items()} if pv_surplus else {}
         else:
             pv_allowed = self._pv_cascade(pv_surplus)
+        if self._pv_paused():
+            # pauza: ziadna zona nekuri z prebytku, ciele sa vratia na bezne
+            pv_surplus = False
+            pv_allowed = {}
 
         zones_data = {
             zone_id: self._compute_zone(
@@ -1105,6 +1230,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 zdata["src_cmd"] = {}      # zariadenie riadi pouzivatel - merace nekontrolujeme
                 continue  # Vypnute uz dlhsie - nechavame zariadenie uplne na pokoji
 
+            if self._manual_check(zone_id, zdata):
+                continue  # pouzivatel zmenil zariadenie rucne - na chvilu mu nic neposielame
+
             if zdata["zone_type"] == ZONE_TYPE_FLOOR_AC and zdata.get("ac_entity"):
                 if zdata["season"] == SEASON_CHLADENIE:
                     await self._apply_device(zdata["ac_entity"], zdata["device_mode"], zdata["target_temperature"])
@@ -1151,11 +1279,22 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # prepocte (kazde 2 s pri zmenach) zapisovala chyba do logu.
         if state is None or state.state in ("unavailable", "unknown"):
             return
+        sent = False
         if state.state != hvac_mode:
             await self.hass.services.async_call(
                 "climate", "set_hvac_mode", {"entity_id": entity_id, "hvac_mode": hvac_mode}, blocking=False,
             )
+            sent = True
         if hvac_mode != "off" and target is not None:
+            # mimo rozsahu zariadenia by ho zariadenie orezalo a vyzeralo by to ako rucna zmena
+            try:
+                lo, hi = state.attributes.get("min_temp"), state.attributes.get("max_temp")
+                if lo is not None:
+                    target = max(float(lo), float(target))
+                if hi is not None:
+                    target = min(float(hi), float(target))
+            except (TypeError, ValueError):
+                pass
             # Zariadenie berie ciel len v svojom kroku (Daikin 1 °C, termostat 0,5 °C).
             # Bez zaokruhlenia by 21,5 °C na Daikine (ulozi 22) vyzeralo ako rozdiel
             # a prikaz by sa posielal pri kazdom prepocte dokola.
@@ -1174,6 +1313,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 await self.hass.services.async_call(
                     "climate", "set_temperature", {"entity_id": entity_id, "temperature": target}, blocking=False,
                 )
+                sent = True
+        self._record_cmd(entity_id, hvac_mode, None if hvac_mode == "off" else target, sent)
 
     async def _apply_floor_ac(self, zone_id: str, zdata: dict) -> None:
         """KURENIE v zone typu floor_ac: AC je vzdy prioritny zdroj. Podlaha nastupi
@@ -1359,6 +1500,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "heat": heat,
         }
 
+        if self._pv_paused():
+            eng.update(tier=0, add_since=None, bad_since=None, reason="paused")
+            return 0
         levels = sorted(set(self._pv_participants().values()))
         tier = eng["tier"]
         if tier and tier not in levels:
@@ -1433,6 +1577,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             self.async_update_listeners()
 
     def _pv_snapshot(self, pv_surplus) -> dict:
+        snap = self._pv_snapshot_inner(pv_surplus)
+        snap["paused_until"] = self._pv_pause_until.isoformat() if self._pv_paused() else None
+        return snap
+
+    def _pv_snapshot_inner(self, pv_surplus) -> dict:
         """Stav pre senzor sensor.smart_heating_fve_kaskada a prehladovu kartu."""
         if not self._pv_auto_enabled():
             tier = self._global_rt.get("pv_tier") if pv_surplus else 0
@@ -1630,6 +1779,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     async def _fast_tick(self, _now=None) -> None:
         """Kazdych 30 s: kaskada FVE, energia z FVE a prepocet len pri zmene stavu meracov."""
+        if self._pv_pause_until is not None and not self._pv_paused():
+            self._pv_pause_until = None           # pauza vyprsala
+            await self.async_recompute_and_apply()
         await self._pv_engine_tick()
         self._accumulate_pv_energy()
         self._accumulate_house_energy()
@@ -1762,11 +1914,15 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         if not entity_id:
             return
         state = self.hass.states.get(entity_id)
-        if state is None or state.state == ("on" if on else "off"):
+        if state is None:
+            return
+        if state.state == ("on" if on else "off"):
+            self._record_cmd(entity_id, "on" if on else "off", None, False)
             return
         await self.hass.services.async_call(
             "homeassistant", "turn_on" if on else "turn_off", {"entity_id": entity_id}, blocking=False,
         )
+        self._record_cmd(entity_id, "on" if on else "off", None, True)
 
     async def _apply_radiator_floor(self, zone_id: str, zdata: dict) -> None:
         """Dve nezavisle regulacie v jednej zone (kupelna):

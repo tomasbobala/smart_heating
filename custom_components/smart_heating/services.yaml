@@ -1,0 +1,13 @@
+pause_solar:
+  fields:
+    minutes:
+      selector:
+        number:
+          min: 5
+          max: 1440
+          step: 5
+          unit_of_measurement: min
+    until_midnight:
+      selector:
+        boolean:
+resume_solar:

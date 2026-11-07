@@ -97,7 +97,12 @@
           "meter_ac_on_w": "AC meter: running above (W; below = standby)",
           "meter_ac_stuck_w": "AC meter: stuck above (W, when it should be off)",
           "preheat_max_lead": "Dynamic preheat: at most earlier by (min)",
-          "preheat_margin": "Dynamic preheat: margin (min)"
+          "preheat_margin": "Dynamic preheat: margin (min)",
+          "pv_pause_minutes": "Default solar heating pause (min)",
+          "manual_minutes": "Manual takeover - automation resumes after (min)",
+          "manual_on_off": "Manual takeover on switching a device on/off",
+          "manual_on_temp": "Manual takeover on changing a device's temperature",
+          "notify_manual": "Notify on manual takeover"
         },
         "description": "Smart Heating version {version}"
       },
@@ -214,6 +219,26 @@
     "error": {
       "invalid_range": "Minimum must be lower than maximum.",
       "radiator_requirements": "Type 'Radiator + floor' needs a radiator relay and an external (air) thermometer."
+    }
+  },
+  "services": {
+    "pause_solar": {
+      "name": "Pause solar heating",
+      "description": "Stops heating from the solar surplus for a while; zones heat to their normal temperatures.",
+      "fields": {
+        "minutes": {
+          "name": "Minutes",
+          "description": "Pause length; default from the integration settings."
+        },
+        "until_midnight": {
+          "name": "Until midnight",
+          "description": "Pause until midnight."
+        }
+      }
+    },
+    "resume_solar": {
+      "name": "Resume solar heating",
+      "description": "Cancels the solar heating pause."
     }
   }
 }

@@ -109,6 +109,18 @@ CONF_BATTERY_POWER_ENTITY = "battery_power_entity"
 CONF_GRID_EXPORT_NEGATIVE = "grid_export_negative"        # True: export do siete je zaporne cislo
 CONF_BATTERY_CHARGE_POSITIVE = "battery_charge_positive"  # True: nabijanie baterie je kladne cislo
 # key -> (min, max, step, unit, default)
+# ---- Pauza kurenia z FVE a rucne prevzatie termostatu ----
+CONF_PV_PAUSE_MINUTES = "pv_pause_minutes"       # predvolena dlzka pauzy (prepinac / automatizacia)
+CONF_MANUAL_MINUTES = "manual_minutes"           # ako dlho automatika neposiela prikazy po rucnej zmene
+CONF_MANUAL_ON_OFF = "manual_on_off"             # reagovat na zapnutie/vypnutie na zariadeni
+CONF_MANUAL_ON_TEMP = "manual_on_temp"           # reagovat na zmenu teploty na zariadeni
+CONF_NOTIFY_MANUAL = "notify_manual"             # notifikacia pri rucnom prevzati
+# key -> (min, max, step, unit, default)
+PAUSE_MANUAL_NUMBERS = {
+    CONF_PV_PAUSE_MINUTES: (15, 720, 15, "min", 120),
+    CONF_MANUAL_MINUTES: (5, 240, 5, "min", 30),
+}
+
 PV_ENGINE_NUMBERS = {
     "pv_add_power": (100, 10000, 100, "W", 1000),     # dostupny prebytok na pridanie priority
     "pv_add_minutes": (1, 60, 1, "min", 5),           # ako dlho musi prebytok trvat
@@ -253,6 +265,8 @@ SWITCH_DEFS = {
     "udrzat_min_podlahy": ("Udrzat min. teplotu podlahy", "mdi:heat-wave", False),
     # Dynamicke predkurenie: zacne skor podla nauceneho nabehu (len ked je dost dat)
     "dynamicke_predkurenie": ("Dynamicke predkurenie podla nabehu", "mdi:home-thermometer", False),
+    # Rucna zmena na termostate/klime/rele -> automatika na chvilu nic neposiela
+    "rucne_prevzatie": ("Rucne prevzatie termostatu", "mdi:hand-back-right", True),
 }
 AC_SWITCH_DEFS = {
     "pouzit_pevny_ac_setpoint": (

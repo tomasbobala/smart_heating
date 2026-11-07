@@ -65,6 +65,18 @@ zone has its own rules but shares common global settings.
 
 ---
 
+## Solar heating pause and manual takeover
+
+- **Pause:** tap the solar tile → Solar cascade → pause for 1 h, 2 h, 4 h or
+  until midnight. Rooms heat to their normal temperatures, the surplus stays for
+  the house and battery. For automations: `switch.smart_heating_fve_pauza`,
+  `smart_heating.pause_solar`, `smart_heating.resume_solar`.
+- **Manual takeover:** change a thermostat, AC or relay by hand and the
+  integration leaves that room alone for 30 minutes (configurable), then resumes;
+  "Resume automation now" on the card ends it earlier. The card also shows what
+  is set on each device.
+- The settings panel has a **Guide** with all features explained (SK / EN).
+
 ## Features
 
 |   |   |

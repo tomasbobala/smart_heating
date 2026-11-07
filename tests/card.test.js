@@ -1948,3 +1948,132 @@ test("zone card: unchanged humidity row is not rebuilt on every update", () => {
   card.hass = buildHass({ stavAttrs: { ...stav, humidity: 61 }, climateAttrs: { current_temperature: 21.2 } });
   assert.match(el.textContent, /61 %/);
 });
+
+// ---------------------------------------------------------------- pauza FVE, termostat, rucne prevzatie, navod
+
+function openCascade(hass) {
+  const card = renderOverview({}, hass);
+  const calls = [];
+  hass.callService = (d, s, data) => calls.push({ d, s, data: JSON.parse(JSON.stringify(data || {})) });
+  Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent)).click();
+  return { card, calls };
+}
+
+test("cascade panel: pause buttons call pause_solar (minutes / until midnight)", async () => {
+  const { card, calls } = openCascade(cascadeHass());
+  await tick();
+  const p = card.querySelector(".sho-pv");
+  assert.match(p.textContent, /Pozastaviť kúrenie z FVE/);
+  p.querySelector('[data-pause="120"]').click();
+  p.querySelector('[data-pause="midnight"]').click();
+  assert.deepStrictEqual(calls, [
+    { d: "smart_heating", s: "pause_solar", data: { minutes: 120 } },
+    { d: "smart_heating", s: "pause_solar", data: { until_midnight: true } },
+  ]);
+});
+
+test("paused: tile and panel show until when, cancel calls resume_solar", async () => {
+  const until = new Date(Date.now() + 102 * 60000);
+  const hhmm = `${until.getHours()}:${String(until.getMinutes()).padStart(2, "0")}`;
+  const hass = cascadeHass({ pauza_do: until.toISOString(), dovod: "paused" }, "0");
+  const { card, calls } = openCascade(hass);
+  await tick();
+  const tile = Array.from(card.querySelectorAll(".sho-tile")).find((t) => /FVE/.test(t.textContent));
+  assert.match(tile.textContent, new RegExp(`Pauza do ${hhmm}`));
+  assert.ok(tile.classList.contains("warn"));
+  const t = card.querySelector(".sho-pv").textContent.replace(/\s+/g, " ");
+  assert.match(t, /Pozastavená/);
+  assert.match(t, new RegExp(`pozastavené do ${hhmm} \\(ešte 1 h 4\\d min\\)`));
+  assert.strictEqual(card.querySelector("[data-pause]"), null);
+  card.querySelector("[data-resume]").click();
+  assert.deepStrictEqual(calls.at(-1), { d: "smart_heating", s: "resume_solar", data: {} });
+});
+
+function devHass(extraStav = {}) {
+  const hass = buildHass({ stavAttrs: Object.assign({
+    devices: [{ key: "floor", entity: "climate.t_spalna" }, { key: "radiator", entity: "switch.rele" }],
+  }, extraStav) });
+  hass.states["climate.t_spalna"] = { state: "heat", attributes: { friendly_name: "T Spálňa", hvac_action: "heating", temperature: 21, current_temperature: 22.5 } };
+  hass.states["switch.rele"] = { state: "off", attributes: { friendly_name: "Radiátor" } };
+  return hass;
+}
+
+test("zone card: shows what is set on the devices", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  card.hass = devHass();
+  document.body.appendChild(card);
+  const t = card.querySelector(".sh-dev").textContent.replace(/\s+/g, " ");
+  assert.match(t, /T Spálňa\s*kúri · nastavené 21,0° · meria 22,5°/);
+  assert.match(t, /Radiátor\s*vypnutý/);
+  assert.strictEqual(card.querySelector(".sh-man").hidden, true);
+});
+
+test("zone card: device change redraws only the device lines", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = devHass();
+  card.hass = hass;
+  document.body.appendChild(card);
+  let full = 0;
+  const orig = card._updateContent.bind(card);
+  card._updateContent = () => { full += 1; orig(); };
+  card.hass = { ...hass, states: { ...hass.states, "climate.t_spalna": { state: "off", attributes: { friendly_name: "T Spálňa", current_temperature: 22.5 } } } };
+  assert.strictEqual(full, 0);
+  assert.match(card.querySelector(".sh-dev").textContent, /T Spálňa\s*vypnutý · meria 22,5°/);
+});
+
+test("zone card: manual takeover banner, Manual pill and resume button", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const until = new Date(Date.now() + 24 * 60000 + 20000);
+  const hass = devHass({ manual_until: until.toISOString(), manual_device: "climate.t_spalna" });
+  const calls = [];
+  hass.callService = (d, s, data) => calls.push({ d, s, data });
+  card.hass = hass;
+  document.body.appendChild(card);
+  const man = card.querySelector(".sh-man");
+  assert.strictEqual(man.hidden, false);
+  assert.match(man.textContent, /Zmenené ručne na zariadení/);
+  assert.match(man.textContent, /Vráti sa o 24\s+min/);
+  assert.match(card.querySelector(".sh-pill").textContent, /Ručne/);
+  assert.ok(card.querySelector(".sh-devl.man"));
+  man.querySelector(".sh-man-btn").click();
+  assert.strictEqual(calls[0].s, "press");
+  assert.strictEqual(calls[0].data.entity_id, `button.smart_heating_${ZONE_ID}_obnovit_automatiku`);
+});
+
+test("settings: manual takeover group, guide opens the matching article, language switch and back", async () => {
+  const { hass } = settingsHass();
+  const base = hass.callApi;
+  hass.callApi = async (method, path, data) => {
+    const r = await base(method, path, data);
+    if (r.type === "form") {
+      r.data_schema.push(
+        { name: "pv_pause_minutes", selector: { number: { min: 15, max: 720, step: 15, unit_of_measurement: "min" } }, default: 120 },
+        { name: "manual_minutes", selector: { number: { min: 5, max: 240, step: 5, unit_of_measurement: "min" } }, default: 30 },
+        { name: "manual_on_off", selector: { boolean: {} }, default: true },
+      );
+    }
+    return r;
+  };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-gear").click();
+  await tick();
+  const set = card.querySelector(".sho-set");
+  assert.match(set.textContent, /Ručné prevzatie/);
+  assert.match(set.textContent, /Automatika sa vráti po\s*−\s*30 min/);
+  assert.match(set.textContent, /Predvolená pauza\s*−\s*120 min/);
+  set.querySelector('.sho-q[data-help="manual"]').click();
+  let open = set.querySelector("details.sho-hlp[open] summary");
+  assert.strictEqual(open.textContent, "Ručné prevzatie termostatu");
+  set.querySelector('[data-help-lang="en"]').click();
+  open = set.querySelector("details.sho-hlp[open] summary");
+  assert.strictEqual(open.textContent, "Manual takeover");
+  assert.strictEqual(set.querySelectorAll("details.sho-hlp").length, 7);
+  set.querySelector(".sho-help-back").click();
+  assert.match(set.textContent, /Predvolená pauza/);
+});

@@ -121,6 +121,15 @@ TEXTS: dict[str, dict[str, str]] = {
         "en": "{source} should be off but draws {power} W for over 10 min",
         "sk": "{source} má byť vypnutá, ale ťahá {power} W viac ako 10 min",
     },
+    "source_manual": {"en": "Manual", "sk": "Ručne"},
+    "reason_manual": {
+        "en": "Changed manually on the device - automation resumes at {time}",
+        "sk": "Zmenené ručne na zariadení – automatika sa vráti o {time}",
+    },
+    "notify_manual": {
+        "en": "{zone}: changed manually on the device, automation paused until {time}",
+        "sk": "{zone}: zmenené ručne na zariadení, automatika pozastavená do {time}",
+    },
     "notify_diag_problem": {"en": "⚠️ {zone}: {problem}", "sk": "⚠️ {zone}: {problem}"},
     "notify_diag_ok": {"en": "✅ {zone}: resolved - {problem}", "sk": "✅ {zone}: vyriešené - {problem}"},
     "source_floor": {"en": "Floor", "sk": "Podlaha"},

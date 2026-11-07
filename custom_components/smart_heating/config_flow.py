@@ -27,6 +27,10 @@ from .const import (
     CONF_NOTIFY_BOOST,
     CONF_NOTIFY_COLD_OUTDOOR,
     CONF_NOTIFY_DIAGNOSTICS,
+    CONF_MANUAL_ON_OFF,
+    CONF_MANUAL_ON_TEMP,
+    CONF_NOTIFY_MANUAL,
+    PAUSE_MANUAL_NUMBERS,
     CONF_NOTIFY_HUMIDITY,
     CONF_OUTDOOR_HUMIDITY,
     CONF_OUTDOOR_PRESSURE,
@@ -170,6 +174,17 @@ def _hub_schema_dict(current: dict) -> dict:
         CONF_NOTIFY_BOOST, CONF_NOTIFY_COOLING, CONF_NOTIFY_HOLIDAY, CONF_NOTIFY_PREHEAT,
         CONF_NOTIFY_AC_BACKUP, CONF_NOTIFY_COLD_OUTDOOR, CONF_NOTIFY_DIAGNOSTICS,
     ):
+        schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
+    # rucne prevzatie: notifikacia predvolene vypnuta (nie je to porucha)
+    schema_dict[
+        vol.Optional(CONF_NOTIFY_MANUAL, default=current.get(CONF_NOTIFY_MANUAL, False))
+    ] = selector.BooleanSelector()
+    # pauza FVE a rucne prevzatie
+    for key, (lo, hi, step, unit, default) in PAUSE_MANUAL_NUMBERS.items():
+        schema_dict[vol.Optional(key, default=current.get(key, default))] = selector.NumberSelector(
+            selector.NumberSelectorConfig(min=lo, max=hi, step=step, mode="box", unit_of_measurement=unit)
+        )
+    for key in (CONF_MANUAL_ON_OFF, CONF_MANUAL_ON_TEMP):
         schema_dict[vol.Optional(key, default=current.get(key, True))] = selector.BooleanSelector()
     # vlhkost je nove a len informativne - upozornenia predvolene vypnute
     schema_dict[

@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.25.5";
+const CARD_VERSION = "0.26.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -109,6 +109,18 @@ const I18N = {
 
   settings: { en: "Settings", sk: "Nastavenia" },
   status_heating: { en: "Heating", sk: "Kúri" },
+  status_manual: { en: "Manual", sk: "Ručne" },
+  man_title: { en: "Changed manually on the device", sk: "Zmenené ručne na zariadení" },
+  man_text: { en: "Automation sends nothing to this room. It resumes in {m} ({t}).", sk: "Automatika tejto izbe nič neposiela. Vráti sa o {m} ({t})." },
+  man_resume: { en: "Resume automation now", sk: "Obnoviť automatiku teraz" },
+  dev_on: { en: "on", sk: "zapnutý" },
+  dev_off: { en: "off", sk: "vypnutý" },
+  dev_heating: { en: "heating", sk: "kúri" },
+  dev_cooling: { en: "cooling", sk: "chladí" },
+  dev_idle: { en: "idle", sk: "nekúri" },
+  dev_set: { en: "set {t}", sk: "nastavené {t}" },
+  dev_meas: { en: "reads {t}", sk: "meria {t}" },
+  dev_na: { en: "unavailable", sk: "nedostupné" },
   status_cooling: { en: "Cooling", sk: "Chladí" },
   status_idle_heat: { en: "Not heating", sk: "Nekúri" },
   status_idle_cool: { en: "Not cooling", sk: "Nechladí" },
@@ -221,6 +233,21 @@ const I18N = {
   ov_grp_pv: { en: "Solar surplus", sk: "FVE prebytok" },
   ov_pv_prio: { en: "P1–{tier}", sk: "P1–{tier}" },
   pv_title: { en: "Solar cascade", sk: "Kaskáda FVE" },
+  pv_state_paused: { en: "Paused", sk: "Pozastavená" },
+  pv_paused_tile: { en: "Paused till {t}", sk: "Pauza do {t}" },
+  pv_r_paused: { en: "Solar heating is paused until {t} ({m} left). Rooms heat to their normal temperatures.", sk: "Kúrenie z FVE je pozastavené do {t} (ešte {m}). Izby kúria na svoje bežné teploty." },
+  pv_pause_lbl: { en: "Pause solar heating", sk: "Pozastaviť kúrenie z FVE" },
+  pv_pause_midnight: { en: "Until midnight", sk: "Do polnoci" },
+  pv_resume: { en: "Cancel pause", sk: "Zrušiť pauzu" },
+  ov_grp_manual: { en: "Manual takeover", sk: "Ručné prevzatie" },
+  of_pv_pause_minutes: { en: "Default pause", sk: "Predvolená pauza" },
+  of_manual_minutes: { en: "Automation resumes after", sk: "Automatika sa vráti po" },
+  of_manual_on_off: { en: "React to switching on/off", sk: "Reagovať na zapnutie/vypnutie" },
+  of_manual_on_temp: { en: "React to temperature change", sk: "Reagovať na zmenu teploty" },
+  of_notify_manual: { en: "Manual takeover", sk: "Ručné prevzatie" },
+  help_btn: { en: "Guide", sk: "Návod" },
+  help_title: { en: "Guide", sk: "Návod" },
+  help_back: { en: "Back to settings", sk: "Späť na nastavenia" },
   pv_state_on: { en: "Active P1–{tier}", sk: "Aktívna P1–{tier}" },
   pv_state_p1: { en: "Active P1", sk: "Aktívna P1" },
   pv_state_off: { en: "Inactive", sk: "Neaktívna" },
@@ -426,6 +453,56 @@ async function fetchEnergyToday(hass, ids) {
   }
   return any ? total : null;
 }
+
+// ---- Navod k funkciam (nastavenia prehladovej karty) ----
+const HELP = {
+  sk: [
+    { k: "pv_pause", t: "Pauza kúrenia z FVE", p: [
+      "Pauza zastaví kúrenie z prebytku FVE na zvolený čas (1 h, 2 h, 4 h alebo do polnoci – tlačidlá v paneli Kaskáda FVE, ktorý otvoríš klepnutím na dlaždicu FVE). Zóny hneď prejdú na svoje bežné teploty, navýšenie z akumulácie sa zruší a prebytok ostane pre dom a batériu.",
+      "Pauzu kedykoľvek zrušíš tlačidlom Zrušiť pauzu. Po jej skončení sa kaskáda rozbehne znova podľa aktuálneho prebytku.",
+      "Pre automatizácie: switch.smart_heating_fve_pauza (zapnutie = pauza na predvolenú dĺžku) alebo služba smart_heating.pause_solar (minutes, until_midnight) a smart_heating.resume_solar." ] },
+    { k: "manual", t: "Ručné prevzatie termostatu", p: [
+      "Keď na termostate, klíme alebo relé niečo zmeníš rukou (vypneš alebo zmeníš teplotu), integrácia to spozná a na nastavený čas zóne nič neposiela. Potom sa automatika vráti sama, alebo skôr tlačidlom Obnoviť automatiku na karte izby.",
+      "Zmeny, ktoré pošle sama integrácia, sa za ručné nepovažujú. Ignorujú sa aj zmeny teploty, keď je termostat v programovom režime.",
+      "Na karte izby vidíš, čo je práve nastavené na zariadení: režim, nastavenú a nameranú teplotu. V Prepínačoch izby sa prevzatie dá pre izbu vypnúť." ] },
+    { k: "pv", t: "Kaskáda FVE a priority", p: [
+      "Izby so zapnutým Využi FVE prebytok kúria z prebytku podľa priority (P1 prvá). Ďalšia priorita sa pridá, keď prebytok vydrží nad nastavenou hranicou; pri vybíjaní batérie, odbere zo siete alebo slabej výrobe sa priority odoberajú od najnižšej. Pod nastaveným SOC batérie sa vypne všetko.",
+      "Maximálny výkon kúrenia z FVE drží rezervu pre dom." ] },
+    { k: "acc", t: "Akumulácia tepla z prebytku", p: [
+      "Keď je prebytok a izba je už nahriata, cieľ sa postupne zvyšuje po krokoch až po maximálnu teplotu z FVE danej izby. Teplo sa tak uloží do podlahy a stien. Po skončení prebytku alebo počas pauzy sa cieľ vráti na bežnú teplotu." ] },
+    { k: "floor", t: "Podlaha – max. a min. teplota", p: [
+      "Max. teplota podlahy chráni krytinu: pri nej sa podlaha vypne a znova zapne až pod hranicou zníženou o hysterézu. Odporúčanie: drevo a vinyl 27 °C, dlažba 29 °C, kúpeľňa 30–32 °C.",
+      "Min. teplota podlahy (prepínač Udržiavať min. teplotu podlahy) drží podlahu teplú aj pri teplom vzduchu." ] },
+    { k: "meters", t: "Merače, spotreba a štatistiky", p: [
+      "Pri izbe nastav merače príkonu a energie po zdrojoch (podlaha, klíma, radiátor). Karta potom ukazuje príkon a spotrebu za dnes, tlačidlo Štatistiky prehľad za deň, týždeň a mesiac. Kontrola meračov upozorní, keď zdroj hlási kúrenie, ale ťahá 0 W, alebo ťahá, hoci má byť vypnutý." ] },
+    { k: "modes", t: "Režimy, predkúrenie a boost", p: [
+      "Auto riadi teplotu podľa prítomnosti, času a vonkajšej teploty; Deň, Noc, Min a Mráz sú pevné ciele, Vypnuté izbu pustí. Predkúrenie začne vopred, aby bolo teplo pri príchode (dynamické podľa naučených nábehov). Boost dočasne zapne komfort." ] },
+  ],
+  en: [
+    { k: "pv_pause", t: "Solar heating pause", p: [
+      "The pause stops heating from the solar surplus for a while (1 h, 2 h, 4 h or until midnight – buttons in the Solar cascade panel, opened by tapping the solar tile). Rooms switch to their normal temperatures at once, any accumulation boost is dropped and the surplus stays for the house and the battery.",
+      "Cancel it any time with Cancel pause. Afterwards the cascade starts again based on the current surplus.",
+      "For automations: switch.smart_heating_fve_pauza (on = pause for the default length) or the services smart_heating.pause_solar (minutes, until_midnight) and smart_heating.resume_solar." ] },
+    { k: "manual", t: "Manual takeover", p: [
+      "When you change a thermostat, AC or relay by hand (switch it off or change the temperature), the integration notices and leaves the room alone for the set time. Then automation resumes on its own, or earlier with Resume automation on the room card.",
+      "Changes sent by the integration itself don't count, nor do temperature changes while the thermostat runs its own program.",
+      "The room card shows what is set on the device right now: mode, set and measured temperature. Takeover can be switched off per room in the room's switches." ] },
+    { k: "pv", t: "Solar cascade and priorities", p: [
+      "Rooms with Use solar surplus heat from the surplus by priority (P1 first). The next priority joins when the surplus stays above the set threshold; on battery discharge, grid import or low production priorities are removed from the lowest. Below the set battery SOC everything stops.",
+      "The maximum solar heating power keeps a reserve for the house." ] },
+    { k: "acc", t: "Heat accumulation from the surplus", p: [
+      "With a surplus and a warm room, the target rises step by step up to the room's maximum solar temperature, storing heat in the floor and walls. When the surplus ends or during a pause, the target returns to normal." ] },
+    { k: "floor", t: "Floor – max and min temperature", p: [
+      "The max floor temperature protects the covering: the floor switches off there and back on only below it minus the hysteresis. Typical: wood and vinyl 27 °C, tiles 29 °C, bathroom 30–32 °C.",
+      "The min floor temperature (switch Keep minimum floor temperature) keeps the floor warm even when the air is warm." ] },
+    { k: "meters", t: "Meters, consumption and statistics", p: [
+      "Set power and energy meters per source (floor, AC, radiator) for a room. The card then shows power and today's consumption, the Statistics button a day, week and month overview. The meter check warns when a source reports heating but draws 0 W, or draws power while it should be off." ] },
+    { k: "modes", t: "Modes, pre-heating and boost", p: [
+      "Auto follows presence, time and outdoor temperature; Day, Night, Min and Frost are fixed targets, Off leaves the room alone. Pre-heating starts early so it's warm when you arrive (dynamic from learned warm-ups). Boost temporarily switches to comfort." ] },
+  ],
+};
+
+const HAND_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 1 1 4 0v6"/><path d="M12 11V4a2 2 0 1 1 4 0v8"/><path d="M16 12V7a2 2 0 1 1 4 0v7a7 7 0 0 1-12.9 3.8L4.4 14a2 2 0 0 1 3.2-2.3L8 12"/></svg>';
 
 const ENERGY_REFRESH_MS = 5 * 60 * 1000;
 
@@ -777,12 +854,15 @@ class SmartHeatingCard extends HTMLElement {
         if (this._consIds("power_entities").some((id) => hass.states[id] !== prevHass.states[id])) {
           this._renderConsumption();
         }
+        // zariadenia (termostat, klima, rele) - prekresli len ich riadky
+        if (this._devIds().some((id) => hass.states[id] !== prevHass.states[id])) this._renderDevices();
         this._maybeFetchEnergy();
         return;
       }
     }
     this._updateContent();
     this._renderConsumption();
+    this._renderDevices();
     this._maybeFetchEnergy();
   }
 
@@ -950,6 +1030,9 @@ class SmartHeatingCard extends HTMLElement {
             <span class="sh-cons-e"></span>
           </div>
 
+          <div class="sh-man" hidden></div>
+          <div class="sh-dev"></div>
+
           <div class="sh-ft">
             <div class="sh-seg" role="group" aria-label="${this._t("section_mode")}"></div>
             <button class="sh-gear" type="button" aria-expanded="false" aria-label="${this._t("settings")}" title="${this._t("settings")}">${ICONS.gear}</button>
@@ -1053,6 +1136,22 @@ class SmartHeatingCard extends HTMLElement {
       .sh-prob div::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: currentColor;
         margin-right: 5px; vertical-align: 1px; }
       .sh-cons[hidden] { display: none; }
+      .sh-dev { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--sh-sub, var(--secondary-text-color)); margin: -2px 0 6px; }
+      .sh-dev[hidden], .sh-man[hidden] { display: none; }
+      .sh-devl { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+      .sh-devl b { font-weight: 600; color: var(--sh-txt, var(--primary-text-color)); }
+      .sh-devl i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; transform: translateY(-1px); background: #9a9aa2; }
+      .sh-devl i.floor { background: #f0883e; } .sh-devl i.ac { background: #4fa3ff; } .sh-devl i.radiator { background: #2fa98a; }
+      .sh-devl.man b { color: var(--sh-warn, #e8a838); }
+      .sh-man { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 12px; margin: 0 0 8px;
+        background: rgba(232,168,56,0.10); box-shadow: inset 0 0 0 1px rgba(232,168,56,0.4); font-size: 12.5px; }
+      .sh-man-h { display: flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--sh-txt, var(--primary-text-color)); }
+      .sh-man-h svg { color: var(--sh-warn, #e8a838); flex-shrink: 0; }
+      .sh-man-t { color: var(--sh-sub, var(--secondary-text-color)); line-height: 1.4; }
+      .sh-man-btn { min-height: 40px; border-radius: 10px; border: 1px solid var(--primary-color, #7c6cf0); background: rgba(124,108,240,0.18);
+        color: var(--sh-txt, var(--primary-text-color)); font: inherit; font-weight: 600; cursor: pointer; }
+      .sh-pill.manual { background: rgba(232,168,56,0.16); color: var(--sh-warn, #e8a838); }
+      .sh-pill.manual svg { width: 14px; height: 14px; }
       .sh-cons-i { display: inline-flex; color: var(--sh-warn, #e8a838); }
       .sh-cons-i svg { width: 15px; height: 15px; display: block; }
       .sh-cons-p { font-weight: 650; color: var(--sh-txt, var(--primary-text-color)); font-variant-numeric: tabular-nums;
@@ -1261,6 +1360,60 @@ class SmartHeatingCard extends HTMLElement {
     this._maybeFetchStats();
   }
 
+  _devIds() {
+    const st = this._hass && this._zoneId ? this._hass.states[eid(this._zoneId, "sensor", "stav")] : null;
+    const devs = st && st.attributes && Array.isArray(st.attributes.devices) ? st.attributes.devices : [];
+    return devs.map((d) => d.entity).filter(Boolean);
+  }
+
+  /** Co je prave nastavene na zariadeniach zony + rucne prevzatie. */
+  _renderDevices() {
+    const box = this.querySelector(".sh-dev");
+    const man = this.querySelector(".sh-man");
+    if (!box || !man || !this._hass) return;
+    const st = this._hass.states[eid(this._zoneId, "sensor", "stav")];
+    const a = (st && st.attributes) || {};
+    const L = this._lang;
+    const deg = (v) => `${Number(v).toFixed(1).replace(".", L === "sk" ? "," : ".")}°`;
+    const lines = (Array.isArray(a.devices) ? a.devices : []).map((d) => {
+      const s = this._hass.states[d.entity];
+      const name = (s && s.attributes && s.attributes.friendly_name) || d.entity;
+      let parts = [];
+      if (!s || s.state === "unavailable" || s.state === "unknown") parts = [this._t("dev_na")];
+      else if (!String(d.entity).startsWith("climate.")) parts = [this._t(s.state === "on" ? "dev_on" : "dev_off")];
+      else if (s.state === "off") {
+        parts = [this._t("dev_off")];
+        if (s.attributes.current_temperature != null) parts.push(this._t("dev_meas", { t: deg(s.attributes.current_temperature) }));
+      } else {
+        const act = s.attributes.hvac_action;
+        if (act === "heating" || act === "cooling" || act === "idle") parts.push(this._t(`dev_${act}`));
+        if (s.attributes.temperature != null) parts.push(this._t("dev_set", { t: deg(s.attributes.temperature) }));
+        if (s.attributes.current_temperature != null) parts.push(this._t("dev_meas", { t: deg(s.attributes.current_temperature) }));
+      }
+      const hot = a.manual_device === d.entity && a.manual_until ? " man" : "";
+      return `<div class="sh-devl${hot}"><i class="seg ${esc(d.key)}"></i><b>${esc(name)}</b><span>${esc(parts.join(" · "))}</span></div>`;
+    });
+    box.innerHTML = lines.join("");
+    box.hidden = !lines.length;
+
+    const until = a.manual_until ? Date.parse(a.manual_until) : NaN;
+    if (!isNaN(until) && until > Date.now()) {
+      const d = new Date(until);
+      const t = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const left = Math.max(1, Math.round((until - Date.now()) / 60000));
+      man.hidden = false;
+      man.innerHTML = `<div class="sh-man-h">${HAND_SVG}<b>${esc(this._t("man_title"))}</b></div>
+        <div class="sh-man-t">${esc(this._t("man_text", { m: `${left}\u00a0min`, t }))}</div>
+        <button type="button" class="sh-man-btn">${esc(this._t("man_resume"))}</button>`;
+      man.querySelector(".sh-man-btn").onclick = () => this._hass.callService("button", "press", {
+        entity_id: `button.smart_heating_${this._zoneId}_obnovit_automatiku`,
+      });
+    } else {
+      man.hidden = true;
+      man.innerHTML = "";
+    }
+  }
+
   _renderStatus(attrs, zAttrs) {
     const action = attrs.hvac_action;
     const isCoolSeason = (zAttrs.season || attrs.sezona) === "Chladenie";
@@ -1270,6 +1423,7 @@ class SmartHeatingCard extends HTMLElement {
     if ((attrs.rezim || "") === "Vypnute" || action === "off") { cls = "off"; key = "status_off"; icon = ICONS.power; }
     if (action === "heating") { cls = "heat"; key = "status_heating"; icon = ICONS.flame; }
     if (action === "cooling") { cls = "cool"; key = "status_cooling"; icon = ICONS.snow; }
+    if (zAttrs.manual_until && Date.parse(zAttrs.manual_until) > Date.now()) { cls = "manual"; key = "status_manual"; icon = HAND_SVG; }
     const el = this.querySelector(".sh-pill");
     el.className = `sh-pill ${cls}`;
     el.innerHTML = `${icon}<span>${this._t(key)}</span>`;
@@ -2052,6 +2206,12 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-wuk { font-size: 11px; color: var(--sh-sub); text-transform: uppercase; letter-spacing: .04em; }
       .sho-pv { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 14px; }
       .sho-pv[hidden] { display: none; }
+      .sho-pvpause { display: flex; flex-direction: column; gap: 6px; }
+      .sho-pvpause .l { font-size: 12.5px; color: var(--sh-sub); }
+      .sho-pvpause .bs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .sho-pvp-b { min-height: 40px; border-radius: 10px; border: 1px solid var(--divider-color, #333); background: rgba(127,127,127,.08);
+        color: var(--sh-txt); font: inherit; font-size: 13.5px; cursor: pointer; }
+      .sho-pvp-b.res { border-color: var(--primary-color, #7c6cf0); background: rgba(124,108,240,.18); font-weight: 600; }
       .sho-pvst { display: flex; align-items: baseline; gap: 10px; font-size: 13px; color: var(--sh-sub); flex-wrap: wrap; }
       .sho-pvst b { font-size: 14px; color: var(--sh-txt); padding: 4px 10px; border-radius: 999px; background: rgba(127,127,127,.14); }
       .sho-pvst.on b { background: rgba(242,184,75,.18); color: #f2b84b; }
@@ -2177,6 +2337,14 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-tile.cold { background: rgba(79,163,255,0.10); box-shadow: inset 0 0 0 1px rgba(79,163,255,0.4); }
       .sho-tile.cold .i { background: rgba(79,163,255,0.22); color: var(--sh-cool); }
       .sho-tile.warn { background: rgba(232,168,56,0.10); box-shadow: inset 0 0 0 1px rgba(232,168,56,0.45); }
+      .sho-q { margin-left: 6px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--divider-color, #444); background: none;
+        color: var(--sh-sub); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; line-height: 1; }
+      .sho-helpbtn { margin-left: auto; min-height: 34px; padding: 0 14px; border-radius: 9px; border: 1px solid var(--divider-color, #444);
+        background: none; color: var(--sh-txt); font: inherit; font-size: 13px; cursor: pointer; }
+      .sho-hlps { display: flex; flex-direction: column; gap: 8px; }
+      .sho-hlp { border-radius: 12px; background: rgba(127,127,127,.08); padding: 0 14px; }
+      .sho-hlp summary { min-height: 46px; display: flex; align-items: center; font-weight: 600; cursor: pointer; }
+      .sho-hlp p { margin: 0 0 10px; font-size: 13.5px; line-height: 1.5; color: var(--sh-sub); }
       .sho-tile.warn .i { background: rgba(232,168,56,0.22); color: var(--sh-warn); }
       .sho-tile.err { background: rgba(229,72,77,0.10); box-shadow: inset 0 0 0 1px rgba(229,72,77,0.5); }
       .sho-tile.err .i { background: rgba(229,72,77,0.22); color: var(--sh-err); }
@@ -2224,6 +2392,7 @@ class SmartHeatingOverview extends HTMLElement {
         if (sw) this._toggleDynPreheat(sw);
       });
       this.querySelector(".sho-set").addEventListener("click", (e) => this._onSettingsClick(e));
+      this.querySelector(".sho-pv").addEventListener("click", (e) => this._onPvClick(e));
       this.querySelector(".sho-stats").addEventListener("click", (e) => {
         const b = e.target.closest("[data-days]");
         if (b) this._loadStats(Number(b.dataset.days));
@@ -2351,6 +2520,18 @@ class SmartHeatingOverview extends HTMLElement {
         const boosted = n((z) => z.s.pv_active);
         const used = n((z) => z.s.pv_active && z.c.hvac_action === "heating");
         const casc = this._hass.states["sensor.smart_heating_fve_kaskada"];
+        const pausedUntil = casc && casc.attributes && casc.attributes.pauza_do ? Date.parse(casc.attributes.pauza_do) : NaN;
+        if (!isNaN(pausedUntil) && pausedUntil > Date.now()) {
+          const d = new Date(pausedUntil);
+          return {
+            icon: "mdi:solar-power-variant",
+            label: this._t("ov_pv"),
+            value: this._t("pv_paused_tile", { t: `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}` }),
+            cls: "warn",
+            entity: "sensor.smart_heating_fve_kaskada",
+            tap: "pv-panel",
+          };
+        }
         if (casc && casc.attributes && casc.attributes.rezim === "vykon") {
           // FVE riadena podla vykonu: aktivne priority + dostupny prebytok
           const tier = Number(casc.state) || 0;
@@ -2656,6 +2837,23 @@ class SmartHeatingOverview extends HTMLElement {
     this._holdHeight(panel);
   }
 
+  _pvPauseHtml(paused) {
+    if (paused) return `<div class="sho-pvpause"><button type="button" class="sho-pvp-b res" data-resume="1">${esc(this._t("pv_resume"))}</button></div>`;
+    const b = (v, label) => `<button type="button" class="sho-pvp-b" data-pause="${v}">${esc(label)}</button>`;
+    return `<div class="sho-pvpause"><div class="l">${esc(this._t("pv_pause_lbl"))}</div>
+      <div class="bs">${b(60, "1 h")}${b(120, "2 h")}${b(240, "4 h")}${b("midnight", this._t("pv_pause_midnight"))}</div></div>`;
+  }
+
+  _onPvClick(e) {
+    const p = e.target.closest("[data-pause]");
+    if (p) {
+      const v = p.dataset.pause;
+      this._hass.callService("smart_heating", "pause_solar", v === "midnight" ? { until_midnight: true } : { minutes: Number(v) });
+      return;
+    }
+    if (e.target.closest("[data-resume]")) this._hass.callService("smart_heating", "resume_solar", {});
+  }
+
   _togglePv() {
     const panel = this.querySelector(".sho-pv");
     if (!panel) return;
@@ -2742,7 +2940,10 @@ class SmartHeatingOverview extends HTMLElement {
         since = this._t("pv_since", { t: `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`, d: fmtDuration((Date.now() - t0) / 60000, L) });
       }
     }
-    const state = tier ? (tier === 1 ? this._t("pv_state_p1") : this._t("pv_state_on", { tier })) : this._t("pv_state_off");
+    const pUntil = a.pauza_do ? Date.parse(a.pauza_do) : NaN;
+    const paused = !isNaN(pUntil) && pUntil > Date.now();
+    const state = paused ? this._t("pv_state_paused")
+      : tier ? (tier === 1 ? this._t("pv_state_p1") : this._t("pv_state_on", { tier })) : this._t("pv_state_off");
 
     // toky
     const bat = num(a.bateria_w);
@@ -2776,6 +2977,12 @@ class SmartHeatingOverview extends HTMLElement {
     else if (reason === "no_zones") msg = this._t("pv_r_no_zones");
     else if (tier && tier >= maxLevel) msg = this._t("pv_r_hold_top");
     else msg = this._t("pv_r_hold", { w: kw(prm.pv_add_power) });
+    if (paused) {
+      const d = new Date(pUntil);
+      msg = this._t("pv_r_paused", { t: `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`,
+        m: fmtDuration((pUntil - Date.now()) / 60000, L) });
+      cls = "is-shed"; prog = null;
+    }
     // pasik ma miesto vzdy (bez odpoctu je neviditelny) - panel nemeni vysku
     const progHtml = prog == null
       ? `<div class="sho-pvbar is-empty" aria-hidden="true"></div>`
@@ -2799,6 +3006,7 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-pvst${tier ? " on" : ""}"><b>${esc(state)}</b>${since ? `<span>${esc(since)}</span>` : ""}</div></div>
       <div class="sho-pvfs">${flows}</div>
       <div class="sho-pvmsg ${cls}">${esc(msg)}</div>${progHtml}
+      ${this._pvPauseHtml(paused)}
       <div class="sho-pvls">${rows}${noFveHtml}</div>
       ${this._pvTimeline(maxLevel || 1)}`;
     this._holdHeight(panel);
@@ -3098,13 +3306,27 @@ class SmartHeatingOverview extends HTMLElement {
     return `${txt} ${unit}`;
   }
 
+  _renderHelp() {
+    const panel = this.querySelector(".sho-set");
+    const lang = this._helpLang || (this._lang === "sk" ? "sk" : "en");
+    const open = this._helpOpen;
+    const items = (HELP[lang] || HELP.en).map((h) => `<details class="sho-hlp" ${h.k === open ? "open" : ""}>
+        <summary>${esc(h.t)}</summary>${h.p.map((x) => `<p>${esc(x)}</p>`).join("")}</details>`).join("");
+    const lb = (l) => `<button type="button" class="sho-per${lang === l ? " on" : ""}" data-help-lang="${l}" aria-pressed="${lang === l}">${l.toUpperCase()}</button>`;
+    panel.innerHTML = `<div class="sho-st-h"><h2>${esc(this._t("help_title"))}</h2><div class="sho-pers" role="group">${lb("sk")}${lb("en")}</div></div>
+      <div class="sho-hlps">${items}</div>
+      <div class="sho-set-f"><button type="button" class="sho-btn sho-help-back">${esc(this._t("help_back"))}</button></div>`;
+  }
+
   _renderSettingsPanel() {
+    if (this._helpOpen) { this._renderHelp(); return; }
     const panel = this.querySelector(".sho-set");
     const fields = this._settingsFields();
     const isPv = (f) => f.name.startsWith("pv_") || f.name === "grid_export_negative" || f.name === "battery_charge_positive";
     const meters = fields.filter((f) => f.name.startsWith("meter_"));
     const preheat = fields.filter((f) => f.name.startsWith("preheat_"));
-    const general = fields.filter((f) => !f.name.startsWith("notify_") && !isPv(f) && !f.name.startsWith("meter_") && !f.name.startsWith("preheat_"));
+    const manual = fields.filter((f) => f.name.startsWith("manual_"));
+    const general = fields.filter((f) => !f.name.startsWith("notify_") && !isPv(f) && !f.name.startsWith("meter_") && !f.name.startsWith("preheat_") && !f.name.startsWith("manual_"));
     const notify = fields.filter((f) => f.name.startsWith("notify_"));
     const pv = fields.filter(isPv);
     const fieldHtml = (f) => {
@@ -3118,9 +3340,11 @@ class SmartHeatingOverview extends HTMLElement {
         <button type="button" data-f="${esc(f.name)}" data-d="-1">−</button><b>${v == null ? "–" : esc(this._fmtNum(v, f))}</b>
         <button type="button" data-f="${esc(f.name)}" data-d="1">+</button></span></div>`;
     };
-    const group = (title, list) => (list.length ? `<div class="sho-grp"><div class="h">${esc(this._t(title))}</div>${list.map(fieldHtml).join("")}</div>` : "");
-    panel.innerHTML = `<div class="sho-set-h">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span></div>
-      <div class="sho-grps">${group("ov_grp_general", general)}${group("ov_grp_pv", pv)}${group("ov_grp_meters", meters)}${group("ov_grp_preheat", preheat)}${group("ov_grp_notify", notify)}</div>
+    const q = (k) => (k ? `<button type="button" class="sho-q" data-help="${k}" aria-label="${esc(this._t("help_btn"))}">?</button>` : "");
+    const group = (title, list, help) => (list.length ? `<div class="sho-grp"><div class="h">${esc(this._t(title))}${q(help)}</div>${list.map(fieldHtml).join("")}</div>` : "");
+    panel.innerHTML = `<div class="sho-set-h">${mdiSvg("cog")}<span>${esc(this._t("ov_settings"))}</span>
+        <button type="button" class="sho-helpbtn" data-help="pv_pause">${esc(this._t("help_btn"))}</button></div>
+      <div class="sho-grps">${group("ov_grp_general", general, "modes")}${group("ov_grp_pv", pv, "pv_pause")}${group("ov_grp_manual", manual, "manual")}${group("ov_grp_meters", meters, "meters")}${group("ov_grp_preheat", preheat, "modes")}${group("ov_grp_notify", notify)}</div>
       ${this._settingsFooter(true)}`;
   }
 
@@ -3136,6 +3360,11 @@ class SmartHeatingOverview extends HTMLElement {
 
   _onSettingsClick(e) {
     const t = e.target;
+    const hq = t.closest("[data-help]");
+    if (hq) { this._helpOpen = hq.dataset.help; this._renderHelp(); return; }
+    const hl = t.closest("[data-help-lang]");
+    if (hl) { this._helpLang = hl.dataset.helpLang; this._renderHelp(); return; }
+    if (t.closest(".sho-help-back")) { this._helpOpen = null; this._renderSettingsPanel(); return; }
     if (t.closest(".sho-all")) {
       e.preventDefault();
       this._closeSettings(true);

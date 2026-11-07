@@ -65,6 +65,18 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
 
 ---
 
+## Pauza kúrenia z FVE a ručné prevzatie
+
+- **Pauza:** klepni na dlaždicu FVE → Kaskáda FVE → pozastaviť na 1 h, 2 h, 4 h
+  alebo do polnoci. Izby kúria na bežné teploty a prebytok ostáva pre dom a
+  batériu. Pre automatizácie: `switch.smart_heating_fve_pauza`,
+  `smart_heating.pause_solar`, `smart_heating.resume_solar`.
+- **Ručné prevzatie:** keď termostat, klímu alebo relé zmeníš rukou, integrácia
+  tejto izbe 30 minút (nastaviteľné) nič neposiela, potom sa vráti; tlačidlom
+  "Obnoviť automatiku teraz" skôr. Karta zároveň ukazuje, čo je nastavené na
+  každom zariadení.
+- V nastaveniach je **Návod** so všetkými funkciami (SK / EN).
+
 ## Funkcie
 
 |   |   |

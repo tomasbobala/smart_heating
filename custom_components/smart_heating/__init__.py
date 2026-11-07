@@ -146,6 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = coordinator
+    _async_register_services(hass)
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
@@ -166,3 +167,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         coordinator: SmartHeatingCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
         coordinator.async_unsub()
     return unload_ok
+
+
+def _async_register_services(hass: HomeAssistant) -> None:
+    """Sluzby pauzy kurenia z FVE (pre automatizacie a kartu)."""
+    import voluptuous as vol
+    from homeassistant.helpers import config_validation as cv
+
+    if hass.services.has_service(DOMAIN, "pause_solar"):
+        return
+
+    def _coordinators():
+        return [c for c in hass.data.get(DOMAIN, {}).values() if isinstance(c, SmartHeatingCoordinator)]
+
+    async def _pause(call) -> None:
+        for c in _coordinators():
+            await c.async_pv_pause(call.data.get("minutes"), bool(call.data.get("until_midnight", False)))
+
+    async def _resume(call) -> None:
+        for c in _coordinators():
+            await c.async_pv_resume()
+
+    hass.services.async_register(DOMAIN, "pause_solar", _pause, schema=vol.Schema({
+        vol.Optional("minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=1440)),
+        vol.Optional("until_midnight"): cv.boolean,
+    }))
+    hass.services.async_register(DOMAIN, "resume_solar", _resume, schema=vol.Schema({}))

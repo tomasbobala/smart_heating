@@ -125,6 +125,18 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             "dynamicke_predkurenie": z.get("dyn_preheat"),
             # pre prehladovu kartu (nastavenia integracie cez options flow)
             "config_entry_id": self.coordinator.entry.entry_id,
+            # zariadenia zony (karta ukazuje, co je na nich nastavene) a rucne prevzatie
+            "devices": [
+                {"key": key, "entity": ent}
+                for key, ent in (
+                    ("floor", self.coordinator.zones.get(self._zone_id, {}).get("climate_entity")),
+                    ("ac", self.coordinator.zones.get(self._zone_id, {}).get("ac_entity")),
+                    ("radiator", self.coordinator.zones.get(self._zone_id, {}).get("radiator_entity")),
+                )
+                if ent
+            ],
+            "manual_until": z.get("manual_until"),
+            "manual_device": z.get("manual_device"),
             # spotreba zony: karty z nich citaju prikon a statistiky energie
             # vsetky merace zony (zdroje + ostatne, bez duplicit) a rozpad po zdrojoch
             "power_entities": self._all_meters("power"),
@@ -220,6 +232,7 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
             "bateria_w": snap.get("battery"),
             "soc": snap.get("soc"),
             "prebytok_w": snap.get("available"),
+            "pauza_do": snap.get("paused_until"),
             "kurenie_w": snap.get("heat"),
             "uroven_od": snap.get("tier_since"),
             "urovne": snap.get("levels"),
