@@ -102,7 +102,9 @@
           "manual_minutes": "Ručné prevzatie – automatika sa vráti po (min)",
           "manual_on_off": "Ručné prevzatie pri zapnutí/vypnutí zariadenia",
           "manual_on_temp": "Ručné prevzatie pri zmene teploty na zariadení",
-          "notify_manual": "Notifikácia pri ručnom prevzatí"
+          "notify_manual": "Notifikácia pri ručnom prevzatí",
+          "zone_off_minutes": "Tlačidlo Vypnúť kúrenie na karte izby – na (min)",
+          "krb_hysterezia": "Krb - hysterézia (°C): zóny sa vrátia až pod hranicou mínus táto hodnota"
         },
         "description": "Smart Heating verzia {version}"
       },
@@ -239,6 +241,34 @@
     "resume_solar": {
       "name": "Obnoviť kúrenie z FVE",
       "description": "Zruší pauzu kúrenia z FVE."
+    },
+    "zone_off": {
+      "name": "Vypnúť kúrenie zóny na čas",
+      "description": "Zariadenia zóny sa držia vypnuté, potom sa vráti automatika.",
+      "fields": {
+        "zone_id": {
+          "name": "ID zóny",
+          "description": "Interné ID zóny (atribút sensor…_stav)."
+        },
+        "minutes": {
+          "name": "Minúty",
+          "description": "Predvolené z nastavení integrácie."
+        },
+        "add": {
+          "name": "Predĺžiť",
+          "description": "Pripočítať čas k prebiehajúcemu vypnutiu."
+        }
+      }
+    },
+    "zone_resume": {
+      "name": "Obnoviť automatiku zóny",
+      "description": "Ukončí vypnutie alebo ručné prevzatie zóny.",
+      "fields": {
+        "zone_id": {
+          "name": "ID zóny",
+          "description": "Interné ID zóny."
+        }
+      }
     }
   }
 }

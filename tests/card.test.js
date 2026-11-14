@@ -526,7 +526,7 @@ test("target buttons are disabled in mode Vypnute", () => {
 test("mode bar: quick modes, active one highlighted, click selects option", () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
-  card.setConfig({ zone_id: ZONE_ID });
+  card.setConfig({ zone_id: ZONE_ID, mode_buttons: true });
   const hass = buildHass({ climateAttrs: { rezim: "Auto" } });
   const calls = [];
   hass.callService = (domain, service, data) => calls.push({ domain, service, data });
@@ -546,7 +546,7 @@ test("mode bar: quick modes, active one highlighted, click selects option", () =
 test("mode bar shows Mraz / Vypnute only while it is the active mode", () => {
   const { CardClass, document } = loadCard();
   const card = new CardClass();
-  card.setConfig({ zone_id: ZONE_ID });
+  card.setConfig({ zone_id: ZONE_ID, mode_buttons: true });
   card.hass = buildHass({ climateAttrs: { rezim: "Mraz" } });
   document.body.appendChild(card);
   const active = card.querySelector(".sh-seg button.a");
@@ -2073,7 +2073,78 @@ test("settings: manual takeover group, guide opens the matching article, languag
   set.querySelector('[data-help-lang="en"]').click();
   open = set.querySelector("details.sho-hlp[open] summary");
   assert.strictEqual(open.textContent, "Manual takeover");
-  assert.strictEqual(set.querySelectorAll("details.sho-hlp").length, 7);
+  assert.strictEqual(set.querySelectorAll("details.sho-hlp").length, 9);
   set.querySelector(".sho-help-back").click();
   assert.match(set.textContent, /Predvolená pauza/);
+});
+
+
+// ---------------------------------------------------------------- aktualny rezim + docasne vypnutie zony
+
+function offCard(stavAttrs = {}, config = {}) {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk", ...config });
+  const hass = buildHass({ stavAttrs });
+  const calls = [];
+  hass.callService = (d, s, data) => calls.push({ d, s, data: JSON.parse(JSON.stringify(data || {})) });
+  card.hass = hass;
+  document.body.appendChild(card);
+  return { card, calls };
+}
+
+test("zone card: only the current mode by default, no mode buttons", () => {
+  const { card } = offCard();
+  const seg = card.querySelector(".sh-seg");
+  assert.strictEqual(seg.querySelectorAll("button").length, 0);
+  assert.match(seg.querySelector(".sh-mode-cur").textContent, /Auto|Deň|Noc|Min/);
+});
+
+test("zone card: Turn off button calls zone_off for the zone", () => {
+  const { card, calls } = offCard();
+  const btn = card.querySelector(".sh-off");
+  assert.strictEqual(btn.hidden, false);
+  assert.match(btn.textContent, /Vypnúť/);
+  btn.click();
+  assert.deepStrictEqual(calls.at(-1), { d: "smart_heating", s: "zone_off", data: { zone_id: ZONE_ID } });
+});
+
+test("zone card: switched off - banner with countdown, +1 h and Turn on now, Off pill", () => {
+  const until = new Date(Date.now() + 58 * 60000 + 20000);
+  const hhmm = `${until.getHours()}:${String(until.getMinutes()).padStart(2, "0")}`;
+  const { card, calls } = offCard({ off_until: until.toISOString() });
+  const man = card.querySelector(".sh-man");
+  assert.strictEqual(man.hidden, false);
+  assert.match(man.textContent, /Kúrenie vypnuté/);
+  assert.match(man.textContent, new RegExp(`vráti o 58\\s+min \\(${hhmm}\\)`));
+  assert.match(card.querySelector(".sh-pill").textContent, /Vypnuté/);
+  assert.match(card.querySelector(".sh-mode-cur").textContent, /Vypnuté/);
+  assert.match(card.querySelector(".sh-off").textContent, /Zapnúť/);
+  man.querySelector("[data-off-add]").click();
+  assert.deepStrictEqual(calls.at(-1).data, { zone_id: ZONE_ID, minutes: 60, add: true });
+  man.querySelector("[data-off-resume]").click();
+  assert.deepStrictEqual(calls.at(-1), { d: "smart_heating", s: "zone_resume", data: { zone_id: ZONE_ID } });
+});
+
+// ---------------------------------------------------------------- 0.28: ucinnost, prepinac klimy
+
+test("overview: Warm-ups shows energy per 1 °C with AC and with floor", () => {
+  const { hass } = wuHass({ swOn: true });
+  hass.states["sensor.smart_heating_aaa11111_stav"].attributes.nabehy.ucinnost = { klima: 0.42, klima_n: 9, podlaha: 1.35, podlaha_n: 3 };
+  const card = renderOverview({}, hass);
+  card.querySelector(".sho-wubtn").click();
+  const text = card.querySelector(".sho-wu").textContent.replace(/\s+/g, " ");
+  assert.match(text, /Spotreba na 1 °C\s*klíma 0,4 kWh \(9×\) · s podlahou 1,4 kWh \(3×\)/);
+});
+
+test("zone card: AC smart floor switch appears when the zone has it", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID, language: "sk" });
+  const hass = buildHass();
+  hass.states[`switch.smart_heating_${ZONE_ID}_podlaha_ked_klima_nestiha`] = { state: "on", attributes: {} };
+  card.hass = hass;
+  document.body.appendChild(card);
+  card.querySelector(".sh-gear").click();
+  assert.match(card.querySelector(".sh-toggles").textContent, /Podlaha len keď klíma nestíha/);
 });

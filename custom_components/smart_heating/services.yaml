@@ -11,3 +11,25 @@ pause_solar:
       selector:
         boolean:
 resume_solar:
+zone_off:
+  fields:
+    zone_id:
+      required: true
+      selector:
+        text:
+    minutes:
+      selector:
+        number:
+          min: 5
+          max: 1440
+          step: 5
+          unit_of_measurement: min
+    add:
+      selector:
+        boolean:
+zone_resume:
+  fields:
+    zone_id:
+      required: true
+      selector:
+        text:

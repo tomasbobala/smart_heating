@@ -102,7 +102,9 @@
           "manual_minutes": "Manual takeover - automation resumes after (min)",
           "manual_on_off": "Manual takeover on switching a device on/off",
           "manual_on_temp": "Manual takeover on changing a device's temperature",
-          "notify_manual": "Notify on manual takeover"
+          "notify_manual": "Notify on manual takeover",
+          "zone_off_minutes": "Heating off button on the room card - for (min)",
+          "krb_hysterezia": "Fireplace - hysteresis (°C): zones return only below threshold minus this"
         },
         "description": "Smart Heating version {version}"
       },
@@ -239,6 +241,34 @@
     "resume_solar": {
       "name": "Resume solar heating",
       "description": "Cancels the solar heating pause."
+    },
+    "zone_off": {
+      "name": "Switch zone heating off for a while",
+      "description": "The zone's devices are kept off, then automation resumes.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone ID",
+          "description": "Internal zone ID (attribute of sensor…_stav)."
+        },
+        "minutes": {
+          "name": "Minutes",
+          "description": "Default from the integration settings."
+        },
+        "add": {
+          "name": "Extend",
+          "description": "Add the time to a running switch-off."
+        }
+      }
+    },
+    "zone_resume": {
+      "name": "Resume zone automation",
+      "description": "Ends the switch-off or manual takeover of the zone.",
+      "fields": {
+        "zone_id": {
+          "name": "Zone ID",
+          "description": "Internal zone ID."
+        }
+      }
     }
   }
 }

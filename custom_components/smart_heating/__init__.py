@@ -193,3 +193,23 @@ def _async_register_services(hass: HomeAssistant) -> None:
         vol.Optional("until_midnight"): cv.boolean,
     }))
     hass.services.async_register(DOMAIN, "resume_solar", _resume, schema=vol.Schema({}))
+
+    def _zone_coordinator(zone_id):
+        return next((c for c in _coordinators() if zone_id in c.zones), None)
+
+    async def _zone_off(call) -> None:
+        c = _zone_coordinator(call.data["zone_id"])
+        if c:
+            await c.async_zone_off(call.data["zone_id"], call.data.get("minutes"), bool(call.data.get("add", False)))
+
+    async def _zone_on(call) -> None:
+        c = _zone_coordinator(call.data["zone_id"])
+        if c:
+            await c.async_resume_zone(call.data["zone_id"])
+
+    hass.services.async_register(DOMAIN, "zone_off", _zone_off, schema=vol.Schema({
+        vol.Required("zone_id"): cv.string,
+        vol.Optional("minutes"): vol.All(vol.Coerce(float), vol.Range(min=1, max=1440)),
+        vol.Optional("add"): cv.boolean,
+    }))
+    hass.services.async_register(DOMAIN, "zone_resume", _zone_on, schema=vol.Schema({vol.Required("zone_id"): cv.string}))

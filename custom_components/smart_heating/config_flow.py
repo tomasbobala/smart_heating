@@ -21,6 +21,8 @@ from .const import (
     CONF_FIREPLACE_TEMP_ENTITY,
     CONF_FLOOR_TEMP_ENTITY,
     CONF_KRB_THRESHOLD,
+    CONF_KRB_HYSTEREZIA,
+    DEFAULT_KRB_HYSTEREZIA,
     CONF_LANGUAGE,
     CONF_MANUAL_PRESENCE_ENTITIES,
     CONF_NOTIFY_AC_BACKUP,
@@ -141,6 +143,11 @@ def _hub_schema_dict(current: dict) -> dict:
         )
     ] = selector.NumberSelector(
         selector.NumberSelectorConfig(min=15, max=60, step=0.5, mode="box", unit_of_measurement="°C")
+    )
+    schema_dict[
+        vol.Optional(CONF_KRB_HYSTEREZIA, default=current.get(CONF_KRB_HYSTEREZIA, DEFAULT_KRB_HYSTEREZIA))
+    ] = selector.NumberSelector(
+        selector.NumberSelectorConfig(min=0, max=10, step=0.5, mode="box", unit_of_measurement="°C")
     )
     schema_dict[
         vol.Optional(

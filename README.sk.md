@@ -75,6 +75,8 @@ má vlastné pravidlá, ale zdieľa spoločné globálne nastavenia.
   tejto izbe 30 minút (nastaviteľné) nič neposiela, potom sa vráti; tlačidlom
   "Obnoviť automatiku teraz" skôr. Karta zároveň ukazuje, čo je nastavené na
   každom zariadení.
+- **Klíma s podlahou:** podlaha sa zapne len keď podľa nameranej rýchlosti klíma cieľ nestihne; panel Nábehy ukazuje kWh na 1 °C klímou a s podlahou. **Hysterézia krbu** (predvolene 1 °C) zabráni preblikávaniu zón okolo hranice.
+- **Vypnutie izby na čas:** ⏻ Vypnúť na karte izby vypne jej kúrenie na 1 h (nastaviteľné), potom sa vráti automatika. Karta ukazuje len aktuálny režim (`mode_buttons: true` vráti tlačidlá Deň / Noc / Min).
 - V nastaveniach je **Návod** so všetkými funkciami (SK / EN).
 
 ## Funkcie

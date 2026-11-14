@@ -24,6 +24,8 @@ OPT_NUMBER_RANGES = "number_ranges"
 CONF_PV_SURPLUS_ENTITY = "pv_surplus_entity"
 CONF_BATTERY_SOC_ENTITY = "battery_soc_entity"
 CONF_KRB_THRESHOLD = "krb_threshold"
+CONF_KRB_HYSTEREZIA = "krb_hysterezia"   # krb vypne pri >= hranici, zony sa vratia az pod hranicou - hysterezia
+DEFAULT_KRB_HYSTEREZIA = 1.0
 CONF_NUDZOVA_TEPLOTA = "nudzova_teplota"
 CONF_HOLIDAY_ACTIVE = "holiday_active"
 CONF_OUTDOOR_HUMIDITY = "outdoor_humidity_sensor"   # vonkajsia vlhkost (%) - len sledovanie
@@ -114,11 +116,13 @@ CONF_PV_PAUSE_MINUTES = "pv_pause_minutes"       # predvolena dlzka pauzy (prepi
 CONF_MANUAL_MINUTES = "manual_minutes"           # ako dlho automatika neposiela prikazy po rucnej zmene
 CONF_MANUAL_ON_OFF = "manual_on_off"             # reagovat na zapnutie/vypnutie na zariadeni
 CONF_MANUAL_ON_TEMP = "manual_on_temp"           # reagovat na zmenu teploty na zariadeni
-CONF_NOTIFY_MANUAL = "notify_manual"             # notifikacia pri rucnom prevzati
+CONF_NOTIFY_MANUAL = "notify_manual"
+CONF_ZONE_OFF_MINUTES = "zone_off_minutes"       # tlacidlo Vypnut na karte zony: na kolko min             # notifikacia pri rucnom prevzati
 # key -> (min, max, step, unit, default)
 PAUSE_MANUAL_NUMBERS = {
     CONF_PV_PAUSE_MINUTES: (15, 720, 15, "min", 120),
     CONF_MANUAL_MINUTES: (5, 240, 5, "min", 30),
+    CONF_ZONE_OFF_MINUTES: (15, 720, 15, "min", 60),
 }
 
 PV_ENGINE_NUMBERS = {
@@ -272,6 +276,12 @@ AC_SWITCH_DEFS = {
     "pouzit_pevny_ac_setpoint": (
         "Pouzit pevny AC setpoint aj bez externeho teplomera", "mdi:thermostat-box", False,
     ),
+    # Podlaha nastupi az ked klima podla nameranej rychlosti nahrievania nestiha
+    "podlaha_ked_klima_nestiha": (
+        "Podlaha len ked klima nestiha (podla rychlosti nahrievania)", "mdi:speedometer", True,
+    ),
 }
+AC_RATE_WINDOW_MIN = 20      # z akeho useku sa pocita rychlost nahrievania klimou
+AC_RATE_MIN_SPAN_MIN = 10    # najkratsi usek, z ktoreho sa uz da rychlost urcit
 
 

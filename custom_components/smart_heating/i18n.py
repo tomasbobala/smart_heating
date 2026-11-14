@@ -122,6 +122,11 @@ TEXTS: dict[str, dict[str, str]] = {
         "sk": "{source} má byť vypnutá, ale ťahá {power} W viac ako 10 min",
     },
     "source_manual": {"en": "Manual", "sk": "Ručne"},
+    "source_ac_eta": {"en": "AC (reaches target in ~{m} min)", "sk": "AC (dohreje o ~{m} min)"},
+    "reason_zone_off": {
+        "en": "Heating off until {time}, then automation resumes",
+        "sk": "Kúrenie vypnuté do {time}, potom sa vráti automatika",
+    },
     "reason_manual": {
         "en": "Changed manually on the device - automation resumes at {time}",
         "sk": "Zmenené ručne na zariadení – automatika sa vráti o {time}",

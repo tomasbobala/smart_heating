@@ -45,6 +45,11 @@ from .const import (
     CONF_MANUAL_ON_OFF,
     CONF_MANUAL_ON_TEMP,
     CONF_NOTIFY_MANUAL,
+    CONF_ZONE_OFF_MINUTES,
+    CONF_KRB_HYSTEREZIA,
+    DEFAULT_KRB_HYSTEREZIA,
+    AC_RATE_WINDOW_MIN,
+    AC_RATE_MIN_SPAN_MIN,
     PAUSE_MANUAL_NUMBERS,
     CONF_NOTIFY_EMERGENCY,
     CONF_NOTIFY_ENTITY,
@@ -419,7 +424,70 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         for entity_id in self._zone_devices(self.zones.get(zone_id, {})):
             self._last_cmd.pop(entity_id, None)
 
+    def _ac_warm_rate(self, zone_id: str, current, track: bool):
+        """Rychlost nahrievania (°C/h) za poslednych AC_RATE_WINDOW_MIN minut, kym hreje
+        len klima. None, ked je usek prilis kratky alebo chyba teplota."""
+        rt = self._rt(zone_id)
+        hist = rt.setdefault("ac_hist", [])
+        now = dt_util.now()
+        if not track or current is None:
+            hist.clear()
+            return None
+        hist.append((now, float(current)))
+        while hist and (now - hist[0][0]).total_seconds() > AC_RATE_WINDOW_MIN * 60:
+            hist.pop(0)
+        span = (now - hist[0][0]).total_seconds() / 3600
+        if span * 60 < AC_RATE_MIN_SPAN_MIN:
+            return None
+        return (hist[-1][1] - hist[0][1]) / span
+
+    def _krb_effective_threshold(self, fireplace_temp, threshold):
+        """Hysterezia krbu: zapne sa pri >= hranici, vypne az pod hranicou - hysterezia.
+        Pocas aktivneho krbu vrati znizenu hranicu, takze zony ostanu vypnute aj ked
+        teplota pri krbe mierne klesne pod hranicu."""
+        if threshold is None:
+            return threshold
+        try:
+            hyst = float(self.entry.options.get(CONF_KRB_HYSTEREZIA, DEFAULT_KRB_HYSTEREZIA) or 0)
+        except (TypeError, ValueError):
+            hyst = DEFAULT_KRB_HYSTEREZIA
+        active = bool(self._global_rt.get("krb_active"))
+        if fireplace_temp is None:
+            active = False
+        elif fireplace_temp >= threshold:
+            active = True
+        elif fireplace_temp < threshold - hyst:
+            active = False
+        self._global_rt["krb_active"] = active
+        return threshold - hyst if active and hyst > 0 else threshold
+
     async def async_resume_zone(self, zone_id: str) -> None:
+        """Automatika hned znova riadi zonu: ukonci rucne prevzatie aj docasne vypnutie."""
+        self._clear_manual(zone_id)
+        self._rt(zone_id).pop("off_until", None)
+        await self.async_recompute_and_apply()
+
+    # ------------------------------------------------- docasne vypnutie zony
+
+    def _zone_off_until(self, zone_id: str):
+        until = self._rt(zone_id).get("off_until")
+        return until if until is not None and dt_util.now() < until else None
+
+    def _zone_off_active(self, zone_id: str) -> bool:
+        return self._zone_off_until(zone_id) is not None
+
+    async def async_zone_off(self, zone_id: str, minutes=None, add: bool = False) -> None:
+        """Vypne kurenie zony na cas (predvolene zone_off_minutes); add=True predlzi
+        prebiehajuce vypnutie. Boost sa zrusi, rucne prevzatie tiez (zariadenia
+        teraz riadime my - drzime ich vypnute)."""
+        if zone_id not in self.zones:
+            return
+        if minutes is None:
+            minutes = self.entry.options.get(CONF_ZONE_OFF_MINUTES, PAUSE_MANUAL_NUMBERS[CONF_ZONE_OFF_MINUTES][4])
+        rt = self._rt(zone_id)
+        base = self._zone_off_until(zone_id) if add else None
+        rt["off_until"] = (base or dt_util.now()) + timedelta(minutes=float(minutes))
+        rt["boost_until"] = None
         self._clear_manual(zone_id)
         await self.async_recompute_and_apply()
 
@@ -479,6 +547,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         emergency_temp = opt.get(CONF_NUDZOVA_TEPLOTA, DEFAULT_EMERGENCY_TEMP)
         krb_threshold = opt.get(CONF_KRB_THRESHOLD, DEFAULT_FIREPLACE_THRESHOLD)
         fireplace_temp = self._state_float(opt.get(CONF_FIREPLACE_TEMP_ENTITY))
+        krb_threshold = self._krb_effective_threshold(fireplace_temp, krb_threshold)
         pv_surplus = self._state_bool(opt.get(CONF_PV_SURPLUS_ENTITY), False)
         battery_soc = self._state_float(opt.get(CONF_BATTERY_SOC_ENTITY))
 
@@ -507,6 +576,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             for zone_id, zone in self.zones.items()
         }
         for zone_id, zdata in zones_data.items():
+            off_until = self._zone_off_until(zone_id)
+            zdata["off_until"] = off_until.isoformat() if off_until else None
+            if off_until and not zdata.get("emergency_active"):
+                zdata["reason"] = self._t("reason_zone_off", time=dt_util.as_local(off_until).strftime("%H:%M"))
             zdata["pv_priority"] = self._pv_priority(zone_id)
             # zona by chcela FVE, ale caka, kym sa nahreju vyssie priority
             zdata["pv_waiting"] = bool(pv_surplus) and pv_allowed.get(zone_id, True) is False
@@ -668,6 +741,13 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         prev_raw_mode = rt.get("prev_raw_mode")
         release_control = mode == MODE_VYPNUTE and prev_raw_mode == MODE_VYPNUTE
         rt["prev_raw_mode"] = mode
+
+        # --- docasne vypnutie zony (tlacidlo na karte): ako Vypnute, ale integracia
+        # zariadenia drzi vypnute a po case sa vrati povodny rezim (napr. Auto).
+        # Nudzova ochrana plati dalej (vyhodnocuje sa az po rezime).
+        if self._zone_off_active(zone_id):
+            mode = MODE_VYPNUTE
+            release_control = False
 
         is_floor_ac = zone.get(CONF_ZONE_TYPE) == ZONE_TYPE_FLOOR_AC and zone.get(CONF_AC_ENTITY)
 
@@ -1386,13 +1466,27 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             deficit = False
         floor_engaged = False
 
+        ac_rate = self._ac_warm_rate(zone_id, current_temp, rt.get("ac_running", True) and not rt.get("floor_backup"))
+        zdata["ac_rate"] = round(ac_rate, 2) if ac_rate is not None else None
+        zdata["ac_eta_min"] = None
         if deficit:
             if rt["ac_deficit_since"] is None:
                 rt["ac_deficit_since"] = dt_util.now()
             elapsed = (dt_util.now() - rt["ac_deficit_since"]).total_seconds() / 60
             floor_engaged = elapsed >= minutes_limit
+            smart = self._state_bool(switch_entity_id(zone_id, "podlaha_ked_klima_nestiha"), True)
+            if floor_engaged and smart and not rt.get("floor_backup") and rt.get("ac_running", True):
+                # klima realne hreje dost rychlo - dohreje sama, podlahu (drahsiu) netreba
+                if ac_rate is not None and ac_rate > 0.05:
+                    eta = (target - current_temp) / ac_rate * 60
+                    zdata["ac_eta_min"] = round(eta)
+                    if eta <= minutes_limit:
+                        floor_engaged = False
+            if floor_engaged:
+                rt["floor_backup"] = True       # raz zapojena podlaha drzi do konca deficitu
         else:
             rt["ac_deficit_since"] = None
+            rt["floor_backup"] = False
             floor_engaged = False
 
         guard = bool(zdata.get("floor_guard"))
@@ -1409,6 +1503,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             else self._t("source_floor_min") if guard
             else (self._t("source_ac") if rt.get("ac_running", True) else self._t("source_none_waiting"))
         )
+        if not floor_on and deficit and zdata.get("ac_eta_min") is not None and rt.get("ac_running", True):
+            zdata["heat_source"] = self._t("source_ac_eta", m=zdata["ac_eta_min"])
         running = [e for e, on in ((ac_entity, rt.get("ac_running", True)), (floor_entity, floor_on)) if on]
         zdata["src_cmd"] = {"ac": bool(rt.get("ac_running", True)), "floor": bool(floor_on)}
         zdata["actual_action"] = self._resolve_action(running, bool(running), "heating") if running else "idle"
@@ -1779,6 +1875,11 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     async def _fast_tick(self, _now=None) -> None:
         """Kazdych 30 s: kaskada FVE, energia z FVE a prepocet len pri zmene stavu meracov."""
+        expired = [z for z in self.zones if self._rt(z).get("off_until") and not self._zone_off_active(z)]
+        for zone_id in expired:
+            self._rt(zone_id).pop("off_until", None)   # vypnutie skoncilo - spat na automatiku
+        if expired:
+            await self.async_recompute_and_apply()
         if self._pv_pause_until is not None and not self._pv_paused():
             self._pv_pause_until = None           # pauza vyprsala
             await self.async_recompute_and_apply()
@@ -2081,7 +2182,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             ):
                 dyn = zdata.get("dyn_preheat") or {}
                 rt["warmup"] = {
-                    "start": now, "from": cur, "target": tgt,
+                    "start": now, "from": cur, "target": tgt, "kwh0": self._source_energy(zone_id),
                     "outdoor": zdata.get("outdoor_temperature"), "source": zdata.get("heat_source"),
                     "kind": zdata.get("warmup_ctx") or "ine",
                     "dyn": bool(dyn.get("day_early") or dyn.get("preheat_early")),
@@ -2102,11 +2203,62 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     "outdoor": run["outdoor"], "source": run["source"],
                     "kind": run.get("kind", "ine"), "dyn": run.get("dyn", False),
                 }
+                kwh = self._energy_delta(run.get("kwh0") or {}, self._source_energy(zone_id))
+                if kwh:
+                    record["kwh"] = kwh
                 runs = self._warmup_data.setdefault(zone_id, [])
                 runs.append(record)
                 del runs[:-WARMUP_KEEP]
                 self._warmup_store.async_delay_save(lambda: self._warmup_data, 60)
             rt["warmup"] = None
+
+    def _source_energy(self, zone_id: str) -> dict:
+        """Aktualne hodnoty meracov energie po zdrojoch (kWh) - na spotrebu pocas nabehu."""
+        out = {}
+        for src in self._zone_sources(self.zones.get(zone_id, {})):
+            total = 0.0
+            ok = False
+            for entity_id in src["energy"]:
+                state = self.hass.states.get(entity_id)
+                try:
+                    v = float(state.state)
+                except (AttributeError, TypeError, ValueError):
+                    continue
+                unit = str(state.attributes.get("unit_of_measurement") or "kWh").lower()
+                total += v / 1000 if unit == "wh" else v
+                ok = True
+            if ok:
+                out[src["key"]] = total
+        return out
+
+    @staticmethod
+    def _energy_delta(start: dict, end: dict) -> dict:
+        out = {}
+        for key, v0 in start.items():
+            v1 = end.get(key)
+            if v1 is not None and 0 <= v1 - v0 < 50:     # reset meraca / nezmysel sa neberie
+                out[key] = round(v1 - v0, 3)
+        return out
+
+    def _warmup_efficiency(self, zone_id: str) -> dict:
+        """Median kWh na 1 °C pre nabehy len klimou a nabehy s podlahou (zo zaznamov so spotrebou)."""
+        ac, fl = [], []
+        for r in self._warmup_data.get(zone_id, []):
+            kwh = r.get("kwh") or {}
+            delta = (r.get("to") or 0) - (r.get("from") or 0)
+            if not kwh or delta < WARMUP_MIN_GAP:
+                continue
+            floor_kwh = kwh.get("floor", 0.0)
+            total = sum(kwh.values())
+            if "ac" in kwh and floor_kwh < 0.05:
+                ac.append(total / delta)
+            elif floor_kwh >= 0.05:
+                fl.append(total / delta)
+        med = self._median
+        return {
+            "klima": round(med(ac), 2) if ac else None, "klima_n": len(ac),
+            "podlaha": round(med(fl), 2) if fl else None, "podlaha_n": len(fl),
+        }
 
     @staticmethod
     def _median(values: list):
@@ -2181,6 +2333,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             "potrebne": WARMUP_READY, "pripravene": model["ready"],
             "min_na_c": model["rate"], "zaklad": model["basis"], "zaklad_n": model["n"],
             "pasma": bands, "posledne": last,
+            "ucinnost": self._warmup_efficiency(zone_id),
         }
 
     def _dynamic_preheat(

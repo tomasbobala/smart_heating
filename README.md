@@ -75,6 +75,8 @@ zone has its own rules but shares common global settings.
   integration leaves that room alone for 30 minutes (configurable), then resumes;
   "Resume automation now" on the card ends it earlier. The card also shows what
   is set on each device.
+- **AC with floor:** the floor joins only when the measured AC warm-up rate wouldn't reach the target in time; the Warm-ups panel shows kWh per 1 °C with the AC and with the floor. **Fireplace hysteresis** (default 1 °C) stops zones flapping around the threshold.
+- **Turn a room off for a while:** ⏻ Turn off on the room card switches its heating off for 1 h (configurable), then automation resumes. The card shows only the current mode (`mode_buttons: true` brings back the Day / Night / Min buttons).
 - The settings panel has a **Guide** with all features explained (SK / EN).
 
 ## Features

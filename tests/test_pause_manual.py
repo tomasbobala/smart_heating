@@ -225,3 +225,66 @@ async def test_entities_and_services(hass):
     await hass.services.async_call(DOMAIN, "resume_solar", {}, blocking=True)
     await hass.async_block_till_done()
     assert hass.states.get("switch.smart_heating_fve_pauza").state == "off"
+
+
+# ------------------------------------------------------------------ docasne vypnutie zony
+
+async def test_zone_off_keeps_devices_off_then_auto_returns(hass):
+    c = make(hass, zone_off_minutes=60)
+    hass.states.async_set("select.smart_heating_z1_rezim", "Auto")
+    floor(hass)
+    await apply(c)
+    with patch.object(c, "async_recompute_and_apply", new=AsyncMock()):
+        await c.async_zone_off(Z)
+    left = (c._rt(Z)["off_until"] - dt_util.now()).total_seconds() / 60
+    assert 59 < left <= 60
+    z, sent, _ = await apply(c)
+    assert ("climate", "set_hvac_mode") in sent                  # termostat sa vypne
+    assert not z["heating_allowed"] and z["off_until"] and z["reason"].startswith("Kúrenie vypnuté do")
+    assert not z["release_control"]                              # integracia ho drzi vypnuty
+    floor(hass, mode="off")
+    z, sent, _ = await apply(c)
+    assert sent == [] and z["manual_until"] is None              # nase vypnutie nie je rucny zasah
+    c._rt(Z)["off_until"] = dt_util.now() - timedelta(seconds=1)
+    with patch.object(c, "async_recompute_and_apply", new=AsyncMock()) as rec:
+        await c._fast_tick()
+    assert "off_until" not in c._rt(Z) and rec.await_count >= 1
+    z, sent, _ = await apply(c)
+    assert z["off_until"] is None and ("climate", "set_hvac_mode") in sent   # znova Auto
+
+
+async def test_zone_off_extend_and_resume(hass):
+    c = make(hass)
+    with patch.object(c, "async_recompute_and_apply", new=AsyncMock()):
+        await c.async_zone_off(Z, 30)
+        await c.async_zone_off(Z, 60, add=True)
+    left = (c._rt(Z)["off_until"] - dt_util.now()).total_seconds() / 60
+    assert 89 < left <= 90
+    with patch.object(c, "async_recompute_and_apply", new=AsyncMock()):
+        await c.async_resume_zone(Z)
+    assert "off_until" not in c._rt(Z)
+
+
+async def test_zone_off_still_has_frost_protection(hass):
+    c = make(hass, nudzova_teplota=8)
+    floor(hass)
+    hass.states.async_set("climate.floor", "off", {"temperature": 21, "current_temperature": 6, "min_temp": 5, "max_temp": 35})
+    with patch.object(c, "async_recompute_and_apply", new=AsyncMock()):
+        await c.async_zone_off(Z)
+    z, _, _ = await apply(c)
+    assert z["heating_allowed"] and z["emergency_active"]
+
+
+async def test_zone_off_service(hass):
+    hass.states.async_set("climate.floor", "heat", {"current_temperature": 21, "temperature": 21})
+    entry = MockConfigEntry(domain=DOMAIN, version=2, data={}, options={"zones": {Z: {
+        "name": "Spalna", "zone_type": "floor", "climate_entity": "climate.floor"}}})
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await hass.services.async_call(DOMAIN, "zone_off", {"zone_id": Z, "minutes": 30}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.smart_heating_z1_stav").attributes["off_until"]
+    await hass.services.async_call(DOMAIN, "zone_resume", {"zone_id": Z}, blocking=True)
+    await hass.async_block_till_done()
+    assert hass.states.get("sensor.smart_heating_z1_stav").attributes["off_until"] is None

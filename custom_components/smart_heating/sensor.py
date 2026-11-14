@@ -136,6 +136,9 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
                 if ent
             ],
             "manual_until": z.get("manual_until"),
+            "off_until": z.get("off_until"),
+            "ac_rychlost": z.get("ac_rate"),          # °C/h, kym hreje len klima
+            "ac_dohreje_za_min": z.get("ac_eta_min"),
             "manual_device": z.get("manual_device"),
             # spotreba zony: karty z nich citaju prikon a statistiky energie
             # vsetky merace zony (zdroje + ostatne, bez duplicit) a rozpad po zdrojoch

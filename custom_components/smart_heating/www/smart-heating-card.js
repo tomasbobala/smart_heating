@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.26.0";
+const CARD_VERSION = "0.27.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -102,6 +102,11 @@ const I18N = {
   pv_acc_hint: { en: "raises the target step by step while there is surplus", sk: "pri prebytku postupne zvyšuje cieľ" },
   temp_pv_max: { en: "Max. temperature from surplus", sk: "Max. teplota z prebytku" },
   badge_pv_acc: { en: "Solar storage {t}° / max {m}°", sk: "FVE akumulácia {t}° / max {m}°" },
+  toggle_ac_smart: { en: "Floor only when the AC can't keep up", sk: "Podlaha len keď klíma nestíha" },
+  of_krb_hysterezia: { en: "Fireplace hysteresis", sk: "Hysterézia krbu" },
+  wu_eff: { en: "Energy per 1 °C", sk: "Spotreba na 1 °C" },
+  wu_eff_ac: { en: "AC {v} kWh ({n}×)", sk: "klíma {v} kWh ({n}×)" },
+  wu_eff_floor: { en: "with floor {v} kWh ({n}×)", sk: "s podlahou {v} kWh ({n}×)" },
   toggle_fixed_ac_setpoint: { en: "Use fixed AC setpoint even without external thermometer", sk: "Použiť pevný AC setpoint aj bez externého teplomera" },
 
   boost_running: { en: "Boost running", sk: "Boost beží" },
@@ -134,6 +139,14 @@ const I18N = {
   editor_zone_placeholder: { en: "-- select a zone --", sk: "-- vyber zónu --" },
   editor_name: { en: "Custom name (optional)", sk: "Vlastný názov (voliteľné)" },
   editor_language: { en: "Language", sk: "Jazyk" },
+  editor_mode_buttons: { en: "Mode buttons (Day / Night / Min)", sk: "Tlačidlá režimov (Deň / Noc / Min)" },
+  off_btn: { en: "Turn off", sk: "Vypnúť" },
+  off_btn_title: { en: "Turn heating off for a while, then automation resumes", sk: "Vypnúť kúrenie na čas, potom sa vráti automatika" },
+  on_btn: { en: "Turn on", sk: "Zapnúť" },
+  off_title: { en: "Heating off", sk: "Kúrenie vypnuté" },
+  off_text: { en: "Automation resumes in {m} ({t}).", sk: "Automatika sa vráti o {m} ({t})." },
+  off_add: { en: "+1 h", sk: "+1 h" },
+  off_resume: { en: "Turn on now", sk: "Zapnúť teraz" },
 
   ov_outside: { en: "outside", sk: "vonku" },
   ov_in3h: { en: "in 3 h", sk: "za 3 h" },
@@ -465,11 +478,18 @@ const HELP = {
       "Keď na termostate, klíme alebo relé niečo zmeníš rukou (vypneš alebo zmeníš teplotu), integrácia to spozná a na nastavený čas zóne nič neposiela. Potom sa automatika vráti sama, alebo skôr tlačidlom Obnoviť automatiku na karte izby.",
       "Zmeny, ktoré pošle sama integrácia, sa za ručné nepovažujú. Ignorujú sa aj zmeny teploty, keď je termostat v programovom režime.",
       "Na karte izby vidíš, čo je práve nastavené na zariadení: režim, nastavenú a nameranú teplotu. V Prepínačoch izby sa prevzatie dá pre izbu vypnúť." ] },
+    { k: "zone_off", t: "Vypnutie kúrenia izby", p: [
+      "Tlačidlo ⏻ Vypnúť na karte izby vypne jej kúrenie na nastavený čas (predvolene 1 h, mení sa v nastaveniach integrácie). Integrácia drží termostat aj klímu vypnuté a po uplynutí času sa izba sama vráti do svojho režimu, napr. Auto.",
+      "Počas vypnutia karta ukazuje odpočet, tlačidlo +1 h a Zapnúť teraz. Protimrazová ochrana platí ďalej. Pre automatizácie: služby smart_heating.zone_off (zone_id, minutes) a smart_heating.zone_resume.",
+      "Karta ukazuje len aktuálny režim; režim sa mení v nastaveniach izby (koliesko). Tlačidlá režimov Deň, Noc, Min sa dajú zapnúť v nastaveniach karty." ] },
     { k: "pv", t: "Kaskáda FVE a priority", p: [
       "Izby so zapnutým Využi FVE prebytok kúria z prebytku podľa priority (P1 prvá). Ďalšia priorita sa pridá, keď prebytok vydrží nad nastavenou hranicou; pri vybíjaní batérie, odbere zo siete alebo slabej výrobe sa priority odoberajú od najnižšej. Pod nastaveným SOC batérie sa vypne všetko.",
       "Maximálny výkon kúrenia z FVE drží rezervu pre dom." ] },
     { k: "acc", t: "Akumulácia tepla z prebytku", p: [
       "Keď je prebytok a izba je už nahriata, cieľ sa postupne zvyšuje po krokoch až po maximálnu teplotu z FVE danej izby. Teplo sa tak uloží do podlahy a stien. Po skončení prebytku alebo počas pauzy sa cieľ vráti na bežnú teplotu." ] },
+    { k: "krb_ac", t: "Krb a klíma s podlahou", p: [
+      "Krb vypne zóny, keď teplota pri krbe dosiahne hranicu. Hysterézia krbu (nastavenia integrácie, predvolene 1 °C) zabráni preblikávaniu: zóny sa vrátia až keď teplota klesne pod hranicu mínus hysterézia.",
+      "V izbe s klímou a podlahou kúri najprv klíma. Prepínač Podlaha len keď klíma nestíha meria, ako rýchlo klíma izbu nahrieva; podlaha sa zapne až keď by klíma cieľ nedosiahla do nastaveného času. Panel Nábehy ukazuje spotrebu na 1 °C klímou a s podlahou." ] },
     { k: "floor", t: "Podlaha – max. a min. teplota", p: [
       "Max. teplota podlahy chráni krytinu: pri nej sa podlaha vypne a znova zapne až pod hranicou zníženou o hysterézu. Odporúčanie: drevo a vinyl 27 °C, dlažba 29 °C, kúpeľňa 30–32 °C.",
       "Min. teplota podlahy (prepínač Udržiavať min. teplotu podlahy) drží podlahu teplú aj pri teplom vzduchu." ] },
@@ -487,11 +507,18 @@ const HELP = {
       "When you change a thermostat, AC or relay by hand (switch it off or change the temperature), the integration notices and leaves the room alone for the set time. Then automation resumes on its own, or earlier with Resume automation on the room card.",
       "Changes sent by the integration itself don't count, nor do temperature changes while the thermostat runs its own program.",
       "The room card shows what is set on the device right now: mode, set and measured temperature. Takeover can be switched off per room in the room's switches." ] },
+    { k: "zone_off", t: "Switching a room's heating off", p: [
+      "The ⏻ Turn off button on the room card switches its heating off for the set time (1 h by default, changed in the integration settings). The integration keeps the thermostat and AC off and afterwards the room returns to its mode, e.g. Auto.",
+      "While off, the card shows a countdown, +1 h and Turn on now. Frost protection still applies. For automations: smart_heating.zone_off (zone_id, minutes) and smart_heating.zone_resume.",
+      "The card shows only the current mode; change it in the room settings (gear). Day, Night and Min buttons can be enabled in the card settings." ] },
     { k: "pv", t: "Solar cascade and priorities", p: [
       "Rooms with Use solar surplus heat from the surplus by priority (P1 first). The next priority joins when the surplus stays above the set threshold; on battery discharge, grid import or low production priorities are removed from the lowest. Below the set battery SOC everything stops.",
       "The maximum solar heating power keeps a reserve for the house." ] },
     { k: "acc", t: "Heat accumulation from the surplus", p: [
       "With a surplus and a warm room, the target rises step by step up to the room's maximum solar temperature, storing heat in the floor and walls. When the surplus ends or during a pause, the target returns to normal." ] },
+    { k: "krb_ac", t: "Fireplace and AC with floor", p: [
+      "The fireplace switches zones off when the temperature near it reaches the threshold. The fireplace hysteresis (integration settings, 1 °C by default) prevents flapping: zones return only once it drops below the threshold minus the hysteresis.",
+      "In a room with AC and floor the AC heats first. The switch Floor only when the AC can't keep up measures how fast the AC warms the room; the floor joins only if the AC wouldn't reach the target within the set time. The Warm-ups panel shows energy per 1 °C with AC and with the floor." ] },
     { k: "floor", t: "Floor – max and min temperature", p: [
       "The max floor temperature protects the covering: the floor switches off there and back on only below it minus the hysteresis. Typical: wood and vinyl 27 °C, tiles 29 °C, bathroom 30–32 °C.",
       "The min floor temperature (switch Keep minimum floor temperature) keeps the floor warm even when the air is warm." ] },
@@ -502,6 +529,7 @@ const HELP = {
   ],
 };
 
+const POWER_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.6a8 8 0 1 0 11.2 0"/></svg>';
 const HAND_SVG = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 13V5a2 2 0 1 1 4 0v6"/><path d="M12 11V4a2 2 0 1 1 4 0v8"/><path d="M16 12V7a2 2 0 1 1 4 0v7a7 7 0 0 1-12.9 3.8L4.4 14a2 2 0 0 1 3.2-2.3L8 12"/></svg>';
 
 const ENERGY_REFRESH_MS = 5 * 60 * 1000;
@@ -952,6 +980,7 @@ class SmartHeatingCard extends HTMLElement {
       eid(z, "switch", "reaguj_na_krb"),
       eid(z, "switch", "vyuzi_fve_prebytok"),
       eid(z, "switch", "pouzit_pevny_ac_setpoint"),
+      eid(z, "switch", "podlaha_ked_klima_nestiha"),
       eid(z, "switch", "udrzat_min_podlahy"),
       eid(z, "select", "fve_priorita"),
       eid(z, "switch", "fve_akumulacia"),
@@ -1035,6 +1064,7 @@ class SmartHeatingCard extends HTMLElement {
 
           <div class="sh-ft">
             <div class="sh-seg" role="group" aria-label="${this._t("section_mode")}"></div>
+            <button class="sh-off" type="button" title="${this._t("off_btn_title")}"></button>
             <button class="sh-gear" type="button" aria-expanded="false" aria-label="${this._t("settings")}" title="${this._t("settings")}">${ICONS.gear}</button>
           </div>
           <div class="sh-prob"></div>
@@ -1151,6 +1181,21 @@ class SmartHeatingCard extends HTMLElement {
       .sh-man-btn { min-height: 40px; border-radius: 10px; border: 1px solid var(--primary-color, #7c6cf0); background: rgba(124,108,240,0.18);
         color: var(--sh-txt, var(--primary-text-color)); font: inherit; font-weight: 600; cursor: pointer; }
       .sh-pill.manual { background: rgba(232,168,56,0.16); color: var(--sh-warn, #e8a838); }
+      .sh-seg.cur { background: none; padding: 0; }
+      .sh-mode-cur { font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 8px; background: var(--sh-mode); color: #fff; }
+      .sh-mode-cur.special { background: rgba(127,127,127,0.45); }
+      .sh-off { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+        margin-left: auto; margin-right: 8px; border-radius: 10px; font-size: 12.5px; font-weight: 600; cursor: pointer;
+        color: var(--sh-txt, var(--primary-text-color)); background: var(--sh-fill); }
+      .sh-off:hover { filter: brightness(1.15); }
+      .sh-off:focus-visible { outline: 2px solid var(--primary-color); }
+      .sh-off[hidden] { display: none; }
+      .sh-off:not([hidden]) + .sh-gear { margin-left: 0; }
+      .sh-off.on { background: rgba(76,175,125,0.18); color: var(--sh-ok, #4caf7d); }
+      .sh-man.off { background: rgba(127,127,127,0.12); box-shadow: inset 0 0 0 1px rgba(127,127,127,0.35); }
+      .sh-man.off .sh-man-h svg { color: var(--sh-sub, var(--secondary-text-color)); }
+      .sh-man-bs { display: grid; grid-template-columns: 1fr 2fr; gap: 6px; }
+      .sh-man-btn.sec { border-color: var(--divider-color, #444); background: none; }
       .sh-pill.manual svg { width: 14px; height: 14px; }
       .sh-cons-i { display: inline-flex; color: var(--sh-warn, #e8a838); }
       .sh-cons-i svg { width: 15px; height: 15px; display: block; }
@@ -1396,6 +1441,22 @@ class SmartHeatingCard extends HTMLElement {
     box.innerHTML = lines.join("");
     box.hidden = !lines.length;
 
+    const offUntil = this._offUntil();
+    if (offUntil) {
+      const d = new Date(offUntil);
+      const t = `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+      const leftMin = Math.max(1, Math.round((offUntil - Date.now()) / 60000));
+      man.hidden = false;
+      man.classList.add("off");
+      man.innerHTML = `<div class="sh-man-h">${POWER_SVG}<b>${esc(this._t("off_title"))}</b></div>
+        <div class="sh-man-t">${esc(this._t("off_text", { m: fmtDuration(leftMin, this._lang).replace(/ /g, "\u00a0"), t }))}</div>
+        <div class="sh-man-bs"><button type="button" class="sh-man-btn sec" data-off-add="1">${esc(this._t("off_add"))}</button>
+        <button type="button" class="sh-man-btn" data-off-resume="1">${esc(this._t("off_resume"))}</button></div>`;
+      man.querySelector("[data-off-add]").onclick = () => this._hass.callService("smart_heating", "zone_off", { zone_id: this._zoneId, minutes: 60, add: true });
+      man.querySelector("[data-off-resume]").onclick = () => this._hass.callService("smart_heating", "zone_resume", { zone_id: this._zoneId });
+      return;
+    }
+    man.classList.remove("off");
     const until = a.manual_until ? Date.parse(a.manual_until) : NaN;
     if (!isNaN(until) && until > Date.now()) {
       const d = new Date(until);
@@ -1424,6 +1485,7 @@ class SmartHeatingCard extends HTMLElement {
     if (action === "heating") { cls = "heat"; key = "status_heating"; icon = ICONS.flame; }
     if (action === "cooling") { cls = "cool"; key = "status_cooling"; icon = ICONS.snow; }
     if (zAttrs.manual_until && Date.parse(zAttrs.manual_until) > Date.now()) { cls = "manual"; key = "status_manual"; icon = HAND_SVG; }
+    if (zAttrs.off_until && Date.parse(zAttrs.off_until) > Date.now() && action !== "heating") { cls = "off"; key = "status_off"; icon = ICONS.power; }
     const el = this.querySelector(".sh-pill");
     el.className = `sh-pill ${cls}`;
     el.innerHTML = `${icon}<span>${this._t(key)}</span>`;
@@ -1508,8 +1570,38 @@ class SmartHeatingCard extends HTMLElement {
     this._updateContent();
   }
 
+  _offUntil() {
+    const st = this._hass && this._hass.states[eid(this._zoneId, "sensor", "stav")];
+    const v = st && st.attributes ? st.attributes.off_until : null;
+    const t = v ? Date.parse(v) : NaN;
+    return !isNaN(t) && t > Date.now() ? t : null;
+  }
+
+  _renderOffBtn(mode) {
+    const btn = this.querySelector(".sh-off");
+    if (!btn) return;
+    const off = this._offUntil();
+    // trvalo Vypnute (rezim v nastaveniach) - tlacidlo nema zmysel
+    btn.hidden = !off && mode === "Vypnute";
+    const html = `${POWER_SVG}<span>${esc(this._t(off ? "on_btn" : "off_btn"))}</span>`;
+    if (btn._shHtml !== html) { btn.innerHTML = html; btn._shHtml = html; }
+    btn.classList.toggle("on", !!off);
+    btn.setAttribute("aria-pressed", off ? "true" : "false");
+    btn.onclick = () => this._hass.callService("smart_heating", off ? "zone_resume" : "zone_off", { zone_id: this._zoneId });
+  }
+
   _renderModeSeg(mode) {
     const wrap = this.querySelector(".sh-seg");
+    this._renderOffBtn(mode);
+    if (!(this._config && this._config.mode_buttons === true)) {
+      // len aktualny rezim (meni sa v nastaveniach karty)
+      const shown = this._offUntil() ? "Vypnute" : mode;
+      const html = `<span class="sh-mode-cur a${QUICK_MODES.includes(shown) ? "" : " special"}">${esc(this._modeLabel(shown))}</span>`;
+      if (wrap._shHtml !== html) { wrap.innerHTML = html; wrap._shHtml = html; }
+      wrap.classList.add("cur");
+      return;
+    }
+    wrap.classList.remove("cur");
     const list = QUICK_MODES.includes(mode) ? QUICK_MODES : [...QUICK_MODES, mode];
     const html = list.map((m) => {
       const active = m === mode;
@@ -1864,7 +1956,9 @@ class SmartHeatingCard extends HTMLElement {
       this._pvAccRows() +
       (this._hass.states[eid(this._zoneId, "switch", "udrzat_min_podlahy")]
         ? this._switchRow(this._t("toggle_floor_min"), "udrzat_min_podlahy") : "") +
-      (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "");
+      (hasAc ? this._switchRow(this._t("toggle_fixed_ac_setpoint"), "pouzit_pevny_ac_setpoint") : "") +
+      (this._hass.states[eid(this._zoneId, "switch", "podlaha_ked_klima_nestiha")]
+        ? this._switchRow(this._t("toggle_ac_smart"), "podlaha_ked_klima_nestiha") : "");
     this._wireNumberRows(wrap);
     wrap.querySelectorAll(".sh-switch").forEach((el) => {
       const toggle = () => {
@@ -2814,12 +2908,20 @@ class SmartHeatingOverview extends HTMLElement {
       const txt = `${when} · ${dec(r.z)}→${dec(r.na)}° · ${Math.round(Number(r.min) || 0)} min · ${r.vonku != null ? `${dec(r.vonku)}° ` : ""}· ${kind}${r.dyn ? ` · ${this._t("wu_dyn")}` : ""}${r.pouzity ? "" : ` · ${this._t("wu_unused")}`}`;
       return `<span class="${r.pouzity ? "" : "x"}">${esc(txt)}</span>`;
     }).join("");
+    // spotreba na 1 °C podla zdroja (len zony s meracmi energie a nabehmi so spotrebou)
+    const eff = st.ucinnost || {};
+    const effParts = [];
+    if (eff.klima != null) effParts.push(this._t("wu_eff_ac", { v: dec(eff.klima), n: eff.klima_n }));
+    if (eff.podlaha != null) effParts.push(this._t("wu_eff_floor", { v: dec(eff.podlaha), n: eff.podlaha_n }));
+    const effHtml = effParts.length
+      ? `<div class="sho-wuk">${esc(this._t("wu_eff"))}</div><div class="sho-wuz-s">${esc(effParts.join(" · "))}</div>` : "";
     return `<div class="sho-wuz">
       <div class="sho-wuz-t"><b>${esc(z.name)}</b>${chip}</div>
       <div class="sho-wuz-sw"><span>${esc(this._t("wu_switch"))}</span>
         <button type="button" class="sho-sw ${on ? "on" : ""}" role="switch" aria-checked="${on}" data-wu-sw="${esc(swId)}"${sw ? "" : " disabled"}><i></i></button></div>
       ${rate}${plan}
       ${bands ? `<div class="sho-wuk">${esc(this._t("wu_bands"))}</div><div class="sho-wub">${bands}</div>` : ""}
+      ${effHtml}
       <div class="sho-wuk">${esc(this._t("wu_last"))}</div>
       <div class="sho-wul">${last || esc(this._t("wu_none"))}</div>
     </div>`;
@@ -3608,9 +3710,14 @@ class SmartHeatingCardEditor extends HTMLElement {
               <option value="sk">Slovenčina</option>
             </select>
           </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.9rem;">
+            <input class="sh-ed-modes" type="checkbox" />
+            <span class="sh-ed-modes-label"></span>
+          </label>
         </div>
       `;
       this._built = true;
+      this.querySelector(".sh-ed-modes").addEventListener("change", (e) => this._emit({ mode_buttons: e.target.checked || undefined }));
       this.querySelector(".sh-ed-zone").addEventListener("change", (e) => this._emit({ zone_id: e.target.value }));
       this.querySelector(".sh-ed-name").addEventListener("input", (e) => this._emit({ name: e.target.value || undefined }));
       this.querySelector(".sh-ed-lang").addEventListener("change", (e) => this._emit({ language: e.target.value === "auto" ? undefined : e.target.value }));
@@ -3619,6 +3726,8 @@ class SmartHeatingCardEditor extends HTMLElement {
     this.querySelector(".sh-ed-zone-label").textContent = this._t("editor_zone");
     this.querySelector(".sh-ed-name-label").textContent = this._t("editor_name");
     this.querySelector(".sh-ed-lang-label").textContent = this._t("editor_language");
+    this.querySelector(".sh-ed-modes-label").textContent = this._t("editor_mode_buttons");
+    this.querySelector(".sh-ed-modes").checked = this._config.mode_buttons === true;
 
     const select = this.querySelector(".sh-ed-zone");
     const optionsHtml =
@@ -3641,6 +3750,7 @@ class SmartHeatingCardEditor extends HTMLElement {
     const newConfig = { ...this._config, type: "custom:smart-heating-card", ...patch };
     if (!newConfig.name) delete newConfig.name;
     if (!newConfig.language) delete newConfig.language;
+    if (!newConfig.mode_buttons) delete newConfig.mode_buttons;
     this._config = newConfig;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
   }

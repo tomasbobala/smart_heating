@@ -2,6 +2,35 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.27.0
+- **Turn a room's heating off for a while.** New ⏻ Turn off button on the zone
+  card: the zone is switched off for `zone_off_minutes` (default 60, integration
+  settings), the integration keeps its devices off and then the zone returns to
+  its own mode (e.g. Auto). While off the card shows "Heating off" with a
+  countdown, +1 h and Turn on now. Frost protection still applies; a running
+  boost or manual takeover is cancelled. Services `smart_heating.zone_off`
+  (`zone_id`, `minutes`, `add`) and `smart_heating.zone_resume`; attribute
+  `off_until`. The Resume automation button also ends a switch-off.
+- **Zone card shows only the current mode.** The Day / Night / Min buttons are
+  hidden by default (the mode is changed in the zone settings); card option
+  `mode_buttons: true` brings them back.
+- **Floor only when the AC can't keep up** (floor_ac zones, switch
+  `podlaha_ked_klima_nestiha`, on by default). The integration measures how fast
+  the AC warms the room (last 20 min) and after `ac_priorita_minuty` brings in the
+  floor only if the AC wouldn't reach the target within that time; once the floor
+  joins it stays on until the target is reached. Without enough data it behaves as
+  before. Source shows "AC (reaches target in ~12 min)"; attributes
+  `ac_rychlost`, `ac_dohreje_za_min`.
+- **Energy per 1 °C by source.** Warm-ups now record the energy of each source
+  (from the zone's energy meters); the Warm-ups panel shows the median kWh per
+  1 °C with the AC alone and with the floor.
+- **Fireplace hysteresis** (`krb_hysterezia`, default 1 °C): zones are switched off
+  at the threshold and return only below threshold minus hysteresis, so they no
+  longer flap when the temperature hovers around it. 0 = previous behaviour.
+- **CI:** actions/checkout, setup-python and setup-node v7, runners pinned to
+  ubuntu-24.04 (ubuntu-latest moves to 26), Node 24 for card tests.
+- Guide: new articles on switching a room off and on fireplace / AC with floor.
+
 ## 0.26.0
 - **Solar heating pause.** In the Solar cascade panel (tap the solar tile):
   pause for 1 h / 2 h / 4 h / until midnight, and Cancel pause. While paused no
