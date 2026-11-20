@@ -6,8 +6,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { JSDOM } = require("jsdom");
 
+// CARD_FILE=smart-heating-card.min.js -> rovnake testy aj nad minifikovanou verziou
+const CARD_FILE = process.env.CARD_FILE || "smart-heating-card.js";
 const CARD_SRC = fs.readFileSync(
-  path.join(__dirname, "..", "custom_components", "smart_heating", "www", "smart-heating-card.js"),
+  path.join(__dirname, "..", "custom_components", "smart_heating", "www", CARD_FILE),
   "utf8"
 );
 
@@ -2147,4 +2149,15 @@ test("zone card: AC smart floor switch appears when the zone has it", () => {
   document.body.appendChild(card);
   card.querySelector(".sh-gear").click();
   assert.match(card.querySelector(".sh-toggles").textContent, /Podlaha len keď klíma nestíha/);
+});
+
+test("overview: summary labels wrap instead of being cut off on a phone ('Kúrenie d…')", () => {
+  const card = renderOverview({});
+  const css = card.querySelector("style").textContent;
+  const rule = (css.match(/\.sho-sum \.r > span \{[^}]*\}/) || [""])[0];
+  assert.ok(rule, "pravidlo pre stitok suhrnu chyba");
+  assert.doesNotMatch(rule, /ellipsis|nowrap/);
+  assert.match(css, /\.sho-sum \.r b \{[^}]*white-space: nowrap/);   // hodnota sa nezalamuje
+  const labels = Array.from(card.querySelectorAll(".sho-sum .r > span")).map((s) => s.textContent);
+  assert.ok(labels.includes("Kúrenie dnes"));
 });

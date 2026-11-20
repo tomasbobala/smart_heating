@@ -6,6 +6,7 @@ import logging
 from datetime import datetime, time as dt_time, timedelta
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.event import (
     async_call_later,
@@ -166,6 +167,21 @@ def _minutes_since(now_t: dt_time, start_t: dt_time) -> int:
     return (now_t.hour * 60 + now_t.minute) - (start_t.hour * 60 + start_t.minute)
 
 
+def _is_unreachable_error(err: BaseException) -> bool:
+    """Chyba spojenia (vypnute zariadenie, timeout) - aj ked ju integracia ciela
+    zabali do HomeAssistantError. Prechadza retazec __cause__ / __context__."""
+    seen = 0
+    while err is not None and seen < 6:
+        if isinstance(err, (OSError, TimeoutError)):
+            return True
+        name = type(err).__name__
+        if "Connect" in name or "Timeout" in name:     # aiohttp / httpx chyby spojenia
+            return True
+        err = err.__cause__ or err.__context__
+        seen += 1
+    return False
+
+
 def _time_in_range(now_t: dt_time, start_t: dt_time, end_t: dt_time) -> bool:
     """True ak now_t lezi v intervale <start_t, end_t), s podporou prechodu cez polnoc."""
     if start_t <= end_t:
@@ -177,7 +193,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
     """Sleduje relevantne entity a prepocitava/aplikuje stav kurenia/chladenia."""
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
-        super().__init__(hass, _LOGGER, name=DOMAIN, update_interval=None)
+        # config_entry explicitne - HA inak hlasi "relies on ContextVar" (2025.x+)
+        super().__init__(hass, _LOGGER, config_entry=entry, name=DOMAIN, update_interval=None)
         self.entry = entry
         self._unsub_tracking = None
         self._unsub_interval = None
@@ -193,6 +210,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._house_energy_kwh: dict[str, float] = {"siet": 0.0, "fve": 0.0, "bateria": 0.0}
         self._house_energy_at = None
         self._notify_fail_logged: dict[str, datetime] = {}
+        # entity, ktore sa menia aj medzi prepoctami (30 s tick): kaskada FVE, energie,
+        # pohotovost klimy v senzore stav. Ostatne entity (~200) sa obnovuju len pri
+        # prepocte - 30 s tick ich zbytocne prepisoval vsetky.
+        self._fast_listeners: list = []
         # runtime stav, ktory neprezije restart HA (zamerne - boost/deficit su kratkodobe)
         self._runtime: dict[str, dict] = {}
         self._global_rt: dict = {"tariff_blocked": False, "holiday_active": False, "krb_zones": set(), "emergency_zones": set()}
@@ -204,6 +225,23 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._standby_store = Store(hass, 1, f"{DOMAIN}.standby.{entry.entry_id}")
         self._standby: dict[str, dict] = {}
         self._standby_at: datetime | None = None
+
+    @callback
+    def async_add_fast_listener(self, update_callback) -> callable:
+        """Entita, ktoru treba obnovit aj v 30 s ticku (bez celeho prepoctu)."""
+        self._fast_listeners.append(update_callback)
+
+        @callback
+        def _remove() -> None:
+            if update_callback in self._fast_listeners:
+                self._fast_listeners.remove(update_callback)
+
+        return _remove
+
+    @callback
+    def async_update_fast_listeners(self) -> None:
+        for update_callback in list(self._fast_listeners):
+            update_callback()
 
     @property
     def zones(self) -> dict:
@@ -1226,8 +1264,10 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
         Pri blocking=False by chyba (napr. vypnuta TV: Host is unreachable) vznikla
         az v ulohe sluzby, mimo nasho try/except, a plnila by log tracebackmi. Takto
-        sa chyba zachyti a zaloguje jednym riadkom (najviac raz za hodinu na ciel);
-        ostatne ciele spravu dostanu normalne."""
+        sa kazdy ciel vybavi zvlast a ostatne ciele spravu dostanu normalne.
+        Nedostupny ciel (stav unavailable, vypnute zariadenie, chyba spojenia) je
+        bezna situacia - preskoci sa len s debug zaznamom. Varovanie (najviac raz za
+        hodinu na ciel) ostava len pre ine chyby, napr. zle nastaveny ciel."""
         entity_ids = self.entry.options.get(CONF_NOTIFY_ENTITY)
         if not entity_ids:
             return
@@ -1237,8 +1277,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
 
     async def _notify_one(self, entity_id: str, message: str) -> None:
         state = self.hass.states.get(entity_id)
-        if state is not None and state.state == "unavailable":
-            self._log_notify_fail(entity_id, "unavailable")
+        if state is not None and state.state == STATE_UNAVAILABLE:
+            _LOGGER.debug("Notifikacia na %s preskocena: ciel je nedostupny", entity_id)
             return
         try:
             async with asyncio.timeout(NOTIFY_TIMEOUT):
@@ -1246,6 +1286,9 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                     "notify", "send_message", {"entity_id": entity_id, "message": message}, blocking=True,
                 )
         except Exception as err:  # noqa: BLE001 - ziadny ciel nesmie zhodit ostatne
+            if _is_unreachable_error(err):
+                _LOGGER.debug("Notifikacia na %s sa nedorucila, ciel je nedostupny: %s", entity_id, err or type(err).__name__)
+                return
             self._log_notify_fail(entity_id, err)
 
     def _log_notify_fail(self, entity_id: str, err) -> None:
@@ -1670,7 +1713,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             await self.async_recompute_and_apply()
         elif isinstance(self.data, dict):
             self.data["pv_engine"] = self._pv_snapshot(after >= 1)
-            self.async_update_listeners()
+            self.async_update_fast_listeners()
 
     def _pv_snapshot(self, pv_surplus) -> dict:
         snap = self._pv_snapshot_inner(pv_surplus)
@@ -1898,7 +1941,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             self._meter_cache = meters
             await self.async_recompute_and_apply()
         elif isinstance(self.data, dict):
-            self.async_update_listeners()
+            self.async_update_fast_listeners()
 
     def _accumulate_pv_energy(self) -> None:
         """Energia kurenia v case, ked zony kurili z FVE prebytku (pv_active), z prikonu.
@@ -2015,8 +2058,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         if not entity_id:
             return
         state = self.hass.states.get(entity_id)
-        if state is None:
-            return
+        if state is None or state.state in ("unavailable", "unknown"):
+            return      # nedostupne rele - prikaz by len zlyhal a plnil log
         if state.state == ("on" if on else "off"):
             self._record_cmd(entity_id, "on" if on else "off", None, False)
             return

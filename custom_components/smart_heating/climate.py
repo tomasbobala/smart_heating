@@ -44,10 +44,17 @@ async def async_setup_entry(
     )
 
 
+# HA 2026.11+ ma natívne API teplot (native_temperature_unit, native_current_temperature,
+# native_target_temperature); stare nazvy su zastarane a v HA 2027.11 prestanu fungovat.
+# Starsie HA (od 2024.12, minimum v hacs.json) natívne API nepoznaju - tam ostavaju stare
+# nazvy. Hodnoty su v oboch pripadoch v °C, prevody na jednotky systemu robi HA.
+NATIVE_TEMPERATURE_API = hasattr(ClimateEntity, "native_temperature_unit")
+
+
 class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], ClimateEntity):
     """Virtualny termostat - hlavne miesto ovladania zony."""
 
-    _attr_temperature_unit = UnitOfTemperature.CELSIUS
+    _attr_native_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_supported_features = ClimateEntityFeature.TARGET_TEMPERATURE
 
     def __init__(self, coordinator: SmartHeatingCoordinator, zone_id: str, zone_conf: dict) -> None:
@@ -74,7 +81,7 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         return self._zdata["name"]
 
     @property
-    def current_temperature(self):
+    def native_current_temperature(self):
         return self._zdata["current_temperature"]
 
     @property
@@ -83,8 +90,19 @@ class SmartHeatingZoneClimate(CoordinatorEntity[SmartHeatingCoordinator], Climat
         return self._zdata.get("humidity")
 
     @property
-    def target_temperature(self):
+    def native_target_temperature(self):
         return self._zdata["target_temperature"]
+
+    if not NATIVE_TEMPERATURE_API:  # HA < 2026.11
+        _attr_temperature_unit = UnitOfTemperature.CELSIUS
+
+        @property
+        def current_temperature(self):
+            return self.native_current_temperature
+
+        @property
+        def target_temperature(self):
+            return self.native_target_temperature
 
     @property
     def hvac_mode(self) -> HVACMode:

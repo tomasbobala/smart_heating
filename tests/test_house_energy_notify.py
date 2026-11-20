@@ -94,12 +94,13 @@ async def test_house_energy_sensors_restore_and_report(hass):
 # ------------------------------------------------------------------ notifikacie
 
 async def test_notify_failing_target_does_not_raise_and_others_get_it(hass, caplog):
+    """Ina chyba nez nedostupnost (napr. zle nastaveny ciel) - varovanie najviac raz za hodinu."""
     c = _coord(hass, notify_entity=["notify.tv", "notify.phone"])
     got = []
 
     async def handler(call):
         if call.data["entity_id"] == "notify.tv":
-            raise HomeAssistantError("Host is unreachable")
+            raise HomeAssistantError("Invalid target")
         got.append(call.data["message"])
 
     hass.services.async_register("notify", "send_message", handler)
@@ -110,6 +111,27 @@ async def test_notify_failing_target_does_not_raise_and_others_get_it(hass, capl
     warnings = [r for r in caplog.records if "notify.tv" in r.getMessage()]
     assert len(warnings) == 1                     # najviac raz za hodinu
     assert "Traceback" not in caplog.text
+
+
+async def test_notify_unreachable_target_is_quiet(hass, caplog):
+    """Vypnuta TV: integracia ciela zabali chybu spojenia do HomeAssistantError."""
+    c = _coord(hass, notify_entity=["notify.android_tv_notify", "notify.iphone"])
+    got = []
+
+    async def handler(call):
+        if call.data["entity_id"] == "notify.android_tv_notify":
+            try:
+                raise OSError(113, "Host is unreachable")
+            except OSError as err:
+                raise HomeAssistantError("Host is unreachable") from err
+        got.append(call.data["message"])
+
+    hass.services.async_register("notify", "send_message", handler)
+    caplog.set_level(logging.DEBUG)
+    await c._notify("ahoj")
+    assert got == ["ahoj"]
+    recs = [r for r in caplog.records if "android_tv" in r.getMessage()]
+    assert recs and all(r.levelno == logging.DEBUG for r in recs)
 
 
 async def test_notify_skips_unavailable_target(hass):
@@ -123,3 +145,24 @@ async def test_notify_skips_unavailable_target(hass):
     hass.states.async_set("notify.tv", "unavailable")
     await c._notify("x")
     assert calls == []
+
+
+async def test_notify_unavailable_target_skipped_without_warning_others_delivered(hass, caplog):
+    """Audit 20. 11. 2026: notify_entity [iPhone, Android TV], TV je unavailable ->
+    sprava ide na iPhone, v logu ziadne varovanie (len debug)."""
+    c = _coord(hass, notify_entity=["notify.iphone_11_pro_max_tomas", "notify.android_tv_notify"])
+    calls = []
+
+    async def handler(call):
+        calls.append(call.data["entity_id"])
+
+    hass.services.async_register("notify", "send_message", handler)
+    hass.states.async_set("notify.android_tv_notify", "unavailable")
+    hass.states.async_set("notify.iphone_11_pro_max_tomas", "unknown")   # este nic neposlal - je dostupny
+    caplog.set_level(logging.DEBUG)
+    await c._notify("x")
+    await c._notify("y")
+    assert calls == ["notify.iphone_11_pro_max_tomas"] * 2
+    tv = [r for r in caplog.records if "android_tv" in r.getMessage()]
+    assert tv and all(r.levelno == logging.DEBUG for r in tv)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "smart_heating" in r.name]

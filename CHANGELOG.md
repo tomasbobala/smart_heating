@@ -2,6 +2,39 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.28.0
+- **Ready for Home Assistant 2027.x.** The zone thermostat now uses the native
+  temperature API (`native_temperature_unit`, `native_current_temperature`,
+  `native_target_temperature`); HA 2026.11 logged "provides the deprecated
+  _attr_temperature_unit" (stops working in 2027.11). Older HA versions keep the
+  old names automatically. Values and °C/°F conversions are unchanged (tested).
+- **Notifications: unreachable targets are skipped quietly.** A target that is
+  `unavailable` (e.g. a switched-off Android TV) or fails with a connection error
+  is skipped with a debug record only; the message is delivered to the other
+  targets. Other errors (misconfigured target) still log a warning at most once
+  an hour.
+- **Smaller card download.** The card is served minified and gzip-compressed
+  (~48 kB instead of ~212 kB) from the same URL. The integration serves the
+  minified file only when its embedded sha256 matches the source, otherwise the
+  readable source - a stale build is never used. `npm run build` creates it.
+- **Overview card on phones:** summary labels ("Heating today", "Heating power",
+  "Energy today") wrap instead of being cut off ("Kúrenie d…") at 375 px; wider
+  layouts are unchanged.
+- **Less load and fewer recorder writes.** The 30 s tick no longer rewrites all
+  ~200 entities, only those that change between recalculations (solar cascade,
+  energy sensors, zone status). The cumulative energy sensors are written to the
+  recorder at most every 5 minutes (≈11,500 → ≈1,150 rows a day; the exact value
+  is still saved on shutdown). The AC standby energy attribute is rounded to
+  0.01 kWh (the card's precision), so it no longer creates a state row every 30 s.
+- The coordinator passes its config entry explicitly; the removed
+  `register_static_path` fallback is gone (minimum HA stays 2024.12).
+- An unavailable radiator relay no longer receives a command on every
+  recalculation.
+- Tests: native climate units incl. °F, notification targets from the audit,
+  recorder writes, minified card (all card tests also run on the min file),
+  config-flow serialisation via HA's own HTTP helper (HA 2026.10 dropped
+  voluptuous_serialize).
+
 ## 0.27.0
 - **Turn a room's heating off for a while.** New ⏻ Turn off button on the zone
   card: the zone is switched off for `zone_off_minutes` (default 60, integration

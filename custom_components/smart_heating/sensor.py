@@ -1,13 +1,16 @@
 """Sensor platform - diagnosticky stav aktualneho rozhodnutia per zona."""
 from __future__ import annotations
 
+from datetime import timedelta
+
 from homeassistant.components.sensor import RestoreSensor, SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_HUMIDITY_ENTITY,
@@ -22,6 +25,34 @@ from .const import (
     OPT_ZONES,
 )
 from .coordinator import SmartHeatingCoordinator
+
+# Kumulativne energie sa pocitaju kazdych 30 s, ale do recorderu staci zapis raz za
+# 5 minut (karta cita hodinove a 5-minutove statistiky). Predtym 4 senzory zapisovali
+# ~11 500 riadkov denne, teraz ~1 150. Presna hodnota sa pri vypnuti HA ulozi vzdy
+# (RestoreSensor cita native_value), takze sa nic nestrati.
+ENERGY_WRITE_INTERVAL = timedelta(minutes=5)
+
+
+class _FastUpdateMixin:
+    """Entita sa obnovuje aj v 30 s ticku coordinatora (nie len pri prepocte)."""
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(self.coordinator.async_add_fast_listener(self._handle_coordinator_update))
+
+
+class _ThrottledEnergyMixin(_FastUpdateMixin):
+    """Zapis stavu kumulativnej energie najviac raz za ENERGY_WRITE_INTERVAL."""
+
+    _last_written = None
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        now = dt_util.utcnow()
+        if self._last_written is not None and now - self._last_written < ENERGY_WRITE_INTERVAL:
+            return
+        self._last_written = now
+        self.async_write_ha_state()
 
 
 async def async_setup_entry(
@@ -39,7 +70,7 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
+class ZoneReasonSensor(_FastUpdateMixin, CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
     _attr_icon = "mdi:information-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     # Konfiguracia (zoznamy entit) sa nemeni - netreba ju ukladat do historie pri
@@ -80,7 +111,9 @@ class ZoneReasonSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity)
             info["on_w"] = c._meter_thresholds(src["key"])[0]
         if src["key"] == "ac" and src["power"]:
             kwh = c.standby_kwh_today(self._zone_id)
-            info["standby_kwh_dnes"] = round(kwh, 3) if kwh is not None else None
+            # 0,01 kWh = presnost zobrazenia na karte; jemnejsie hodnoty menili atribut
+            # (a zapisovali riadok do recorderu) kazdych 30 s
+            info["standby_kwh_dnes"] = round(kwh, 2) if kwh is not None else None
         return info
 
     @property
@@ -194,7 +227,7 @@ class ZoneTemperatureSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEn
             return None
 
 
-class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
+class PvCascadeSensor(_FastUpdateMixin, CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
     """Kaskada FVE prebytku pre celu integraciu: stav = najnizsia priorita, ktora
     smie kurit z prebytku (0 = ziadna). Atributy ukazuju vykony a co sa chysta."""
 
@@ -243,7 +276,7 @@ class PvCascadeSensor(CoordinatorEntity[SmartHeatingCoordinator], SensorEntity):
         }
 
 
-class PvEnergySensor(CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
+class PvEnergySensor(_ThrottledEnergyMixin, CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
     """Energia kurenia odobrata v case, ked zony kurili z FVE prebytku (z meracov
     prikonu, kazdych 30 s). Kumulativna - HA z nej pocita denne statistiky pre
     'podiel z FVE' v prehladovej karte."""
@@ -282,7 +315,7 @@ HOUSE_SOURCES = {
 }
 
 
-class HouseEnergySensor(CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
+class HouseEnergySensor(_ThrottledEnergyMixin, CoordinatorEntity[SmartHeatingCoordinator], RestoreSensor):
     """Spotreba domu podla zdroja (siet / FVE priamo / bateria), integrovana z
     okamzitych tokov kazdych 30 s. Prehladova karta z ich hodinovych statistik
     rozdeli spotrebu kurenia - funguje aj pre zdroje, ktore maju len merac energie

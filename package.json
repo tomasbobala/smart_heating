@@ -1,12 +1,15 @@
 {
   "name": "smart-heating-card",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "Lovelace card for the Smart Heating Home Assistant integration",
   "private": true,
   "scripts": {
-    "test": "node --test tests/card.test.js"
+    "test": "node --test tests/card.test.js && CARD_FILE=smart-heating-card.min.js node --test tests/card.test.js",
+    "build": "node scripts/build-card.js",
+    "check-build": "node scripts/build-card.js --check"
   },
   "devDependencies": {
-    "jsdom": "^25.0.0"
+    "jsdom": "^25.0.0",
+    "terser": "^5.37.0"
   }
 }

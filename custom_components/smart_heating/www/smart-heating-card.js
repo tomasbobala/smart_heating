@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.27.0";
+const CARD_VERSION = "0.28.0";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -2443,8 +2443,9 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-tile.err { background: rgba(229,72,77,0.10); box-shadow: inset 0 0 0 1px rgba(229,72,77,0.5); }
       .sho-tile.err .i { background: rgba(229,72,77,0.22); color: var(--sh-err); }
       .sho-sum { display: flex; flex-direction: column; justify-content: center; gap: 6px; }
-      .sho-sum .r { display: flex; justify-content: space-between; gap: 16px; font-size: 13px; color: var(--sh-sub); }
-      .sho-sum .r > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sho-sum .r { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; font-size: 13px; color: var(--sh-sub); }
+      /* stitok sa radsej zalomi, nez aby sa orezal ("Kúrenie d…" na mobile); hodnota ostava na riadku */
+      .sho-sum .r > span { min-width: 0; overflow-wrap: break-word; }
       .sho-sum .r b { color: var(--sh-txt); font-variant-numeric: tabular-nums; white-space: nowrap; }
       .sho-sum .r .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
       .sho-msg { padding: 16px; color: var(--sh-sub); }
@@ -2458,6 +2459,7 @@ class SmartHeatingOverview extends HTMLElement {
         .sho-btnrow { grid-template-columns: 1fr; }
       }
       @container (max-width: 420px) {
+        .sho-sum .r { gap: 10px; }
         .sho-tiles { padding: 10px; gap: 8px; }
         .sho-tile { padding: 7px 9px; gap: 8px; }
       }

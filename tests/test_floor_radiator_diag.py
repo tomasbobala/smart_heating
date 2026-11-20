@@ -271,3 +271,24 @@ async def test_warmup_aborted_when_target_changes(base):
     _set(hass, select__smart_heating_z1_rezim="Noc")
     await _run(c)
     assert c._rt(Z)["warmup"] is None and Z not in c._warmup_data
+
+
+async def test_unavailable_radiator_relay_gets_no_command(hass):
+    """Nedostupne rele: ziadna sluzba (inak zbytocna chyba v logu pri kazdom prepocte)."""
+    from pytest_homeassistant_custom_component.common import MockConfigEntry, async_mock_service
+
+    from custom_components.smart_heating.const import DOMAIN
+    from custom_components.smart_heating.coordinator import SmartHeatingCoordinator
+
+    entry = MockConfigEntry(domain=DOMAIN, version=2, data={}, options={})
+    entry.add_to_hass(hass)
+    c = SmartHeatingCoordinator(hass, entry)
+    calls = async_mock_service(hass, "homeassistant", "turn_on")
+    hass.states.async_set("switch.radiator", "unavailable")
+    await c._apply_switch("switch.radiator", True)
+    await hass.async_block_till_done()
+    assert calls == []
+    hass.states.async_set("switch.radiator", "off")
+    await c._apply_switch("switch.radiator", True)
+    await hass.async_block_till_done()
+    assert len(calls) == 1

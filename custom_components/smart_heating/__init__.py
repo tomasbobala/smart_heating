@@ -1,7 +1,10 @@
 """Smart Heating - univerzalna integracia pre riadenie viaczonoveho kurenia."""
 from __future__ import annotations
 
+import gzip
+import hashlib
 import logging
+import re
 from pathlib import Path
 
 from homeassistant.components.frontend import add_extra_js_url
@@ -24,6 +27,34 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 CARD_URL_PATH = "/smart_heating_static/smart-heating-card.js"
 CARD_REGISTERED = "card_registered"
+
+
+_MIN_HASH_RE = re.compile(rb"src-sha256:([0-9a-f]{64})")
+
+
+def _card_file_to_serve(www: Path) -> Path:
+    """Minifikovana karta (smart-heating-card.min.js + .gz), ak zodpoveda zdrojaku.
+
+    Prehliadac dostane ~48 kB gzip namiesto ~212 kB. Prvy riadok min suboru nesie
+    sha256 zdrojaka (scripts/build-card.js); ked nesedi - karta bola upravena bez
+    `npm run build` - alebo .gz nie je z toho isteho min suboru, servuje sa zdrojak.
+    Tak sa do prehliadaca nikdy nedostane stara verzia karty. Vola sa v executore.
+    """
+    src = www / "smart-heating-card.js"
+    mini = www / "smart-heating-card.min.js"
+    try:
+        min_bytes = mini.read_bytes()
+        match = _MIN_HASH_RE.search(min_bytes[:300])
+        if not match or match.group(1).decode() != hashlib.sha256(src.read_bytes()).hexdigest():
+            _LOGGER.info("smart-heating-card.min.js nezodpoveda zdrojaku, pouzije sa smart-heating-card.js")
+            return src
+        gz = mini.with_name(mini.name + ".gz")
+        if gz.exists() and gzip.decompress(gz.read_bytes()) != min_bytes:
+            _LOGGER.info("smart-heating-card.min.js.gz nezodpoveda min suboru, pouzije sa smart-heating-card.js")
+            return src
+    except (OSError, EOFError, gzip.BadGzipFile):
+        return src
+    return mini
 
 
 def _lovelace_resources(hass: HomeAssistant):
@@ -93,15 +124,17 @@ async def _async_register_card(hass: HomeAssistant) -> None:
         _LOGGER.warning("hass.http este nie je pripravene, registracia karty sa odklada")
         return
 
-    try:
-        if hasattr(http, "async_register_static_paths"):
-            from homeassistant.components.http import StaticPathConfig
+    serve_path = await hass.async_add_executor_job(_card_file_to_serve, card_path.parent)
 
-            await http.async_register_static_paths(
-                [StaticPathConfig(CARD_URL_PATH, str(card_path), cache_headers=False)]
-            )
-        else:  # pragma: no cover - starsie verzie HA
-            http.register_static_path(CARD_URL_PATH, str(card_path), cache_headers=False)
+    try:
+        # register_static_path bolo v HA 2025.7 odstranene; async_register_static_paths
+        # existuje od 2024.7 (minimum integracie je 2024.12). URL ostava rovnaka;
+        # pri .min.js HA samo posle .min.js.gz, ked prehliadac podporuje gzip.
+        from homeassistant.components.http import StaticPathConfig
+
+        await http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL_PATH, str(serve_path), cache_headers=False)]
+        )
     except RuntimeError as err:
         # opakovana registracia tej istej cesty
         _LOGGER.debug("Staticka cesta uz je zaregistrovana: %s", err)
