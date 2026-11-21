@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.28.1";
+const CARD_VERSION = "0.28.2";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -375,7 +375,7 @@ const STATS_REFRESH_MS = 15 * 60 * 1000;
  * scrollovani a otvarani menu). Sirku preto sleduje ResizeObserver a nastavi triedy
  * cq-max<N> (sirka <= N) a cq-min<N> (sirka >= N) - rovnake prahy, rovnaka sirka
  * (content-box kontajnera) ako pri @container, takze rozlozenie ostava rovnake. */
-function watchWidth(el, maxSteps, minSteps = []) {
+function watchWidth(el, maxSteps, minSteps = [], onResize = null) {
   if (!el || !el.parentElement || typeof ResizeObserver === "undefined") return null;
   // Sleduje sa sonda s nulovou vyskou pred kontajnerom (jej sirka = sirka kontajnera
   // vratane paddingu): zmena tried meni len vysku obsahu, nie sondu, takze
@@ -392,7 +392,10 @@ function watchWidth(el, maxSteps, minSteps = []) {
       - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0);
     for (const n of maxSteps) el.classList.toggle(`cq-max${n}`, content <= n);
     for (const n of minSteps) el.classList.toggle(`cq-min${n}`, content >= n);
+    if (onResize && content !== lastW) onResize();
+    lastW = content;
   };
+  let lastW = null;
   const ro = new ResizeObserver((entries) => { for (const e of entries) apply(e.contentRect.width); });
   ro.observe(probe);
   return ro;
@@ -1114,7 +1117,7 @@ class SmartHeatingCard extends HTMLElement {
       </ha-card>
     `;
 
-    this._widthRO = watchWidth(this.querySelector(".sh-root"), [270, 300, 360], [480]);
+    this._widthRO = watchWidth(this.querySelector(".sh-root"), [270, 300, 360], [480], () => this._fitRow2());
 
     const gear = this.querySelector(".sh-gear");
     gear.addEventListener("click", () => {
@@ -1179,7 +1182,17 @@ class SmartHeatingCard extends HTMLElement {
         font-variant-numeric: tabular-nums; margin-top: 3px; white-space: nowrap; }
       .sh-lg-v { overflow: hidden; text-overflow: ellipsis; }
 
-      .sh-row2 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+      /* odchylka · podlaha · ciel: vzdy jeden riadok. Zalomenie podla dlzky textu (v cieli /
+         -0,7° pod) menilo vysku karty o ~30 px pri kazdej zmene teploty a na desktope s nou
+         poskakoval cely riadok kariet. Ked sa nezmesti, _fitRow2() postupne skrati popisy. */
+      .sh-row2 { display: flex; flex-wrap: nowrap; align-items: center; gap: 8px; margin-top: 14px; min-width: 0; }
+      .sh-row2 .sh-tgt { flex-shrink: 0; }
+      .sh-row2.fit1 .sh-chip-floor .lbl { display: none; }
+      .sh-row2.fit1 .sh-chip-floor svg { display: inline-block; }
+      .sh-row2.fit2 .sh-tgt-v .lbl { display: none; }
+      .sh-row2.fit2 .sh-tgt-v { min-width: 40px; }
+      .sh-row2.fit3 .sh-delta .dw { display: none; }
+      .sh-row2.fit4 .sh-delta, .sh-row2.fit4 .sh-chip-floor { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       /* vlhkost: pevne jeden riadok (vyska karty sa nesmie menit) */
       .sh-feel { display: flex; align-items: center; gap: 6px; height: 18px; margin-top: 8px; font-size: 12px; color: var(--sh-sub);
         white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
@@ -1200,7 +1213,10 @@ class SmartHeatingCard extends HTMLElement {
       .sh-cons[hidden] { display: none; }
       .sh-dev { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--sh-sub, var(--secondary-text-color)); margin: -2px 0 6px; }
       .sh-dev[hidden], .sh-man[hidden] { display: none; }
-      .sh-devl { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+      /* riadok zariadenia: pevne jeden riadok (zalomenie podla dlzky textu menilo vysku karty) */
+      .sh-devl { display: flex; align-items: baseline; gap: 6px; flex-wrap: nowrap; min-width: 0; white-space: nowrap; }
+      .sh-devl b { flex-shrink: 0; }
+      .sh-devl span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
       .sh-devl b { font-weight: 600; color: var(--sh-txt, var(--primary-text-color)); }
       .sh-devl i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; transform: translateY(-1px); background: #9a9aa2; }
       .sh-devl i.floor { background: #f0883e; } .sh-devl i.ac { background: #4fa3ff; } .sh-devl i.radiator { background: #2fa98a; }
@@ -1463,7 +1479,7 @@ class SmartHeatingCard extends HTMLElement {
         if (s.attributes.current_temperature != null) parts.push(this._t("dev_meas", { t: deg(s.attributes.current_temperature) }));
       }
       const hot = a.manual_device === d.entity && a.manual_until ? " man" : "";
-      return `<div class="sh-devl${hot}"><i class="seg ${esc(d.key)}"></i><b>${esc(name)}</b><span>${esc(parts.join(" · "))}</span></div>`;
+      return `<div class="sh-devl${hot}" title="${esc(`${name}: ${parts.join(" · ")}`)}"><i class="seg ${esc(d.key)}"></i><b>${esc(name)}</b><span>${esc(parts.join(" · "))}</span></div>`;
     });
     box.innerHTML = lines.join("");
     box.hidden = !lines.length;
@@ -1536,9 +1552,9 @@ class SmartHeatingCard extends HTMLElement {
     const dc = deltaClass(d);
     const deltaEl = this.querySelector(".sh-delta");
     deltaEl.className = `sh-delta ${dc}`;
-    deltaEl.textContent = d == null || mode === "Vypnute" ? ""
+    deltaEl.innerHTML = d == null || mode === "Vypnute" ? ""
       : dc === "ok" ? this._t("delta_ok")
-      : `${fmtSigned(d, lang)}° ${this._t(d > 0 ? "delta_above" : "delta_below")}`;
+      : `${fmtSigned(d, lang)}°<span class="dw"> ${esc(this._t(d > 0 ? "delta_above" : "delta_below"))}</span>`;
 
     const floor = num(zAttrs.floor_temperature);
     this.querySelector(".sh-chip-floor").innerHTML = floor == null ? ""
@@ -1554,6 +1570,22 @@ class SmartHeatingCard extends HTMLElement {
     tgt.classList.toggle("pending", this._pendingTarget != null);
     const disabled = mode === "Vypnute" || shown == null;
     tgt.querySelectorAll("button").forEach((b) => { b.disabled = disabled; });
+    this._fitRow2();
+  }
+
+  /** Riadok odchylka · podlaha · ciel sa nikdy nezalomi (karta nemeni vysku). Ked sa
+   * nezmesti, postupne: podlaha len ikonou, bez slova "Ciel", odchylka len cislom,
+   * nakoniec trojbodka. Meria sa len pri zmene obsahu alebo sirky karty. */
+  _fitRow2() {
+    const row = this.querySelector(".sh-row2");
+    if (!row || !row.isConnected) return;
+    const fits = () => row.scrollWidth <= row.clientWidth + 1;
+    row.classList.remove("fit1", "fit2", "fit3", "fit4");
+    if (!row.clientWidth) return;               // skryta karta - zmeria sa pri zobrazeni
+    for (const c of ["fit1", "fit2", "fit3", "fit4"]) {
+      if (fits()) return;
+      row.classList.add(c);
+    }
   }
 
   /** Denna teplota zony, ked prave bezi akumulacia z FVE (inak null). */

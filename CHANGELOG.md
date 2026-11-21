@@ -2,6 +2,16 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.28.2
+- **Cards no longer change height on every temperature / device update** (the
+  dashboard "moved" in desktop Safari, where zone cards sit side by side and a
+  row follows its tallest card). Two lines wrapped depending on text length:
+  the deviation · floor · target row ("on target" vs "−0.7° below") and the
+  device line ("T Living room heating · set 24° · measures 21.4°"). Both are now
+  always one line: the target row shortens its labels step by step when space
+  is short (floor as an icon, no "Target" word, deviation as a number), the
+  device line ends with "…" and shows the full text as a tooltip.
+
 ## 0.28.1
 - **iPhone / Safari: the page no longer jumps up** when scrolled to the bottom or
   when a menu is opened. WebKit re-laid out cards using CSS container queries

@@ -2165,3 +2165,34 @@ test("overview: summary labels wrap instead of being cut off on a phone ('Kúren
 test("cards do not use CSS container queries (WebKit scroll jump on iPhone)", () => {
   assert.doesNotMatch(CARD_SRC.replace(/\/\*[\s\S]*?\*\//g, ""), /@container\s*\(|container-type\s*:/);
 });
+
+test("zone card rows that change with every update never wrap (card height stays the same)", () => {
+  const css = CARD_SRC;
+  assert.match(css, /\.sh-row2 \{[^}]*flex-wrap: nowrap/);
+  assert.match(css, /\.sh-devl \{[^}]*flex-wrap: nowrap[^}]*white-space: nowrap/);
+  assert.doesNotMatch(css, /\.sh-row2 \{[^}]*flex-wrap: wrap/);
+});
+
+test("deviation keeps its number and puts the word in a shrinkable span", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  card.hass = buildHass({ climateAttrs: { current_temperature: 21.3, temperature: 23 } });
+  document.body.appendChild(card);
+  const d = card.querySelector(".sh-delta");
+  assert.match(d.textContent, /^−1,7°\s*pod$/);
+  assert.strictEqual(d.querySelector(".dw").textContent.trim(), "pod");
+});
+
+test("device line carries the full text as a tooltip", () => {
+  const { CardClass, document } = loadCard();
+  const card = new CardClass();
+  card.setConfig({ zone_id: ZONE_ID });
+  const hass = buildHass({ stavAttrs: { devices: [{ key: "floor", entity: "climate.t_floor" }] } });
+  hass.states["climate.t_floor"] = { state: "heat", attributes: { friendly_name: "T Obyvacka", hvac_action: "heating", temperature: 24, current_temperature: 21.4 } };
+  card.hass = hass;
+  document.body.appendChild(card);
+  const line = card.querySelector(".sh-devl");
+  assert.ok(line, "riadok zariadenia chyba");
+  assert.match(line.getAttribute("title"), /T Obyvacka: .*24/);
+});
