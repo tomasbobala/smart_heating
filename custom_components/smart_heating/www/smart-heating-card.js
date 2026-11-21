@@ -23,7 +23,7 @@
  *       entities: [person.a, person.b]
  */
 
-const CARD_VERSION = "0.28.0";
+const CARD_VERSION = "0.28.1";
 
 const MODES = ["Auto", "Den", "Noc", "Min", "Mraz", "Vypnute"];
 const QUICK_MODES = ["Auto", "Den", "Noc", "Min"];
@@ -368,6 +368,36 @@ const I18N = {
 };
 
 const STATS_REFRESH_MS = 15 * 60 * 1000;
+
+/** Nahrada CSS container queries (@container). Safari / aplikacia HA na iPhone (WebKit)
+ * pri kazdej zmene obsahu kontajnera s container-type urobi medzivypocet, v ktorom je
+ * karta na okamih nizsia - na konci stranky potom posunie zobrazenie hore (skakanie pri
+ * scrollovani a otvarani menu). Sirku preto sleduje ResizeObserver a nastavi triedy
+ * cq-max<N> (sirka <= N) a cq-min<N> (sirka >= N) - rovnake prahy, rovnaka sirka
+ * (content-box kontajnera) ako pri @container, takze rozlozenie ostava rovnake. */
+function watchWidth(el, maxSteps, minSteps = []) {
+  if (!el || !el.parentElement || typeof ResizeObserver === "undefined") return null;
+  // Sleduje sa sonda s nulovou vyskou pred kontajnerom (jej sirka = sirka kontajnera
+  // vratane paddingu): zmena tried meni len vysku obsahu, nie sondu, takze
+  // ResizeObserver nehlasi "loop completed with undelivered notifications".
+  const probe = document.createElement("div");
+  probe.className = "cq-probe";
+  probe.setAttribute("aria-hidden", "true");
+  probe.style.cssText = "height:0;margin:0;padding:0;border:0;overflow:hidden;flex:none;";
+  el.parentElement.insertBefore(probe, el);
+  const apply = (w) => {
+    if (!w) return;                                  // skryta karta - nechaj posledny stav
+    const cs = getComputedStyle(el);
+    const content = w - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0)
+      - (parseFloat(cs.borderLeftWidth) || 0) - (parseFloat(cs.borderRightWidth) || 0);
+    for (const n of maxSteps) el.classList.toggle(`cq-max${n}`, content <= n);
+    for (const n of minSteps) el.classList.toggle(`cq-min${n}`, content >= n);
+  };
+  const ro = new ResizeObserver((entries) => { for (const e of entries) apply(e.contentRect.width); });
+  ro.observe(probe);
+  return ro;
+}
+
 const OVERVIEW_REFRESH_MS = 10 * 60 * 1000;
 const DELTA_OK = 0.5;
 const DAY_MS = 24 * 3600 * 1000;
@@ -1084,6 +1114,8 @@ class SmartHeatingCard extends HTMLElement {
       </ha-card>
     `;
 
+    this._widthRO = watchWidth(this.querySelector(".sh-root"), [270, 300, 360], [480]);
+
     const gear = this.querySelector(".sh-gear");
     gear.addEventListener("click", () => {
       this._settingsOpen = !this._settingsOpen;
@@ -1110,7 +1142,7 @@ class SmartHeatingCard extends HTMLElement {
       smart-heating-card > ha-card { height: 100%; display: flex; flex-direction: column; overflow: hidden; position: relative; }
       .sh-root { ${SHARED_TOKENS}
         position: relative; flex: 1; padding: 16px 18px 14px 20px; display: flex; flex-direction: column;
-        container-type: inline-size; color: var(--sh-txt); --sh-acc: rgba(127,127,127,0.35); }
+        color: var(--sh-txt); --sh-acc: rgba(127,127,127,0.35); }
       .sh-root.is-heat { --sh-acc: var(--sh-heat); background: linear-gradient(135deg, rgba(255,138,61,0.10), transparent 55%); }
       .sh-root.is-cool { --sh-acc: var(--sh-cool); background: linear-gradient(135deg, rgba(79,163,255,0.10), transparent 55%); }
       .sh-root.is-off { --sh-acc: rgba(127,127,127,0.18); }
@@ -1254,21 +1286,16 @@ class SmartHeatingCard extends HTMLElement {
       .sh-badge.ok { color: var(--sh-ok); }
       .sh-badge.info { color: var(--sh-cool); }
 
-      @container (max-width: 360px) {
-        .sh-chip-floor .lbl { display: none; }
-        .sh-chip-floor svg { display: inline-block; }
-        .sh-tgt button { width: 26px; height: 28px; }
-        .sh-tgt-v { min-width: 52px; }
-      }
-      @container (max-width: 300px) {
-        .sh-tgt-v .lbl { display: none; }
-        .sh-tgt-v { min-width: 40px; }
-      }
-      @container (max-width: 270px) {
-        .sh-temp { font-size: 40px; }
-        .sh-temp small { font-size: 18px; }
-        .sh-seg button { padding: 5px 7px; }
-      }
+      /* sirka karty - triedy z watchWidth() namiesto @container (WebKit skakal) */
+      .sh-root.cq-max360 .sh-chip-floor .lbl { display: none; }
+      .sh-root.cq-max360 .sh-chip-floor svg { display: inline-block; }
+      .sh-root.cq-max360 .sh-tgt button { width: 26px; height: 28px; }
+      .sh-root.cq-max360 .sh-tgt-v { min-width: 52px; }
+      .sh-root.cq-max300 .sh-tgt-v .lbl { display: none; }
+      .sh-root.cq-max300 .sh-tgt-v { min-width: 40px; }
+      .sh-root.cq-max270 .sh-temp { font-size: 40px; }
+      .sh-root.cq-max270 .sh-temp small { font-size: 18px; }
+      .sh-root.cq-max270 .sh-seg button { padding: 5px 7px; }
       @media (prefers-reduced-motion: reduce) {
         .sh-pill svg { animation: none !important; }
         .sh-gear svg, .sh-accent { transition: none; }
@@ -1276,7 +1303,7 @@ class SmartHeatingCard extends HTMLElement {
 
       .sh-settings { display: grid; grid-template-columns: 1fr; gap: 10px; align-items: start; margin-top: 14px; }
       .sh-settings[hidden] { display: none; }
-      @container (min-width: 480px) { .sh-settings { grid-template-columns: 1fr 1fr; } }
+      .sh-root.cq-min480 .sh-settings { grid-template-columns: 1fr 1fr; }
 
       .sh-section { border-radius: 10px; }
       .sh-section-label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500;
@@ -2241,7 +2268,7 @@ class SmartHeatingOverview extends HTMLElement {
   _styles() {
     return `
       smart-heating-overview { display: block; }
-      smart-heating-overview > ha-card { background: none; border: none; box-shadow: none; overflow: visible; container-type: inline-size; }
+      smart-heating-overview > ha-card { background: none; border: none; box-shadow: none; overflow: visible; }
       .sho-root { ${SHARED_TOKENS}
         color: var(--sh-txt);
         display: grid; grid-template-columns: minmax(180px, auto) 1fr minmax(200px, auto); gap: 14px; align-items: stretch; }
@@ -2380,7 +2407,7 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-hum { display: flex; justify-content: space-between; font-size: 13px; padding: 3px 0; color: var(--sh-sub); }
       .sho-hum b { color: var(--sh-txt); font-weight: 600; font-variant-numeric: tabular-nums; }
       .sho-st-low { display: grid; grid-template-columns: 1.3fr 1fr; gap: 24px; }
-      @container (max-width: 700px) { .sho-st-low { grid-template-columns: 1fr; } }
+      ha-card.cq-max700 .sho-st-low { grid-template-columns: 1fr; }
       .sho-rk { display: grid; grid-template-columns: 96px 1fr 76px; align-items: center; gap: 12px; font-size: 13.5px; padding: 5px 0; }
       .sho-rk .bar { display: flex; height: 12px; border-radius: 6px; overflow: hidden; background: rgba(127,127,127,.12); }
       .sho-rk b { text-align: right; font-variant-numeric: tabular-nums; }
@@ -2449,20 +2476,16 @@ class SmartHeatingOverview extends HTMLElement {
       .sho-sum .r b { color: var(--sh-txt); font-variant-numeric: tabular-nums; white-space: nowrap; }
       .sho-sum .r .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 7px; vertical-align: 1px; }
       .sho-msg { padding: 16px; color: var(--sh-sub); }
-      @container (max-width: 760px) {
-        .sho-root { grid-template-columns: 1fr 1fr; }
-        .sho-tiles { grid-column: 1 / -1; order: 3; }
-        .sho-set, .sho-stats, .sho-pv, .sho-wu { order: 4; }   /* panely pod dlazdicami (FVE panel sa otvara z dlazdice) */
-      }
-      @container (max-width: 560px) {
-        .sho-tiles { grid-template-columns: 1fr 1fr; }
-        .sho-btnrow { grid-template-columns: 1fr; }
-      }
-      @container (max-width: 420px) {
-        .sho-sum .r { gap: 10px; }
-        .sho-tiles { padding: 10px; gap: 8px; }
-        .sho-tile { padding: 7px 9px; gap: 8px; }
-      }
+      /* sirka karty - triedy z watchWidth() namiesto @container (WebKit skakal) */
+      ha-card.cq-max760 .sho-root { grid-template-columns: 1fr 1fr; }
+      ha-card.cq-max760 .sho-tiles { grid-column: 1 / -1; order: 3; }
+      ha-card.cq-max760 .sho-set, ha-card.cq-max760 .sho-stats,
+      ha-card.cq-max760 .sho-pv, ha-card.cq-max760 .sho-wu { order: 4; }   /* panely pod dlazdicami (FVE panel sa otvara z dlazdice) */
+      ha-card.cq-max560 .sho-tiles { grid-template-columns: 1fr 1fr; }
+      ha-card.cq-max560 .sho-btnrow { grid-template-columns: 1fr; }
+      ha-card.cq-max420 .sho-sum .r { gap: 10px; }
+      ha-card.cq-max420 .sho-tiles { padding: 10px; gap: 8px; }
+      ha-card.cq-max420 .sho-tile { padding: 7px 9px; gap: 8px; }
     `;
   }
 
@@ -2478,6 +2501,7 @@ class SmartHeatingOverview extends HTMLElement {
         <div class="sho-blk sho-pv" hidden></div>
         <div class="sho-blk sho-wu" hidden></div>
       </div></ha-card>`;
+      this._widthRO = watchWidth(this.querySelector("ha-card"), [420, 560, 700, 760]);
       this.querySelector(".sho-sum").addEventListener("click", (e) => {
         if (e.target.closest(".sho-gear")) { if (this._statsOpen) this._toggleStats(); if (this._pvOpen) this._togglePv(); if (this._wuOpen) this._toggleWu(); this._toggleSettings(); }
         if (e.target.closest(".sho-statsbtn")) { if (this._pvOpen) this._togglePv(); if (this._wuOpen) this._toggleWu(); this._toggleStats(); }

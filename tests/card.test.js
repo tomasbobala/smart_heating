@@ -2161,3 +2161,7 @@ test("overview: summary labels wrap instead of being cut off on a phone ('Kúren
   const labels = Array.from(card.querySelectorAll(".sho-sum .r > span")).map((s) => s.textContent);
   assert.ok(labels.includes("Kúrenie dnes"));
 });
+
+test("cards do not use CSS container queries (WebKit scroll jump on iPhone)", () => {
+  assert.doesNotMatch(CARD_SRC.replace(/\/\*[\s\S]*?\*\//g, ""), /@container\s*\(|container-type\s*:/);
+});

@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## 0.28.1
+- **iPhone / Safari: the page no longer jumps up** when scrolled to the bottom or
+  when a menu is opened. WebKit re-laid out cards using CSS container queries
+  (`container-type`) with a momentarily shorter height whenever their content
+  changed (e.g. the overview summary on every power update), and Safari then
+  scrolled up. Container queries are replaced by width classes set by a
+  ResizeObserver with the same breakpoints; the layout is pixel-identical
+  (checked at 10 widths in WebKit).
+
 ## 0.28.0
 - **Ready for Home Assistant 2027.x.** The zone thermostat now uses the native
   temperature API (`native_temperature_unit`, `native_current_temperature`,
